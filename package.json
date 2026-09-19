@@ -1,0 +1,11 @@
+{
+  "name": "mention-market",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @mention/web dev",
+    "build": "pnpm --filter @mention/web build",
+    "start": "pnpm --filter @mention/web start",
+    "lint": "pnpm --filter @mention/web lint"
+  }
+}

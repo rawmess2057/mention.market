@@ -1,0 +1,1138 @@
+/**
+ * Mock seed data + live simulation store.
+ *
+ * In production this is replaced by the indexer + WebSocket feed. For the demo
+ * we simulate: live markets with ticking LMSR prices, a scrolling transcript
+ * that highlights watched words, pari-mutuel pools filling up, and markets
+ * moving through the resolution pipeline (evidence -> challenge window -> resolved).
+ */
+
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { seededRandom } from "./format";
+import type { PricePoint } from "./history";
+import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
+import { realizedOnSell as realizedPnlOnSell } from "./pnl";
+import type {
+  ActivityItem,
+  LeaderboardRow,
+  Market,
+  Position,
+  TradeRecord,
+  TranscriptSnippet,
+  User,
+  WordPool,
+} from "./types";
+
+/* ------------------------------------------------------------------ */
+/* Seed data                                                           */
+/* ------------------------------------------------------------------ */
+
+const NOW = Date.now();
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+
+export const WATCH_WORDS: Record<string, string[]> = {
+  "sol-ai": ["AI", "Solana", "agent"],
+  "x-grok": ["grok", "benchmark", "open source"],
+  "fed-presser": ["cut", "inflation", "pause"],
+  "nbafinals-g7": ["MVP", "foul", "three"],
+  "streams-kai": ["chat", "subathon", "W"],
+  "earnings-nvda": ["AI", "data center", "guidance"],
+  "debate-mayor": ["housing", "budget", "safety"],
+  "podcast-lex": ["consciousness", "sim", "love"],
+  "kick-ice": ["ice", "donation", "goal"],
+  "spaces-crypto": ["ETF", "halving", "bullish"],
+};
+
+const seedWords = (entries: Array<[string, number, number]>): WordPool[] =>
+  entries.map(([word, pool, bettors]) => ({
+    word,
+    pool,
+    bettors,
+    lastBetAt: NOW - Math.floor(Math.random() * 5 * MIN),
+  }));
+
+export const SEED_MARKETS: Market[] = [
+  {
+    id: "m1",
+    slug: "sol-ai",
+    title: "Will they say \u201cAI\u201d?",
+    event: "Solana Speedrun #12 — live dev stream",
+    vertical: "streams",
+    type: "binary",
+    status: "open",
+    createdAt: NOW - 3 * HOUR,
+    endTime: NOW + 42 * MIN,
+    volume: 18_420,
+    traders: 312,
+    yesShares: 640,
+    noShares: 410,
+    b: 300,
+    rules:
+      "Resolves YES if the exact word \u201cAI\u201d (case-insensitive, standalone) is spoken by the host during the live segment. Track: twitch.tv/solspeedrun. Transcript from Deepgram primary feed.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "twitch.tv/solspeedrun",
+    sourceUrl: "https://twitch.tv/solspeedrun",
+  },
+  {
+    id: "m2",
+    slug: "x-grok",
+    title: "First word said: race",
+    event: "xAI Grok 5 launch livestream",
+    vertical: "streams",
+    type: "majority",
+    status: "open",
+    createdAt: NOW - 6 * HOUR,
+    endTime: NOW + 2 * HOUR,
+    volume: 44_100,
+    traders: 891,
+    yesShares: 0,
+    noShares: 0,
+    b: 0,
+    words: seedWords([
+      ["agents", 5_200, 214],
+      ["open source", 4_150, 168],
+      ["benchmark", 3_980, 190],
+      ["Grok", 2_640, 132],
+      ["safety", 1_210, 63],
+      [" Elon ", 980, 54],
+      ["physics", 640, 31],
+      ["nothingburger", 310, 12],
+    ]),
+    rules:
+      "Pot is split among backers of the first word/phrase (from the board) spoken by the presenter. Case-insensitive. First occurrence per Deepgram feed wins. 1% rake.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "x.com/xai",
+    sourceUrl: "https://x.com/xai",
+  },
+  {
+    id: "m3",
+    slug: "fed-presser",
+    title: "Will Powell say \u201cpause\u201d?",
+    event: "FOMC press conference",
+    vertical: "earnings",
+    type: "binary",
+    status: "open",
+    createdAt: NOW - 2 * HOUR,
+    endTime: NOW + 8 * MIN,
+    volume: 96_800,
+    traders: 2_041,
+    yesShares: 1_180,
+    noShares: 960,
+    b: 500,
+    rules:
+      "Resolves YES if \u201cpause\u201d appears in the official presser transcript (Federal Reserve feed, primary source). Derivative forms (\u201cpaused\u201d, \u201cpausing\u201d) do NOT count.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "federalreserve.gov",
+    sourceUrl: "https://federalreserve.gov",
+  },
+  {
+    id: "m4",
+    slug: "nbafinals-g7",
+    title: "Word race: post-game interview",
+    event: "NBA Finals G7 — courtside mic",
+    vertical: "sports",
+    type: "majority",
+    status: "open",
+    createdAt: NOW - 1 * HOUR,
+    endTime: NOW + 25 * MIN,
+    volume: 61_350,
+    traders: 1_450,
+    yesShares: 0,
+    noShares: 0,
+    b: 0,
+    words: seedWords([
+      ["credit the team", 8_900, 402],
+      ["we fought", 6_720, 318],
+      ["MVP", 5_410, 261],
+      ["God bless", 4_180, 202],
+      ["next season", 2_050, 98],
+    ]),
+    rules:
+      "First phrase from the board said during the post-game court interview wins. Broadcast audio only. 1% rake.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "nba.com/broadcast",
+    sourceUrl: "https://nba.com",
+  },
+  {
+    id: "m5",
+    slug: "streams-kai",
+    title: "Will he say \u201cW in the chat\u201d?",
+    event: "Kai Cenat — subathon stream",
+    vertical: "streams",
+    type: "binary",
+    status: "open",
+    createdAt: NOW - 30 * MIN,
+    endTime: NOW + 90 * MIN,
+    volume: 12_930,
+    traders: 744,
+    yesShares: 210,
+    noShares: 260,
+    b: 150,
+    rules:
+      "Resolves YES if the phrase \u201cW in the chat\u201d is spoken by the streamer. Chat messages don\u2019t count. Twitch VOD audio is the source of truth.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "twitch.tv/kaicenat",
+    sourceUrl: "https://twitch.tv/kaicenat",
+  },
+  {
+    id: "m6",
+    slug: "earnings-nvda",
+    title: "Earnings call buzzword race",
+    event: "NVDA Q4 earnings call",
+    vertical: "earnings",
+    type: "majority",
+    status: "open",
+    createdAt: NOW - 4 * HOUR,
+    endTime: NOW + 3 * HOUR,
+    volume: 88_240,
+    traders: 1_977,
+    yesShares: 0,
+    noShares: 0,
+    b: 0,
+    words: seedWords([
+      ["data center", 11_200, 388],
+      ["AI demand", 9_640, 341],
+      ["guidance", 7_310, 276],
+      ["supply", 4_920, 188],
+      ["sovereign AI", 3_150, 121],
+    ]),
+    rules:
+      "First phrase from the board said by management during prepared remarks or Q&A wins. Official earnings transcript is the source. 1% rake.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "nvidia.com/ir",
+    sourceUrl: "https://nvidia.com/ir",
+  },
+  {
+    id: "m7",
+    slug: "debate-mayor",
+    title: "Will the mayor say \u201chousing\u201d first minute?",
+    event: "NYC mayoral debate",
+    vertical: "politics",
+    type: "binary",
+    status: "locked",
+    createdAt: NOW - 2 * HOUR,
+    endTime: NOW - 1 * MIN,
+    volume: 51_600,
+    traders: 1_204,
+    yesShares: 1_520,
+    noShares: 1_010,
+    b: 400,
+    rules:
+      "Resolves YES if \u201chousing\u201d is spoken in the first minute of the debate by any candidate. Official broadcast transcript.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "nyc.gov/tv",
+    sourceUrl: "https://nyc.gov",
+  },
+  {
+    id: "m8",
+    slug: "podcast-lex",
+    title: "Will Lex say \u201csimulation\u201d?",
+    event: "Lex Fridman #412 — guest TBA",
+    vertical: "podcasts",
+    type: "binary",
+    status: "resolved",
+    createdAt: NOW - 2 * 24 * HOUR,
+    endTime: NOW - 20 * HOUR,
+    resolvedAt: NOW - 19 * HOUR,
+    volume: 33_470,
+    traders: 918,
+    yesShares: 980,
+    noShares: 620,
+    b: 250,
+    rules:
+      "Resolves YES if \u201csimulation\u201d (any form: simulate, simulated) is spoken by Lex during the episode. Podcast audio, Deepgram feed.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "lexfridman.com",
+    sourceUrl: "https://lexfridman.com",
+    winningOutcome: "yes",
+    confidence: 98,
+    evidence: {
+      winningOutcome: "yes",
+      confidence: 98,
+      proposedAt: NOW - 19 * HOUR + 4 * MIN,
+      proposedBy: "mention-resolver-01",
+      evidenceHash: "9f2c…a41d",
+      bondUsd: 50,
+      challengeWindowMs: 20 * MIN,
+      challengeDeadline: NOW - 19 * HOUR + 24 * MIN,
+      challenged: false,
+      snippets: [
+        {
+          t: 1_284_000,
+          speaker: "Lex Fridman",
+          text: "…if we are living in a simulation, then the physics we observe is just the renderer…",
+        },
+        {
+          t: 2_410_000,
+          speaker: "Lex Fridman",
+          text: "…I keep coming back to the simulation hypothesis, it\u2019s a beautiful question…",
+        },
+      ],
+    },
+  },
+  {
+    id: "m9",
+    slug: "kick-ice",
+    title: "Will she break the ice bath record live?",
+    event: "Kick — ice bath challenge stream",
+    vertical: "streams",
+    type: "binary",
+    status: "resolved",
+    createdAt: NOW - 3 * 24 * HOUR,
+    endTime: NOW - 40 * HOUR,
+    resolvedAt: NOW - 40 * HOUR + 9 * MIN,
+    volume: 21_050,
+    traders: 655,
+    yesShares: 410,
+    noShares: 890,
+    b: 200,
+    rules:
+      "Resolves YES if the stated record time is beaten on the live timer shown on stream. Overlay timer + mod confirmation.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "kick.com/icequeen",
+    sourceUrl: "https://kick.com",
+    winningOutcome: "no",
+    confidence: 96,
+    evidence: {
+      winningOutcome: "no",
+      confidence: 96,
+      proposedAt: NOW - 40 * HOUR + 9 * MIN,
+      proposedBy: "mention-resolver-02",
+      evidenceHash: "c77e…19b0",
+      bondUsd: 50,
+      challengeWindowMs: 20 * MIN,
+      challengeDeadline: NOW - 40 * HOUR + 29 * MIN,
+      challenged: false,
+      snippets: [
+        {
+          t: 5_512_000,
+          speaker: "Host timer overlay",
+          text: "Final time 12:41 — record 11:58. Record not broken.",
+        },
+      ],
+    },
+  },
+  {
+    id: "m10",
+    slug: "spaces-crypto",
+    title: "Will \u201cETF\u201d be said 10+ times?",
+    event: "X Spaces — crypto policy roundtable",
+    vertical: "politics",
+    type: "binary",
+    status: "resolving",
+    createdAt: NOW - 5 * HOUR,
+    endTime: NOW - 4 * MIN,
+    volume: 27_300,
+    traders: 832,
+    yesShares: 700,
+    noShares: 690,
+    b: 250,
+    rules:
+      "Resolves YES if \u201cETF\u201d is spoken at least 10 times during the Space. Official X Spaces audio via Deepgram feed.",
+    creator: "mention",
+    creatorFeeBps: 100,
+    source: "x.com/spaces",
+    sourceUrl: "https://x.com",
+  },
+];
+
+export const SEED_POSITIONS: Record<string, Position> = {
+  m1: {
+    id: "p-m1",
+    marketId: "m1",
+    yesShares: 40,
+    avgYesPrice: 0.58,
+  },
+  m3: {
+    id: "p-m3",
+    marketId: "m3",
+    noShares: 25,
+    avgNoPrice: 0.47,
+  },
+  m8: {
+    id: "p-m8",
+    marketId: "m8",
+    yesShares: 60,
+    avgYesPrice: 0.52,
+  },
+  m6: {
+    id: "p-m6",
+    marketId: "m6",
+    wordBacks: { "AI demand": 50, guidance: 20 },
+  },
+};
+
+export const SEED_ACTIVITY: ActivityItem[] = [
+  { id: "a1", marketId: "m1", kind: "buy", side: "yes", amount: 50, user: "degen_dm", at: NOW - 1 * MIN },
+  { id: "a2", marketId: "m1", kind: "buy", side: "no", amount: 25, user: "quant_queen", at: NOW - 2 * MIN },
+  { id: "a3", marketId: "m2", kind: "back", side: "agents", amount: 200, user: "whale_wallet", at: NOW - 3 * MIN },
+  { id: "a4", marketId: "m3", kind: "buy", side: "yes", amount: 120, user: "macro_mike", at: NOW - 4 * MIN },
+  { id: "a5", marketId: "m8", kind: "resolve", side: "yes", amount: 33_470, user: "resolver", at: NOW - 19 * HOUR },
+  { id: "a6", marketId: "m4", kind: "back", side: "MVP", amount: 75, user: "hoops_henry", at: NOW - 5 * MIN },
+  { id: "a7", marketId: "m5", kind: "buy", side: "no", amount: 40, user: "stream_sniper", at: NOW - 6 * MIN },
+  { id: "a8", marketId: "m6", kind: "back", side: "data center", amount: 300, user: "ai_alpha", at: NOW - 7 * MIN },
+];
+
+/** Trade ledger entries matching the seeded positions (open legs only). */
+export const SEED_TRADES: TradeRecord[] = [
+  {
+    id: "t1",
+    marketId: "m1",
+    marketTitle: "Will they say \u201cAI\u201d?",
+    kind: "buy",
+    side: "yes",
+    amount: 23.2,
+    shares: 40,
+    price: 0.58,
+    pnl: 0,
+    at: NOW - 2 * HOUR - 12 * MIN,
+  },
+  {
+    id: "t3",
+    marketId: "m3",
+    marketTitle: "Will Powell say \u201cpause\u201d?",
+    kind: "buy",
+    side: "no",
+    amount: 11.75,
+    shares: 25,
+    price: 0.47,
+    pnl: 0,
+    at: NOW - 55 * MIN,
+  },
+  {
+    id: "t6a",
+    marketId: "m6",
+    marketTitle: "Earnings call buzzword race",
+    kind: "back",
+    side: "AI demand",
+    amount: 50,
+    shares: 0,
+    price: 0,
+    pnl: 0,
+    at: NOW - 2 * HOUR,
+  },
+  {
+    id: "t6b",
+    marketId: "m6",
+    marketTitle: "Earnings call buzzword race",
+    kind: "back",
+    side: "guidance",
+    amount: 20,
+    shares: 0,
+    price: 0,
+    pnl: 0,
+    at: NOW - 90 * MIN,
+  },
+  {
+    id: "t8",
+    marketId: "m8",
+    marketTitle: "Will Lex say \u201csimulation\u201d?",
+    kind: "buy",
+    side: "yes",
+    amount: 31.2,
+    shares: 60,
+    price: 0.52,
+    pnl: 0,
+    at: NOW - 21 * HOUR,
+  },
+];
+
+export const LEADERBOARD: LeaderboardRow[] = [
+  { rank: 1, handle: "whale_wallet", avatarSeed: "ww", points: 8_420, profit: 3_120, winRate: 0.68, trades: 214 },
+  { rank: 2, handle: "quant_queen", avatarSeed: "qq", points: 7_910, profit: 2_450, winRate: 0.71, trades: 189 },
+  { rank: 3, handle: "degen_dm", avatarSeed: "dd", points: 6_380, profit: 1_980, winRate: 0.59, trades: 341 },
+  { rank: 4, handle: "ai_alpha", avatarSeed: "aa", points: 5_970, profit: 1_640, winRate: 0.62, trades: 156 },
+  { rank: 5, handle: "macro_mike", avatarSeed: "mm", points: 5_420, profit: 1_210, winRate: 0.57, trades: 132 },
+  { rank: 6, handle: "hoops_henry", avatarSeed: "hh", points: 4_880, profit: 990, winRate: 0.55, trades: 121 },
+  { rank: 7, handle: "stream_sniper", avatarSeed: "ss", points: 4_310, profit: 870, winRate: 0.53, trades: 98 },
+  { rank: 8, handle: "you", avatarSeed: "you", points: 3_940, profit: 640, winRate: 0.61, trades: 87 },
+];
+
+export const CURRENT_USER: User = {
+  handle: "you",
+  points: 3_940,
+  rank: 8,
+  balance: 1_000,
+};
+
+/** A few transcript lines already in the buffer for live markets. */
+export const SEED_TRANSCRIPT: Record<string, TranscriptSnippet[]> = {
+  "sol-ai": [
+    { t: 1_002_000, speaker: "host", text: "…and then we wire up the program client, super straightforward…" },
+    { t: 1_048_000, speaker: "host", text: "…the anchor macros generate all the plumbing for you…" },
+    { t: 1_121_000, speaker: "host", text: "…next we deploy to devnet and run the test suite…" },
+  ],
+  "fed-presser": [
+    { t: 3_410_000, speaker: "Powell", text: "…the committee remains attentive to the risks on both sides…" },
+    { t: 3_452_000, speaker: "Powell", text: "…we will evaluate incoming data carefully before adjusting stance…" },
+  ],
+  "streams-kai": [
+    { t: 7_640_000, speaker: "Kai", text: "…yo chat we are SO back, look at this donation…" },
+  ],
+};
+
+/* ------------------------------------------------------------------ */
+/* Simulation store                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface ConfirmTrade {
+  marketId: string;
+  side: string; // "yes" | "no" | word
+  shares?: number;
+  amount: number;
+}
+
+interface SimState {
+  markets: Record<string, Market>;
+  positions: Record<string, Position>;
+  activity: ActivityItem[];
+  transcript: Record<string, TranscriptSnippet[]>;
+  history: Record<string, PricePoint[]>; // timestamped sparkline/chart data per market
+  user: User;
+  claimable: Record<string, number>;
+  trades: TradeRecord[];
+  pendingTrade: ConfirmTrade | null;
+  toast: string | null;
+
+  // actions
+  buyBinary: (marketId: string, side: "yes" | "no", amount: number, txSig?: string) => void;
+  sellBinary: (marketId: string, side: "yes" | "no", shares: number) => void;
+  backWord: (marketId: string, word: string, amount: number, txSig?: string) => void;
+  claim: (marketId: string) => void;
+  challenge: (marketId: string) => void;
+  createMarket: (m: {
+    title: string;
+    event: string;
+    vertical: Market["vertical"];
+    type: Market["type"];
+    words: string[];
+    minutes: number;
+    rules: string;
+  }) => string;
+  setPendingTrade: (t: ConfirmTrade | null) => void;
+  showToast: (msg: string | null) => void;
+  tick: () => void;
+}
+
+const FIRST = ["degen", "quant", "macro", "ai", "crypto", "stream", "hoops", "bag", "moon", "floor"];
+const LAST = ["dm", "queen", "mike", "alpha", "kid", "sniper", "henry", "wolf", "rider", "trader"];
+
+function randomUser(rnd: () => number) {
+  return `${FIRST[Math.floor(rnd() * FIRST.length)]}_${LAST[Math.floor(rnd() * LAST.length)]}`;
+}
+
+let simTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Durable slice persisted to localStorage. Volatile state (seeded markets
+ *  relative to page-load, history, transcript, toasts) is NOT persisted:
+ *  seed markets re-seed fresh each load, anything the user created/traded
+ *  survives refresh. */
+interface PersistedState {
+  positions: Record<string, Position>;
+  user: User;
+  claimable: Record<string, number>;
+  activity: ActivityItem[];
+  customMarkets: Record<string, Market>;
+  trades: TradeRecord[];
+}
+
+const SEED_IDS = new Set(SEED_MARKETS.map((m) => m.id));
+
+function sanitizeNumber(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+export const useSim = create<SimState>()(persist((set, get) => {
+  const markets: Record<string, Market> = {};
+  for (const m of SEED_MARKETS) markets[m.id] = structuredClone(m);
+
+  const positions: Record<string, Position> = {};
+  for (const [k, v] of Object.entries(SEED_POSITIONS)) positions[k] = structuredClone(v);
+
+  const transcript: Record<string, TranscriptSnippet[]> = {};
+  for (const [k, v] of Object.entries(SEED_TRANSCRIPT)) transcript[k] = structuredClone(v);
+
+  const claimable: Record<string, number> = {
+    // m8 resolved YES, user holds 60 YES shares -> 60 USDC payout
+    m8: 60,
+  };
+
+  // Seed plausible price walks so sparklines are never empty
+  const history: Record<string, PricePoint[]> = {};
+  for (const m of Object.values(markets)) {
+    const target =
+      m.type === "binary" ? lmsrProbYes(m.yesShares, m.noShares, m.b) : leaderShare(m);
+    history[m.id] = seededWalkTimed(
+      target,
+      48,
+      (m.id.charCodeAt(1) + 3) * 7919,
+      Date.now(),
+      5_000
+    );
+  }
+
+  return {
+    markets,
+    positions,
+    activity: [...SEED_ACTIVITY],
+    history,
+    transcript,
+    user: { ...CURRENT_USER },
+    claimable,
+    trades: SEED_TRADES.map((t) => ({ ...t })),
+    pendingTrade: null,
+    toast: null,
+
+    buyBinary: (marketId, side, amount, txSig) => {
+      const m = get().markets[marketId];
+      if (!m || m.status !== "open") return;
+      const cost = amount; // LMSR: buy by cost, derive shares
+      const shares = lmsrSharesForCost(m, side, cost);
+      if (shares <= 0) return;
+
+      const trade: TradeRecord = {
+        id: `t-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        marketId,
+        marketTitle: m.title,
+        kind: "buy",
+        side,
+        amount: cost,
+        shares,
+        price: cost / shares,
+        avgEntry: cost / shares,
+        pnl: 0,
+        at: Date.now(),
+        txSig,
+      };
+
+      set((s) => {
+        const markets = { ...s.markets };
+        const mm = structuredClone(markets[marketId]);
+        if (side === "yes") {
+          mm.yesShares += shares;
+        } else {
+          mm.noShares += shares;
+        }
+        mm.volume += cost;
+        mm.traders += 1;
+        markets[marketId] = mm;
+
+        const positions = { ...s.positions };
+        const p: Position = positions[marketId]
+          ? structuredClone(positions[marketId])
+          : { id: `p-${marketId}`, marketId };
+        if (side === "yes") {
+          const prevCost = (p.avgYesPrice ?? 0) * (p.yesShares ?? 0);
+          const newShares = (p.yesShares ?? 0) + shares;
+          p.avgYesPrice = (prevCost + cost) / newShares;
+          p.yesShares = newShares;
+        } else {
+          const prevCost = (p.avgNoPrice ?? 0) * (p.noShares ?? 0);
+          const newShares = (p.noShares ?? 0) + shares;
+          p.avgNoPrice = (prevCost + cost) / newShares;
+          p.noShares = newShares;
+        }
+        positions[marketId] = p;
+
+        const user = { ...s.user, balance: Math.max(0, s.user.balance - cost) };
+        return { markets, positions, user, trades: [trade, ...s.trades].slice(0, 500) };
+      });
+
+      get().showToast(`Bought ${side.toUpperCase()} · ${fmtShares(shares)} shares`);
+    },
+
+    sellBinary: (marketId, side, shares) => {
+      const s = get();
+      const m = s.markets[marketId];
+      const p = s.positions[marketId];
+      if (!m || !p || m.status !== "open") return;
+      const held = side === "yes" ? (p.yesShares ?? 0) : (p.noShares ?? 0);
+      const sell = Math.min(shares, held);
+      if (sell <= 0) return;
+
+      const proceeds = lmsrSellValue(m, side, sell);
+      const avgEntry = side === "yes" ? (p.avgYesPrice ?? 0) : (p.avgNoPrice ?? 0);
+      const entryPrice = avgEntry > 0 ? avgEntry : proceeds / sell;
+      const trade: TradeRecord = {
+        id: `t-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        marketId,
+        marketTitle: m.title,
+        kind: "sell",
+        side,
+        amount: proceeds,
+        shares: sell,
+        price: proceeds / sell,
+        avgEntry: entryPrice,
+        pnl: realizedPnlOnSell(entryPrice, sell, proceeds),
+        at: Date.now(),
+      };
+      set((st) => {
+        const markets = { ...st.markets };
+        const mm = structuredClone(markets[marketId]);
+        if (side === "yes") {
+          mm.yesShares = Math.max(0, mm.yesShares - sell);
+        } else {
+          mm.noShares = Math.max(0, mm.noShares - sell);
+        }
+        markets[marketId] = mm;
+
+        const positions = { ...st.positions };
+        const pp = structuredClone(positions[marketId]);
+        if (side === "yes") {
+          pp.yesShares = (pp.yesShares ?? 0) - sell;
+        } else {
+          pp.noShares = (pp.noShares ?? 0) - sell;
+        }
+        positions[marketId] = pp;
+
+        const user = { ...st.user, balance: st.user.balance + proceeds };
+        return { markets, positions, user, trades: [trade, ...st.trades].slice(0, 500) };
+      });
+
+      get().showToast(`Sold ${side.toUpperCase()} · +${fmtShares(proceeds)} USDC`);
+    },
+
+    backWord: (marketId, word, amount, txSig) => {
+      const m = get().markets[marketId];
+      if (!m || m.status !== "open" || !m.words) return;
+
+      const w0 = m.words.find((x) => x.word === word);
+      const pot = m.words.reduce((s, x) => s + x.pool, 0);
+      const wPool = w0?.pool ?? 0;
+      const impliedShare = pot + amount > 0 ? wPool / (pot + amount) : 0;
+
+      const trade: TradeRecord = {
+        id: `t-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        marketId,
+        marketTitle: m.title,
+        kind: "back",
+        side: word,
+        amount,
+        shares: 0,
+        price: impliedShare,
+        pnl: 0,
+        at: Date.now(),
+        txSig,
+      };
+      set((s) => {
+        const markets = { ...s.markets };
+        const mm = structuredClone(markets[marketId]);
+        const w = mm.words!.find((x) => x.word === word);
+        if (!w) return {};
+        w.pool += amount;
+        w.bettors += 1;
+        w.lastBetAt = Date.now();
+        mm.volume += amount;
+        markets[marketId] = mm;
+
+        const positions = { ...s.positions };
+        const p: Position = positions[marketId]
+          ? structuredClone(positions[marketId])
+          : { id: `p-${marketId}`, marketId };
+        p.wordBacks = { ...(p.wordBacks ?? {}) };
+        p.wordBacks[word] = (p.wordBacks[word] ?? 0) + amount;
+        positions[marketId] = p;
+
+        const user = { ...s.user, balance: Math.max(0, s.user.balance - amount) };
+        return { markets, positions, user, trades: [trade, ...s.trades].slice(0, 500) };
+      });
+
+      get().showToast(`Backed \u201c${word}\u201d · ${fmtShares(amount)} USDC`);
+    },
+
+    claim: (marketId) => {
+      const s = get();
+      const amt = s.claimable[marketId];
+      if (!amt) return;
+      const m = s.markets[marketId];
+      const pos = s.positions[marketId];
+      const win = m?.winningOutcome;
+      let side = win ?? "yes";
+      let cost = 0;
+      if (m?.type === "binary") {
+        const isYes = win === "yes";
+        const sh = isYes ? (pos?.yesShares ?? 0) : (pos?.noShares ?? 0);
+        const avg = isYes ? (pos?.avgYesPrice ?? 0) : (pos?.avgNoPrice ?? 0);
+        cost = avg * sh;
+        if (!(avg > 0)) side = isYes ? "yes" : "no";
+      } else if (pos?.wordBacks && win) {
+        cost = pos.wordBacks[win] ?? 0;
+      }
+      const trade: TradeRecord = {
+        id: `t-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        marketId,
+        marketTitle: m?.title ?? "",
+        kind: "claim",
+        side,
+        amount: amt,
+        shares: 0,
+        price: 0,
+        pnl: amt - cost,
+        at: Date.now(),
+      };
+      set((st) => {
+        const claimable = { ...st.claimable };
+        delete claimable[marketId];
+        const positions = { ...st.positions };
+        const p = positions[marketId];
+        if (p) positions[marketId] = { ...p, claimed: true, payout: amt };
+        const user = { ...st.user, balance: st.user.balance + amt, points: st.user.points + 25 };
+        return { claimable, positions, user, trades: [trade, ...st.trades].slice(0, 500) };
+      });
+      get().showToast(`Claimed ${fmtShares(amt)} USDC 🎉`);
+    },
+
+    challenge: (marketId) => {
+      set((s) => {
+        const markets = { ...s.markets };
+        const mm = structuredClone(markets[marketId]);
+        if (!mm.evidence) return {};
+        mm.evidence.challenged = true;
+        markets[marketId] = mm;
+        return { markets };
+      });
+      get().showToast("Challenge submitted — resolver review started");
+    },
+
+    createMarket: ({ title, event, vertical, type, words, minutes, rules }) => {
+      const id = `m${Date.now()}`;
+      const slug = `custom-${id}`;
+      const now = Date.now();
+      const market: Market = {
+        id,
+        slug,
+        title: type === "binary" ? title : "Word race: live",
+        event,
+        vertical,
+        type,
+        status: "open",
+        createdAt: now,
+        endTime: now + minutes * MIN,
+        volume: 0,
+        traders: 0,
+        yesShares: 100,
+        noShares: 100,
+        b: Math.max(50, minutes * 2),
+        words:
+          type === "majority"
+            ? words.map((w) => ({ word: w, pool: 0, bettors: 0, lastBetAt: 0 }))
+            : undefined,
+        rules,
+        creator: "you",
+        creatorFeeBps: 100,
+        source: "custom event",
+        sourceUrl: "",
+      };
+      set((s) => ({ markets: { ...s.markets, [id]: market } }));
+      get().showToast("Market created — live now!");
+      return id;
+    },
+
+    setPendingTrade: (t) => set({ pendingTrade: t }),
+    showToast: (msg) => set({ toast: msg }),
+
+    tick: () => {
+      const rnd = seededRandom(Math.floor(Date.now() / 1000));
+      set((s) => {
+        const markets = { ...s.markets };
+        const newActivity: ActivityItem[] = [];
+        const newTranscript: Record<string, TranscriptSnippet[]> = { ...s.transcript };
+        const newHistory: Record<string, PricePoint[]> = { ...s.history };
+
+        for (const m of Object.values(markets)) {
+          if (m.status === "open" && Date.now() >= m.endTime) {
+            const mm = structuredClone(m);
+            mm.status = mm.status === "open" ? "resolving" : mm.status;
+            markets[m.id] = mm;
+            newActivity.push({
+              id: `r-${m.id}-${Date.now()}`,
+              marketId: m.id,
+              kind: "resolve",
+              amount: mm.volume,
+              user: "resolver",
+              at: Date.now(),
+            });
+            continue;
+          }
+          if (m.status !== "open") {
+            // resolving -> resolved after a bit
+            if (m.status === "resolving" && rnd() < 0.02) {
+              const mm = structuredClone(m);
+              mm.status = "resolved";
+              mm.winningOutcome = "yes";
+              mm.confidence = 94 + Math.floor(rnd() * 5);
+              mm.resolvedAt = Date.now();
+              const now = Date.now();
+              mm.evidence = {
+                winningOutcome: "yes",
+                confidence: mm.confidence,
+                proposedAt: now,
+                proposedBy: "mention-resolver-01",
+                evidenceHash: Math.floor(rnd() * 1e9).toString(16).slice(0, 4) + "…" + "f3a1",
+                bondUsd: 50,
+                challengeWindowMs: 20 * MIN,
+                challengeDeadline: now + 20 * MIN,
+                challenged: false,
+                snippets: (newTranscript[mm.slug] ?? []).slice(-3).map((l) => ({
+                  t: l.t,
+                  speaker: l.speaker,
+                  text: l.text,
+                })),
+              };
+              markets[m.id] = mm;
+            }
+            continue;
+          }
+
+          // --- live market simulation ---
+          const mm = structuredClone(m);
+
+          if (mm.type === "binary") {
+            // Random bot trades move the LMSR price
+            const r = rnd();
+            if (r < 0.35) {
+              const side = rnd() < 0.5 + 0.15 * Math.sign(Math.sin(mm.id.length)) ? "yes" : "no";
+              const amount = Math.round(5 + rnd() * 90);
+              const shares = lmsrSharesForCost(mm, side, amount);
+              if (side === "yes") mm.yesShares += shares;
+              else mm.noShares += shares;
+              mm.volume += amount;
+              newActivity.push({
+                id: `a-${Date.now()}-${Math.floor(rnd() * 1e6)}`,
+                marketId: mm.id,
+                kind: "buy",
+                side,
+                amount,
+                user: randomUser(rnd),
+                at: Date.now(),
+              });
+            }
+            newHistory[m.id] = [
+              ...(newHistory[m.id] ?? []),
+              { t: Date.now(), v: lmsrProbYes(mm.yesShares, mm.noShares, mm.b) },
+            ].slice(-120);
+            markets[m.id] = mm;
+          } else if (mm.type === "majority" && mm.words) {
+            const r = rnd();
+            if (r < 0.5 && mm.words.length > 0) {
+              // Weighted toward words with existing momentum
+              const idx = Math.floor(rnd() * mm.words.length);
+              const w = mm.words[idx];
+              const amount = Math.round(10 + rnd() * 150);
+              w.pool += amount;
+              w.bettors += 1;
+              w.lastBetAt = Date.now();
+              mm.volume += amount;
+              newActivity.push({
+                id: `a-${Date.now()}-${Math.floor(rnd() * 1e6)}`,
+                marketId: mm.id,
+                kind: "back",
+                side: w.word,
+                amount,
+                user: randomUser(rnd),
+                at: Date.now(),
+              });
+            }
+            newHistory[m.id] = [
+              ...(newHistory[m.id] ?? []),
+              { t: Date.now(), v: leaderShare(mm) },
+            ].slice(-120);
+            markets[m.id] = mm;
+          }
+
+          // Transcript lines for live markets
+          const lines = newTranscript[m.slug] ?? [];
+          if (rnd() < 0.22) {
+            const t0 = lines.length > 0 ? lines[lines.length - 1].t : Date.now() % 3_600_000;
+            newTranscript[m.slug] = [
+              ...lines.slice(-30),
+              {
+                t: t0 + 8_000 + Math.floor(rnd() * 20_000),
+                speaker: "host",
+                text: randomLine(rnd, mm),
+              },
+            ];
+          }
+        }
+
+        return {
+          markets,
+          activity: [...newActivity, ...s.activity].slice(0, 60),
+          transcript: newTranscript,
+          history: newHistory,
+        };
+      });
+    },
+  };
+}, {
+  name: "mention-market-sim-v1",
+  version: 2,
+  migrate: (persisted, version) => {
+    const p = (persisted ?? {}) as Partial<PersistedState>;
+    if (version < 2) {
+      return { ...p, trades: [] as TradeRecord[] };
+    }
+    return p;
+  },
+  partialize: (s) => ({
+    positions: s.positions,
+    user: s.user,
+    claimable: s.claimable,
+    activity: s.activity.slice(0, 200),
+    trades: s.trades.slice(0, 500),
+    customMarkets: Object.fromEntries(
+      Object.entries(s.markets).filter(([id]) => !SEED_IDS.has(id))
+    ),
+  }),
+  merge: (persisted, current) => {
+    const p = (persisted ?? {}) as Partial<PersistedState>;
+    const markets = { ...current.markets };
+    for (const [id, m] of Object.entries(p.customMarkets ?? {})) {
+      if (m && typeof m.id === "string") markets[id] = m;
+    }
+    const user = p.user
+      ? {
+          ...current.user,
+          ...p.user,
+          balance: sanitizeNumber(p.user.balance, current.user.balance),
+          points: sanitizeNumber(p.user.points, current.user.points),
+        }
+      : current.user;
+    return {
+      ...current,
+      markets,
+      positions: p.positions ?? current.positions,
+      activity: p.activity ?? current.activity,
+      claimable: p.claimable ?? current.claimable,
+      trades: p.trades ?? current.trades,
+      user,
+    };
+  },
+}));
+
+/* ------------------------------------------------------------------ */
+/* Simulation helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+/** Shares received for spending `cost` USDC on `side` in an LMSR market. */
+export function lmsrSharesForCost(m: Market, side: "yes" | "no", cost: number): number {
+  // Solve for shares: C(q + shares) - C(q) = cost. LMSR is monotonic; binary
+  // search is robust and cheap at UI precision.
+  let lo = 0;
+  let hi = 1;
+  while (lmsrCostDelta(m, side, hi) < cost) hi *= 2;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (lmsrCostDelta(m, side, mid) < cost) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function lmsrCostDelta(m: Market, side: "yes" | "no", shares: number): number {
+  return lmsrBuyCost(m.yesShares, m.noShares, m.b, side, shares);
+}
+
+/** USDC received for selling `shares` back into the LMSR pool. */
+export function lmsrSellValue(m: Market, side: "yes" | "no", shares: number): number {
+  return lmsrSellReturn(m.yesShares, m.noShares, m.b, side, shares);
+}
+
+function fmtShares(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 1 : 0 });
+}
+
+/** Share of the current pot held by the leading word (0..1). */
+function leaderShare(m: Market): number {
+  if (!m.words || m.words.length === 0) return 0;
+  const pot = m.words.reduce((s, w) => s + w.pool, 0);
+  if (pot <= 0) return 0;
+  return Math.max(...m.words.map((w) => w.pool)) / pot;
+}
+
+/** Deterministic timestamped walk ending exactly at `target` — for sparkline seeds. */
+export function seededWalkTimed(
+  target: number,
+  n: number,
+  seed: number,
+  endTime: number = Date.now(),
+  stepMs = 5_000
+): PricePoint[] {
+  const values = seededWalk(target, n, seed);
+  return values.map((v, i) => ({
+    t: endTime - (n - 1 - i) * stepMs,
+    v,
+  }));
+}
+
+/** Deterministic random walk ending exactly at `target` — for sparkline seeds. */
+function seededWalk(target: number, n: number, seed: number): number[] {
+  const rnd = seededRandom(seed);
+  const start = Math.min(0.95, Math.max(0.05, target + (rnd() - 0.5) * 0.5));
+  const pts: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const base = start + (target - start) * t;
+    const noise = (rnd() - 0.5) * 0.14 * (1 - t);
+    pts.push(Math.min(0.98, Math.max(0.02, base + noise)));
+  }
+  pts[n - 1] = target;
+  return pts;
+}
+
+const FILLER = [
+  "so the way this works is",
+  "you can see the chart here",
+  "we ran the numbers last night and",
+  "honestly nobody expected that",
+  "let me show you one more thing",
+  "back to the main point",
+  "that\u2019s exactly right, and",
+  "if you look at the second half",
+  "we\u2019ll come back to that",
+  "the important thing here is",
+];
+
+const WORDS_BY_MARKET: Record<string, string[]> = {
+  "sol-ai": ["AI", "the Solana network", "agents", "the validator set"],
+  "fed-presser": ["inflation", "the labor market", "our mandate", "policy"],
+  "streams-kai": ["the subathon", "chat", "the challenge", "donations"],
+  "x-grok": ["Grok", "benchmarks", "open source", "agents"],
+  "nbafinals-g7": ["the team", "defense", "MVP chatter", "the fourth quarter"],
+  "earnings-nvda": ["data center", "AI demand", "guidance", "supply chain"],
+  "debate-mayor": ["housing", "the budget", "public safety", "small business"],
+  "spaces-crypto": ["the ETF", "regulation", "liquidity", "the halving"],
+  "podcast-lex": ["consciousness", "the simulation", "love", "discipline"],
+  "kick-ice": ["the ice bath", "the record", "donations", "the timer"],
+};
+
+function randomLine(rnd: () => number, m: Market): string {
+  const filler = FILLER[Math.floor(rnd() * FILLER.length)];
+  const pool = WORDS_BY_MARKET[m.slug] ?? ["the market", "the stream"];
+  const subject = pool[Math.floor(rnd() * pool.length)];
+  return `…${filler} ${subject}…`;
+}
+
+/** Start/stop the global simulation ticker (client-only). */
+export function startSim(intervalMs = 1200) {
+  if (simTimer) return;
+  simTimer = setInterval(() => useSim.getState().tick(), intervalMs);
+}
+
+export function stopSim() {
+  if (simTimer) {
+    clearInterval(simTimer);
+    simTimer = null;
+  }
+}

@@ -8,6 +8,7 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adap
 import { clusterApiUrl } from "@solana/web3.js";
 import { useEffect } from "react";
 import { startSim, stopSim } from "@/lib/sim";
+import { WalletSync } from "@/components/wallet-sync";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -27,7 +28,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletModalProvider>
+          <WalletSync />
+          {children}
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

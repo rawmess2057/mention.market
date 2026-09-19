@@ -9,10 +9,11 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { seededRandom } from "./format";
+import { seededRandom, shortAddr } from "./format";
 import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
+import { claimPayout } from "./settle";
 import type {
   ActivityItem,
   LeaderboardRow,
@@ -347,32 +348,6 @@ export const SEED_MARKETS: Market[] = [
   },
 ];
 
-export const SEED_POSITIONS: Record<string, Position> = {
-  m1: {
-    id: "p-m1",
-    marketId: "m1",
-    yesShares: 40,
-    avgYesPrice: 0.58,
-  },
-  m3: {
-    id: "p-m3",
-    marketId: "m3",
-    noShares: 25,
-    avgNoPrice: 0.47,
-  },
-  m8: {
-    id: "p-m8",
-    marketId: "m8",
-    yesShares: 60,
-    avgYesPrice: 0.52,
-  },
-  m6: {
-    id: "p-m6",
-    marketId: "m6",
-    wordBacks: { "AI demand": 50, guidance: 20 },
-  },
-};
-
 export const SEED_ACTIVITY: ActivityItem[] = [
   { id: "a1", marketId: "m1", kind: "buy", side: "yes", amount: 50, user: "degen_dm", at: NOW - 1 * MIN },
   { id: "a2", marketId: "m1", kind: "buy", side: "no", amount: 25, user: "quant_queen", at: NOW - 2 * MIN },
@@ -384,70 +359,6 @@ export const SEED_ACTIVITY: ActivityItem[] = [
   { id: "a8", marketId: "m6", kind: "back", side: "data center", amount: 300, user: "ai_alpha", at: NOW - 7 * MIN },
 ];
 
-/** Trade ledger entries matching the seeded positions (open legs only). */
-export const SEED_TRADES: TradeRecord[] = [
-  {
-    id: "t1",
-    marketId: "m1",
-    marketTitle: "Will they say \u201cAI\u201d?",
-    kind: "buy",
-    side: "yes",
-    amount: 23.2,
-    shares: 40,
-    price: 0.58,
-    pnl: 0,
-    at: NOW - 2 * HOUR - 12 * MIN,
-  },
-  {
-    id: "t3",
-    marketId: "m3",
-    marketTitle: "Will Powell say \u201cpause\u201d?",
-    kind: "buy",
-    side: "no",
-    amount: 11.75,
-    shares: 25,
-    price: 0.47,
-    pnl: 0,
-    at: NOW - 55 * MIN,
-  },
-  {
-    id: "t6a",
-    marketId: "m6",
-    marketTitle: "Earnings call buzzword race",
-    kind: "back",
-    side: "AI demand",
-    amount: 50,
-    shares: 0,
-    price: 0,
-    pnl: 0,
-    at: NOW - 2 * HOUR,
-  },
-  {
-    id: "t6b",
-    marketId: "m6",
-    marketTitle: "Earnings call buzzword race",
-    kind: "back",
-    side: "guidance",
-    amount: 20,
-    shares: 0,
-    price: 0,
-    pnl: 0,
-    at: NOW - 90 * MIN,
-  },
-  {
-    id: "t8",
-    marketId: "m8",
-    marketTitle: "Will Lex say \u201csimulation\u201d?",
-    kind: "buy",
-    side: "yes",
-    amount: 31.2,
-    shares: 60,
-    price: 0.52,
-    pnl: 0,
-    at: NOW - 21 * HOUR,
-  },
-];
-
 export const LEADERBOARD: LeaderboardRow[] = [
   { rank: 1, handle: "whale_wallet", avatarSeed: "ww", points: 8_420, profit: 3_120, winRate: 0.68, trades: 214 },
   { rank: 2, handle: "quant_queen", avatarSeed: "qq", points: 7_910, profit: 2_450, winRate: 0.71, trades: 189 },
@@ -456,14 +367,14 @@ export const LEADERBOARD: LeaderboardRow[] = [
   { rank: 5, handle: "macro_mike", avatarSeed: "mm", points: 5_420, profit: 1_210, winRate: 0.57, trades: 132 },
   { rank: 6, handle: "hoops_henry", avatarSeed: "hh", points: 4_880, profit: 990, winRate: 0.55, trades: 121 },
   { rank: 7, handle: "stream_sniper", avatarSeed: "ss", points: 4_310, profit: 870, winRate: 0.53, trades: 98 },
-  { rank: 8, handle: "you", avatarSeed: "you", points: 3_940, profit: 640, winRate: 0.61, trades: 87 },
 ];
 
 export const CURRENT_USER: User = {
-  handle: "you",
-  points: 3_940,
-  rank: 8,
-  balance: 1_000,
+  handle: "",
+  points: 0,
+  rank: 0,
+  balance: 0,
+  balanceKind: "usdc",
 };
 
 /** A few transcript lines already in the buffer for live markets. */
@@ -493,6 +404,36 @@ export interface ConfirmTrade {
   amount: number;
 }
 
+/** The per-wallet "book": everything the wallet owns or has done. */
+export interface WalletBook {
+  user: User;
+  positions: Record<string, Position>;
+  trades: TradeRecord[];
+}
+
+function freshBook(wallet: string): WalletBook {
+  return {
+    user: {
+      handle: shortAddr(wallet),
+      points: 0,
+      rank: 0,
+      balance: 0,
+      wallet,
+      balanceKind: "usdc",
+    },
+    positions: {},
+    trades: [],
+  };
+}
+
+function emptyBook(): WalletBook {
+  return { user: { ...CURRENT_USER }, positions: {}, trades: [] };
+}
+
+function projectBook(books: Record<string, WalletBook>, wallet: string | null): WalletBook {
+  return (wallet && books[wallet]) || emptyBook();
+}
+
 interface SimState {
   markets: Record<string, Market>;
   positions: Record<string, Position>;
@@ -500,12 +441,15 @@ interface SimState {
   transcript: Record<string, TranscriptSnippet[]>;
   history: Record<string, PricePoint[]>; // timestamped sparkline/chart data per market
   user: User;
-  claimable: Record<string, number>;
   trades: TradeRecord[];
+  books: Record<string, WalletBook>;
+  activeWallet: string | null;
   pendingTrade: ConfirmTrade | null;
   toast: string | null;
 
   // actions
+  setWallet: (wallet: string | null) => void;
+  setBalance: (wallet: string, balance: number, kind: "usdc" | "sol") => void;
   buyBinary: (marketId: string, side: "yes" | "no", amount: number, txSig?: string) => void;
   sellBinary: (marketId: string, side: "yes" | "no", shares: number) => void;
   backWord: (marketId: string, word: string, amount: number, txSig?: string) => void;
@@ -536,37 +480,26 @@ let simTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Durable slice persisted to localStorage. Volatile state (seeded markets
  *  relative to page-load, history, transcript, toasts) is NOT persisted:
- *  seed markets re-seed fresh each load, anything the user created/traded
- *  survives refresh. */
+ *  seed markets re-seed fresh each load, the wallet book and anything the
+ *  user created survive refresh. */
 interface PersistedState {
-  positions: Record<string, Position>;
-  user: User;
-  claimable: Record<string, number>;
+  books: Record<string, WalletBook>;
+  activeWallet: string | null;
   activity: ActivityItem[];
   customMarkets: Record<string, Market>;
-  trades: TradeRecord[];
 }
 
 const SEED_IDS = new Set(SEED_MARKETS.map((m) => m.id));
-
-function sanitizeNumber(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
 
 export const useSim = create<SimState>()(persist((set, get) => {
   const markets: Record<string, Market> = {};
   for (const m of SEED_MARKETS) markets[m.id] = structuredClone(m);
 
   const positions: Record<string, Position> = {};
-  for (const [k, v] of Object.entries(SEED_POSITIONS)) positions[k] = structuredClone(v);
+  const trades: TradeRecord[] = [];
 
   const transcript: Record<string, TranscriptSnippet[]> = {};
   for (const [k, v] of Object.entries(SEED_TRANSCRIPT)) transcript[k] = structuredClone(v);
-
-  const claimable: Record<string, number> = {
-    // m8 resolved YES, user holds 60 YES shares -> 60 USDC payout
-    m8: 60,
-  };
 
   // Seed plausible price walks so sparklines are never empty
   const history: Record<string, PricePoint[]> = {};
@@ -589,12 +522,43 @@ export const useSim = create<SimState>()(persist((set, get) => {
     history,
     transcript,
     user: { ...CURRENT_USER },
-    claimable,
-    trades: SEED_TRADES.map((t) => ({ ...t })),
+    trades,
+    books: {},
+    activeWallet: null,
     pendingTrade: null,
     toast: null,
 
+    setWallet: (wallet) =>
+      set((s) => {
+        const books = wallet
+          ? s.books[wallet]
+            ? s.books
+            : { ...s.books, [wallet]: freshBook(wallet) }
+          : s.books;
+        const activeWallet = wallet;
+        const book = projectBook(books, activeWallet);
+        return {
+          books,
+          activeWallet,
+          positions: book.positions,
+          trades: book.trades,
+          user: book.user,
+        };
+      }),
+
+    setBalance: (wallet, balance, kind) =>
+      set((s) => {
+        const book = s.books[wallet];
+        if (!book) return {};
+        const user = { ...book.user, balance, balanceKind: kind };
+        const books = { ...s.books, [wallet]: { ...book, user } };
+        const active = s.activeWallet === wallet;
+        return { books, ...(active ? { user } : {}) };
+      }),
+
     buyBinary: (marketId, side, amount, txSig) => {
+      const wallet = get().activeWallet;
+      if (!wallet) return;
       const m = get().markets[marketId];
       if (!m || m.status !== "open") return;
       const cost = amount; // LMSR: buy by cost, derive shares
@@ -617,8 +581,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
       };
 
       set((s) => {
-        const markets = { ...s.markets };
-        const mm = structuredClone(markets[marketId]);
+        const mm = structuredClone(s.markets[marketId]);
         if (side === "yes") {
           mm.yesShares += shares;
         } else {
@@ -626,7 +589,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         }
         mm.volume += cost;
         mm.traders += 1;
-        markets[marketId] = mm;
+        const markets = { ...s.markets, [marketId]: mm };
 
         const positions = { ...s.positions };
         const p: Position = positions[marketId]
@@ -646,13 +609,17 @@ export const useSim = create<SimState>()(persist((set, get) => {
         positions[marketId] = p;
 
         const user = { ...s.user, balance: Math.max(0, s.user.balance - cost) };
-        return { markets, positions, user, trades: [trade, ...s.trades].slice(0, 500) };
+        const trades = [trade, ...s.trades].slice(0, 500);
+        const book = { user, positions, trades };
+        return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
       });
 
       get().showToast(`Bought ${side.toUpperCase()} · ${fmtShares(shares)} shares`);
     },
 
     sellBinary: (marketId, side, shares) => {
+      const wallet = get().activeWallet;
+      if (!wallet) return;
       const s = get();
       const m = s.markets[marketId];
       const p = s.positions[marketId];
@@ -697,13 +664,17 @@ export const useSim = create<SimState>()(persist((set, get) => {
         positions[marketId] = pp;
 
         const user = { ...st.user, balance: st.user.balance + proceeds };
-        return { markets, positions, user, trades: [trade, ...st.trades].slice(0, 500) };
+        const trades = [trade, ...st.trades].slice(0, 500);
+        const book = { user, positions, trades };
+        return { markets, positions, user, trades, books: { ...st.books, [wallet]: book } };
       });
 
       get().showToast(`Sold ${side.toUpperCase()} · +${fmtShares(proceeds)} USDC`);
     },
 
     backWord: (marketId, word, amount, txSig) => {
+      const wallet = get().activeWallet;
+      if (!wallet) return;
       const m = get().markets[marketId];
       if (!m || m.status !== "open" || !m.words) return;
 
@@ -745,52 +716,49 @@ export const useSim = create<SimState>()(persist((set, get) => {
         positions[marketId] = p;
 
         const user = { ...s.user, balance: Math.max(0, s.user.balance - amount) };
-        return { markets, positions, user, trades: [trade, ...s.trades].slice(0, 500) };
+        const trades = [trade, ...s.trades].slice(0, 500);
+        const book = { user, positions, trades };
+        return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
       });
 
       get().showToast(`Backed \u201c${word}\u201d · ${fmtShares(amount)} USDC`);
     },
 
     claim: (marketId) => {
+      const wallet = get().activeWallet;
+      if (!wallet) return;
       const s = get();
-      const amt = s.claimable[marketId];
-      if (!amt) return;
       const m = s.markets[marketId];
       const pos = s.positions[marketId];
-      const win = m?.winningOutcome;
-      let side = win ?? "yes";
-      let cost = 0;
-      if (m?.type === "binary") {
-        const isYes = win === "yes";
-        const sh = isYes ? (pos?.yesShares ?? 0) : (pos?.noShares ?? 0);
-        const avg = isYes ? (pos?.avgYesPrice ?? 0) : (pos?.avgNoPrice ?? 0);
-        cost = avg * sh;
-        if (!(avg > 0)) side = isYes ? "yes" : "no";
-      } else if (pos?.wordBacks && win) {
-        cost = pos.wordBacks[win] ?? 0;
-      }
+      if (!m || !pos || pos.claimed) return;
+      const q = claimPayout(m, pos);
+      if (!q || q.payout <= 0) return;
       const trade: TradeRecord = {
         id: `t-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
         marketId,
-        marketTitle: m?.title ?? "",
+        marketTitle: m.title,
         kind: "claim",
-        side,
-        amount: amt,
+        side: q.side,
+        amount: q.payout,
         shares: 0,
         price: 0,
-        pnl: amt - cost,
+        pnl: q.payout - q.cost,
         at: Date.now(),
       };
       set((st) => {
-        const claimable = { ...st.claimable };
-        delete claimable[marketId];
         const positions = { ...st.positions };
         const p = positions[marketId];
-        if (p) positions[marketId] = { ...p, claimed: true, payout: amt };
-        const user = { ...st.user, balance: st.user.balance + amt, points: st.user.points + 25 };
-        return { claimable, positions, user, trades: [trade, ...st.trades].slice(0, 500) };
+        if (p) positions[marketId] = { ...p, claimed: true, payout: q.payout };
+        const user = {
+          ...st.user,
+          balance: st.user.balance + q.payout,
+          points: st.user.points + 25,
+        };
+        const trades = [trade, ...st.trades].slice(0, 500);
+        const book = { user, positions, trades };
+        return { positions, user, trades, books: { ...st.books, [wallet]: book } };
       });
-      get().showToast(`Claimed ${fmtShares(amt)} USDC 🎉`);
+      get().showToast(`Claimed ${fmtShares(q.payout)} USDC 🎉`);
     },
 
     challenge: (marketId) => {
@@ -976,21 +944,12 @@ export const useSim = create<SimState>()(persist((set, get) => {
     },
   };
 }, {
-  name: "mention-market-sim-v1",
-  version: 2,
-  migrate: (persisted, version) => {
-    const p = (persisted ?? {}) as Partial<PersistedState>;
-    if (version < 2) {
-      return { ...p, trades: [] as TradeRecord[] };
-    }
-    return p;
-  },
+  name: "mention-market-sim-v2",
+  version: 1,
   partialize: (s) => ({
-    positions: s.positions,
-    user: s.user,
-    claimable: s.claimable,
+    books: s.books,
+    activeWallet: s.activeWallet,
     activity: s.activity.slice(0, 200),
-    trades: s.trades.slice(0, 500),
     customMarkets: Object.fromEntries(
       Object.entries(s.markets).filter(([id]) => !SEED_IDS.has(id))
     ),
@@ -1001,22 +960,19 @@ export const useSim = create<SimState>()(persist((set, get) => {
     for (const [id, m] of Object.entries(p.customMarkets ?? {})) {
       if (m && typeof m.id === "string") markets[id] = m;
     }
-    const user = p.user
-      ? {
-          ...current.user,
-          ...p.user,
-          balance: sanitizeNumber(p.user.balance, current.user.balance),
-          points: sanitizeNumber(p.user.points, current.user.points),
-        }
-      : current.user;
+    const books = p.books ?? {};
+    const activeWallet =
+      p.activeWallet && books[p.activeWallet] ? p.activeWallet : null;
+    const book = projectBook(books, activeWallet);
     return {
       ...current,
       markets,
-      positions: p.positions ?? current.positions,
       activity: p.activity ?? current.activity,
-      claimable: p.claimable ?? current.claimable,
-      trades: p.trades ?? current.trades,
-      user,
+      books,
+      activeWallet,
+      positions: book.positions,
+      trades: book.trades,
+      user: book.user,
     };
   },
 }));

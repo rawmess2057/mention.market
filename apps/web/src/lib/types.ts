@@ -125,6 +125,10 @@ export interface User {
   points: number;
   rank: number;
   balance: number;
+  /** Connected wallet address this book belongs to ("" = guest). */
+  wallet?: string;
+  /** Unit the balance is denominated in. */
+  balanceKind?: "usdc" | "sol";
 }
 
 export const VERTICAL_META: Record<

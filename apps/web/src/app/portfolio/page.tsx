@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn, fmtTimeLeft, fmtUsd, shortAddr } from "@/lib/format";
 import { lmsrPositionValue, lmsrProbYes } from "@/lib/lmsr";
 import { pnlSeries, summarizePnl, verticalBreakdown } from "@/lib/pnl";
+import { claimableAmounts } from "@/lib/settle";
 import { useSim } from "@/lib/sim";
 import { STATUS_META, type Market, type TradeRecord } from "@/lib/types";
 
@@ -127,6 +130,7 @@ function computePositions(
 }
 
 export default function PortfolioPage() {
+  const { connected } = useWallet();
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
@@ -139,23 +143,37 @@ export default function PortfolioPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="overview" className="flex-1 gap-1.5 sm:flex-none">
-            <BarChart3 className="h-3.5 w-3.5" /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="positions" className="flex-1 gap-1.5 sm:flex-none">
-            <Wallet className="h-3.5 w-3.5" /> Positions
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-1 gap-1.5 sm:flex-none">
-            <HistoryIcon className="h-3.5 w-3.5" /> History
-          </TabsTrigger>
-        </TabsList>
+      {connected ? (
+        <Tabs defaultValue="overview">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="overview" className="flex-1 gap-1.5 sm:flex-none">
+              <BarChart3 className="h-3.5 w-3.5" /> Overview
+            </TabsTrigger>
+            <TabsTrigger value="positions" className="flex-1 gap-1.5 sm:flex-none">
+              <Wallet className="h-3.5 w-3.5" /> Positions
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex-1 gap-1.5 sm:flex-none">
+              <HistoryIcon className="h-3.5 w-3.5" /> History
+            </TabsTrigger>
+          </TabsList>
 
-        <OverviewTab />
-        <PositionsTab />
-        <HistoryTab />
-      </Tabs>
+          <OverviewTab />
+          <PositionsTab />
+          <HistoryTab />
+        </Tabs>
+      ) : (
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-gray-warm bg-white p-12 text-center shadow-card">
+          <Wallet className="h-8 w-8 text-gray-mid" />
+          <div>
+            <p className="font-serif text-lg font-semibold text-navy">Connect your wallet</p>
+            <p className="mt-1 max-w-md text-sm text-gray-mid">
+              Your portfolio is per-wallet: positions, trade history, and P&L are all
+              tied to the connected account.
+            </p>
+          </div>
+          <WalletMultiButton className="!bg-navy hover:opacity-90" />
+        </div>
+      )}
     </div>
   );
 }
@@ -171,8 +189,11 @@ function OverviewTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
-  const claimable = useSim((s) => s.claimable);
   const trades = useSim((s) => s.trades);
+  const claimable = useMemo(
+    () => claimableAmounts(positions, markets),
+    [positions, markets]
+  );
 
   const overview = useMemo(
     () => summarizePnl(trades, positions, markets, claimable, user.balance),
@@ -412,9 +433,12 @@ function PositionsTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
-  const claimable = useSim((s) => s.claimable);
   const sellBinary = useSim((s) => s.sellBinary);
   const claim = useSim((s) => s.claim);
+  const claimable = useMemo(
+    () => claimableAmounts(positions, markets),
+    [positions, markets]
+  );
 
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [sort, setSort] = useState<SortKey>("pnl");

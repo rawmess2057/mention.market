@@ -41,6 +41,7 @@ export function TopBar() {
   const toast = useSim((s) => s.toast);
   const showToast = useSim((s) => s.showToast);
   const { usdcBalance } = useDevnetUsdc();
+  const pathname = usePathname();
   const [toastVisible, setToastVisible] = useState(false);
 
   useEffect(() => {
@@ -64,10 +65,18 @@ export function TopBar() {
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-3 py-1.5 text-xs sm:flex">
-              <span className="text-gray-mid">Free-play</span>
-              <span className="font-mono font-semibold text-green">{fmtUsd(user.balance)}</span>
-            </div>
+            {connected && (
+              <div className="hidden items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-3 py-1.5 text-xs sm:flex">
+                <span className="text-gray-mid">
+                  {user.balanceKind === "sol" ? "Balance" : "Balance"}
+                </span>
+                <span className="font-mono font-semibold text-green">
+                  {user.balanceKind === "sol"
+                    ? `◎ ${user.balance.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                    : fmtUsd(user.balance)}
+                </span>
+              </div>
+            )}
             {connected && usdcBalance !== null && (
               <a
                 href="https://faucet.circle.com/"
@@ -111,6 +120,17 @@ export function TopBar() {
                         <div className="font-medium text-navy">{user.handle}</div>
                         <div className="mt-0.5 font-mono">{shortAddr(publicKey.toBase58())}</div>
                       </div>
+                      <DropdownMenu.Separator className="my-1 h-px bg-gray-warm/60" />
+                      <DropdownItem asChild active={pathname === "/portfolio"}>
+                        <Link href="/portfolio">
+                          <Briefcase className="h-3.5 w-3.5" /> Portfolio
+                        </Link>
+                      </DropdownItem>
+                      <DropdownItem asChild active={pathname === "/leaderboard"}>
+                        <Link href="/leaderboard">
+                          <Trophy className="h-3.5 w-3.5" /> Ranks
+                        </Link>
+                      </DropdownItem>
                       <DropdownMenu.Separator className="my-1 h-px bg-gray-warm/60" />
                       <DropdownItem
                         onSelect={() => navigator.clipboard.writeText(publicKey.toBase58())}
@@ -205,17 +225,23 @@ export function UserBadge() {
 function DropdownItem({
   asChild,
   destructive,
+  active,
   onSelect,
   children,
 }: {
   asChild?: boolean;
   destructive?: boolean;
+  active?: boolean;
   onSelect?: () => void | Promise<void>;
   children: React.ReactNode;
 }) {
   const cls = cn(
     "flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
-    destructive ? "text-red-brand hover:bg-red-brand/10" : "text-navy hover:bg-blue-light"
+    active
+      ? "bg-blue-light font-semibold text-blue"
+      : destructive
+        ? "text-red-brand hover:bg-red-brand/10"
+        : "text-navy hover:bg-blue-light"
   );
   if (asChild)
     return (

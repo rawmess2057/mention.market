@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,9 +19,12 @@ import type { Market } from "@/lib/types";
 const QUICK = [5, 10, 25, 100];
 
 export function WordBoard({ market }: { market: Market }) {
+  const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const backWord = useSim((s) => s.backWord);
   const showToast = useSim((s) => s.showToast);
+  const balance = useSim((s) => s.user.balance);
   const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
   const [selected, setSelected] = useState<string | null>(null);
   const [amount, setAmount] = useState("10");
@@ -147,8 +152,12 @@ export function WordBoard({ market }: { market: Market }) {
               <Button
                 size="lg"
                 className="w-full"
-                disabled={amt <= 0 || submitting || usdcBusy}
+                disabled={!connected || amt <= 0 || amt > balance || submitting || usdcBusy}
                 onClick={async () => {
+                  if (!connected) {
+                    setVisible(true);
+                    return;
+                  }
                   if (!selected || amt <= 0) return;
                   const word = selected;
                   setSubmitting(true);
@@ -161,7 +170,11 @@ export function WordBoard({ market }: { market: Market }) {
               >
                 {submitting || usdcBusy
                   ? "Confirming…"
-                  : `Back ${selected} · ${fmtUsd(amt)}`}
+                  : !connected
+                    ? "Connect wallet to back"
+                    : amt > balance
+                      ? "Insufficient balance"
+                      : `Back ${selected} · ${fmtUsd(amt)}`}
               </Button>
             </div>
           )}

@@ -1,14 +1,34 @@
 "use client";
 
+import { useMemo } from "react";
 import { Medal } from "lucide-react";
-import { cn, fmtUsd } from "@/lib/format";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { cn, fmtUsd, shortAddr } from "@/lib/format";
 import { LEADERBOARD, useSim } from "@/lib/sim";
 
 const MEDALS = ["text-amber-600", "text-gray-cool", "text-orange-600"];
 
 export default function LeaderboardPage() {
+  const { connected, publicKey } = useWallet();
   const user = useSim((s) => s.user);
+  const trades = useSim((s) => s.trades);
   const leaderboard = LEADERBOARD;
+
+  const me = useMemo(() => {
+    if (!connected || !publicKey) return null;
+    const realized = trades.reduce((s, t) => s + t.pnl, 0);
+    return {
+      rank: leaderboard.length + 1,
+      handle: shortAddr(publicKey.toBase58()),
+      avatarSeed: "you",
+      points: user.points,
+      profit: realized,
+      winRate: 0,
+      trades: trades.length,
+    };
+  }, [connected, publicKey, user.points, trades, leaderboard.length]);
+
+  const rows = me ? [...leaderboard, me] : leaderboard;
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -20,7 +40,7 @@ export default function LeaderboardPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-warm bg-white shadow-card">
-        {leaderboard.map((row, i) => (
+        {rows.map((row, i) => (
           <div
             key={row.handle}
             className={cn(
@@ -47,7 +67,7 @@ export default function LeaderboardPage() {
                 )}
               </div>
               <div className="text-[11px] text-gray-mid">
-                {row.trades} trades · {(row.winRate * 100).toFixed(0)}% win rate
+                {row.trades} trades · {me && row.handle === me.handle ? "—" : `${(row.winRate * 100).toFixed(0)}% win rate`}
               </div>
             </div>
             <div className="text-right">

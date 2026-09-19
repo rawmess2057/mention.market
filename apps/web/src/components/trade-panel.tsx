@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Info } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,9 +16,15 @@ import type { Market } from "@/lib/types";
 
 const QUICK = [10, 25, 50, 100];
 
+function fmtBalance(amount: number, kind: "usdc" | "sol" | undefined) {
+  return kind === "sol" ? `◎ ${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : fmtUsd(amount);
+}
+
 export function TradePanel({ market }: { market: Market }) {
+  const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const m = useSim((s) => s.markets[market.id]) ?? market;
-  const balance = useSim((s) => s.user.balance);
+  const user = useSim((s) => s.user);
   const buyBinary = useSim((s) => s.buyBinary);
   const setPendingTrade = useSim((s) => s.setPendingTrade);
   const pendingTrade = useSim((s) => s.pendingTrade);
@@ -28,6 +36,8 @@ export function TradePanel({ market }: { market: Market }) {
   const [submitting, setSubmitting] = useState(false);
 
   const amt = Math.max(0, parseFloat(amount) || 0);
+  const balance = user.balance;
+  const balanceKind = user.balanceKind;
 
   const quote = useMemo(() => {
     if (amt <= 0) return null;
@@ -48,7 +58,16 @@ export function TradePanel({ market }: { market: Market }) {
 
   const price = lmsrProbYes(m.yesShares, m.noShares, m.b);
   const myPrice = side === "yes" ? price : 1 - price;
-  const disabled = m.status !== "open" || amt <= 0 || amt > balance;
+  const disabled =
+    !connected || m.status !== "open" || amt <= 0 || amt > balance;
+
+  const cta = !connected
+    ? "Connect wallet to trade"
+    : m.status !== "open"
+      ? "Market closed"
+      : amt > balance
+        ? "Insufficient balance"
+        : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`;
 
   return (
     <>
@@ -88,9 +107,9 @@ export function TradePanel({ market }: { market: Market }) {
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-gray-mid">Amount (USDC)</span>
+            <span className="text-gray-mid">Amount ({balanceKind === "sol" ? "SOL" : "USDC"})</span>
             <span className="text-gray-mid">
-              Balance: <span className="font-mono text-green">{fmtUsd(balance)}</span>
+              Balance: <span className="font-mono text-green">{fmtBalance(balance, balanceKind)}</span>
             </span>
           </div>
           <Input
@@ -134,23 +153,26 @@ export function TradePanel({ market }: { market: Market }) {
             className="w-full"
             disabled={disabled}
             onClick={() =>
-              setPendingTrade({ marketId: m.id, side, amount: amt, shares: quote?.shares })
+              !connected
+                ? setVisible(true)
+                : setPendingTrade({ marketId: m.id, side, amount: amt, shares: quote?.shares })
             }
           >
-            {m.status !== "open"
-              ? "Market closed"
-              : amt > balance
-                ? "Insufficient balance"
-                : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`}
+            {cta}
           </Button>
         </motion.div>
 
         <div className="mt-3 flex items-start gap-1.5 text-[10px] text-gray-mid">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>
-            Demo mode: trades execute instantly against a simulated LMSR. Mainnet flows will require
-            a wallet signature per trade.
-          </span>
+          {connected ? (
+            <span>
+              Demo mode: trades execute instantly against a simulated LMSR using your {balanceKind === "sol" ? "devnet SOL balance" : "devnet USDC balance"}.
+            </span>
+          ) : (
+            <span>
+              Connect a wallet to trade — your book, balance, and P&L live on your own account.
+            </span>
+          )}
         </div>
       </div>
 
@@ -198,8 +220,8 @@ export function TradePanel({ market }: { market: Market }) {
               : "Confirm · Sign & buy (demo)"}
           </Button>
           <p className="text-center text-[10px] text-gray-mid">
-            Wallet connected? Confirming signs a devnet USDC transfer to the demo vault, then the
-            simulated fill executes. No wallet? Free-play sim.
+            Confirming signs a devnet USDC transfer to the demo vault, then the simulated fill
+            executes against your book.
           </p>
         </DialogContent>
       </Dialog>

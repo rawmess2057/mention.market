@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Wallet, Clock, Zap, TrendingUp } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, fmtUsd, shortAddr } from "@/lib/format";
@@ -13,10 +15,16 @@ import type { Market } from "@/lib/types";
 
 const QUICK = [10, 25, 50, 100];
 
+function fmtBalance(amount: number, kind: "usdc" | "sol" | undefined) {
+  return kind === "sol" ? `◎ ${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : fmtUsd(amount);
+}
+
 export function OrderBook({ market }: { market: Market }) {
+  const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
-  const balance = useSim((s) => s.user.balance);
+  const user = useSim((s) => s.user);
   const buyBinary = useSim((s) => s.buyBinary);
   const activity = useSim((s) => s.activity);
   const showToast = useSim((s) => s.showToast);
@@ -28,7 +36,9 @@ export function OrderBook({ market }: { market: Market }) {
 
   const amt = Math.max(0, parseFloat(amount) || 0);
   const price = lmsrProbYes(m.yesShares, m.noShares, m.b);
-  const disabled = m.status !== "open" || amt <= 0 || amt > balance;
+  const balance = user.balance;
+  const balanceKind = user.balanceKind;
+  const disabled = !connected || m.status !== "open" || amt <= 0 || amt > balance;
 
   const recentTrades = useMemo(
     () => activity.filter((a) => a.marketId === m.id).slice(0, 5),
@@ -53,7 +63,9 @@ export function OrderBook({ market }: { market: Market }) {
           <Wallet className="h-3.5 w-3.5" />
           <span className="font-medium">Balance</span>
         </div>
-        <div className="mt-1 font-mono text-xl font-bold text-navy">{fmtUsd(balance)}</div>
+        <div className="mt-1 font-mono text-xl font-bold text-navy">
+          {fmtBalance(balance, balanceKind)}
+        </div>
       </div>
 
       {/* Open Position */}
@@ -126,7 +138,9 @@ export function OrderBook({ market }: { market: Market }) {
 
         {/* Amount */}
         <div className="mt-3">
-          <div className="mb-1 text-[11px] text-gray-mid">Amount (USDC)</div>
+          <div className="mb-1 text-[11px] text-gray-mid">
+            Amount ({balanceKind === "sol" ? "SOL" : "USDC"})
+          </div>
           <Input
             type="number"
             inputMode="decimal"
@@ -155,6 +169,10 @@ export function OrderBook({ market }: { market: Market }) {
             className="w-full"
             disabled={disabled || submitting || usdcBusy}
             onClick={async () => {
+              if (!connected) {
+                setVisible(true);
+                return;
+              }
               setSubmitting(true);
               const sig = await walletBuy(amt);
               buyBinary(m.id, side, amt, sig ?? undefined);
@@ -165,9 +183,11 @@ export function OrderBook({ market }: { market: Market }) {
             <Zap className="h-3.5 w-3.5" />
             {submitting || usdcBusy
               ? "Confirming…"
-              : disabled
-                ? "Enter amount"
-                : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`}
+              : !connected
+                ? "Connect wallet"
+                : disabled
+                  ? "Enter amount"
+                  : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`}
           </Button>
         </motion.div>
       </div>

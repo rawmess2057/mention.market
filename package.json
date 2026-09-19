@@ -2,6 +2,8 @@
   "name": "mention-market",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "pnpm --filter @mention/web dev",
     "build": "pnpm --filter @mention/web build",

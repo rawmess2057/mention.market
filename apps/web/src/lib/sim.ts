@@ -820,8 +820,10 @@ export const useSim = create<SimState>()(persist((set, get) => {
 
         for (const m of Object.values(markets)) {
           if (m.status === "open" && Date.now() >= m.endTime) {
+            // Locked: propose a deterministic outcome and open the challenge window.
             const mm = structuredClone(m);
-            mm.status = mm.status === "open" ? "resolving" : mm.status;
+            mm.status = "resolving";
+            proposeResolution(mm, newTranscript[mm.slug] ?? []);
             markets[m.id] = mm;
             newActivity.push({
               id: `r-${m.id}-${Date.now()}`,
@@ -833,35 +835,28 @@ export const useSim = create<SimState>()(persist((set, get) => {
             });
             continue;
           }
-          if (m.status !== "open") {
-            // resolving -> resolved after a bit
-            if (m.status === "resolving" && rnd() < 0.02) {
-              const mm = structuredClone(m);
-              mm.status = "resolved";
-              mm.winningOutcome = "yes";
-              mm.confidence = 94 + Math.floor(rnd() * 5);
-              mm.resolvedAt = Date.now();
-              const now = Date.now();
-              mm.evidence = {
-                winningOutcome: "yes",
-                confidence: mm.confidence,
-                proposedAt: now,
-                proposedBy: "mention-resolver-01",
-                evidenceHash: Math.floor(rnd() * 1e9).toString(16).slice(0, 4) + "…" + "f3a1",
-                bondUsd: 50,
-                challengeWindowMs: 20 * MIN,
-                challengeDeadline: now + 20 * MIN,
-                challenged: false,
-                snippets: (newTranscript[mm.slug] ?? []).slice(-3).map((l) => ({
-                  t: l.t,
-                  speaker: l.speaker,
-                  text: l.text,
-                })),
-              };
+          if (m.status === "resolving") {
+            const mm = structuredClone(m);
+            // A resolving market with no proposal (seeded/legacy) gets one now.
+            if (!mm.evidence) {
+              proposeResolution(mm, newTranscript[mm.slug] ?? []);
+              markets[m.id] = mm;
+              continue;
+            }
+            // Finalize after the window; a dispute resets the proposal instead.
+            if (Date.now() >= mm.evidence.challengeDeadline) {
+              if (mm.evidence.challenged) {
+                proposeResolution(mm, newTranscript[mm.slug] ?? []);
+              } else {
+                mm.status = "resolved";
+                mm.winningOutcome = mm.evidence.winningOutcome;
+                mm.resolvedAt = Date.now();
+              }
               markets[m.id] = mm;
             }
             continue;
           }
+          if (m.status !== "open") continue;
 
           // --- live market simulation ---
           const mm = structuredClone(m);
@@ -980,6 +975,100 @@ export const useSim = create<SimState>()(persist((set, get) => {
 /* ------------------------------------------------------------------ */
 /* Simulation helpers                                                  */
 /* ------------------------------------------------------------------ */
+
+/** Challenge window used by the sim (kept short so the pipeline is visible). */
+const SIM_CHALLENGE_WINDOW_MS = 2 * MIN;
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/** Count standalone mentions of `phrase` in `hay` (word-boundary aware, so
+ *  "AI" does not match "claim" or "available"). */
+function mentions(hay: string, phrase: string): number {
+  if (!phrase) return 0;
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "g");
+  return (hay.match(re) ?? []).length;
+}
+
+/**
+ * Deterministic outcome proposal.
+ * - majority: the word with the largest pool (ties broken alphabetically).
+ * - binary: YES when a watched word is mentioned in the captured transcript,
+ *   otherwise the market's final implied probability decides.
+ */
+export function proposedOutcome(m: Market, snippets: TranscriptSnippet[]): string {
+  if (m.type === "majority") {
+    if (!m.words || m.words.length === 0) return "";
+    return [...m.words].sort((a, b) =>
+      b.pool !== a.pool ? b.pool - a.pool : a.word.localeCompare(b.word)
+    )[0].word;
+  }
+  const hay = snippets.map((s) => s.text.toLowerCase()).join(" ");
+  const hits = (WATCH_WORDS[m.slug] ?? []).reduce(
+    (n, w) => n + mentions(hay, w.toLowerCase()),
+    0
+  );
+  if (hits > 0) return "yes";
+  return lmsrProbYes(m.yesShares, m.noShares, m.b) >= 0.5 ? "yes" : "no";
+}
+
+/** Deterministic confidence for a proposal (58–99). */
+function proposedConfidence(m: Market, outcome: string): number {
+  if (m.type === "majority") {
+    const pot = (m.words ?? []).reduce((s, w) => s + w.pool, 0);
+    const win = (m.words ?? []).find((w) => w.word === outcome)?.pool ?? 0;
+    return clamp(55 + Math.round((pot > 0 ? win / pot : 0) * 44), 55, 99);
+  }
+  const pYes = lmsrProbYes(m.yesShares, m.noShares, m.b);
+  const p = outcome === "yes" ? pYes : 1 - pYes;
+  return clamp(Math.round(58 + Math.abs(p - 0.5) * 74), 58, 99);
+}
+
+/** Stable FNV-1a hash of the evidence payload, formatted like a tx hash. */
+function evidenceHashFor(outcome: string, snippets: TranscriptSnippet[]): string {
+  const payload = `${outcome}|${snippets
+    .map((s) => `${s.t}:${s.speaker}:${s.text}`)
+    .join("|")}`;
+  let h = 2166136261;
+  for (let i = 0; i < payload.length; i++) {
+    h ^= payload.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const hex = (h >>> 0).toString(16).padStart(8, "0");
+  return `${hex.slice(0, 4)}…${hex.slice(4)}`;
+}
+
+/**
+ * Attach a deterministic resolution proposal to `m` (mutates in place):
+ * sets the winning outcome, confidence, and evidence package with a deadline.
+ * The proposal is backdated to the lock time so markets that ended long ago
+ * finalize promptly once their challenge window has elapsed.
+ */
+function proposeResolution(m: Market, snippets: TranscriptSnippet[]): void {
+  const outcome = proposedOutcome(m, snippets);
+  const confidence = proposedConfidence(m, outcome);
+  const proposedAt = Math.min(Date.now(), m.endTime);
+  m.winningOutcome = outcome;
+  m.confidence = confidence;
+  m.evidence = {
+    winningOutcome: outcome,
+    confidence,
+    proposedAt,
+    proposedBy: "mention-resolver-01",
+    evidenceHash: evidenceHashFor(outcome, snippets),
+    bondUsd: 50,
+    challengeWindowMs: SIM_CHALLENGE_WINDOW_MS,
+    challengeDeadline: proposedAt + SIM_CHALLENGE_WINDOW_MS,
+    challenged: false,
+    snippets: snippets.slice(-3).map((l) => ({
+      t: l.t,
+      speaker: l.speaker,
+      text: l.text,
+    })),
+  };
+}
 
 /** Shares received for spending `cost` USDC on `side` in an LMSR market. */
 export function lmsrSharesForCost(m: Market, side: "yes" | "no", cost: number): number {

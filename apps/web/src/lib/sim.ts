@@ -14,6 +14,7 @@ import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
 import { claimPayout } from "./settle";
+import { isChainId } from "./chain";
 import type {
   ActivityItem,
   LeaderboardRow,
@@ -463,7 +464,10 @@ interface SimState {
     words: string[];
     minutes: number;
     rules: string;
+    chainId?: number;
   }) => string;
+  ingestChainMarkets: (markets: Market[]) => void;
+  ingestChainPositions: (positions: Position[]) => void;
   setPendingTrade: (t: ConfirmTrade | null) => void;
   showToast: (msg: string | null) => void;
   tick: () => void;
@@ -773,7 +777,39 @@ export const useSim = create<SimState>()(persist((set, get) => {
       get().showToast("Challenge submitted — resolver review started");
     },
 
-    createMarket: ({ title, event, vertical, type, words, minutes, rules }) => {
+    createMarket: ({ title, event, vertical, type, words, minutes, rules, chainId }) => {
+      if (chainId) {
+        const id = `c${chainId}`;
+        const now = Date.now();
+        const market: Market = {
+          id,
+          slug: id,
+          title,
+          event,
+          vertical,
+          type,
+          status: "open",
+          createdAt: now,
+          endTime: now + minutes * MIN,
+          volume: 0,
+          traders: 0,
+          yesShares: 100,
+          noShares: 100,
+          b: Math.max(50, minutes * 2),
+          words:
+            type === "majority"
+              ? words.map((w) => ({ word: w, pool: 0, bettors: 0, lastBetAt: 0 }))
+              : undefined,
+          rules,
+          creator: "chain",
+          creatorFeeBps: 100,
+          source: `chain #${chainId} (devnet)`,
+          sourceUrl: `https://explorer.solana.com/address/E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV?cluster=devnet`,
+        };
+        set((s) => ({ markets: { ...s.markets, [id]: market } }));
+        get().showToast("Market launched on-chain — trading live!");
+        return id;
+      }
       const id = `m${Date.now()}`;
       const slug = `custom-${id}`;
       const now = Date.now();
@@ -807,6 +843,30 @@ export const useSim = create<SimState>()(persist((set, get) => {
       return id;
     },
 
+    ingestChainMarkets: (incoming) => {
+      set((s) => {
+        const markets = { ...s.markets };
+        for (const m of incoming) markets[m.id] = m;
+        return { markets };
+      });
+    },
+
+    ingestChainPositions: (incoming) => {
+      const wallet = get().activeWallet;
+      if (!wallet) return;
+      set((s) => {
+        const positions = { ...s.positions };
+        for (const p of incoming) positions[p.marketId] = p;
+        const books = { ...s.books };
+        const book = books[wallet];
+        if (book) {
+          const bookPositions = { ...book.positions, ...positions };
+          books[wallet] = { ...book, positions: bookPositions };
+        }
+        return { positions, books };
+      });
+    },
+
     setPendingTrade: (t) => set({ pendingTrade: t }),
     showToast: (msg) => set({ toast: msg }),
 
@@ -819,6 +879,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const newHistory: Record<string, PricePoint[]> = { ...s.history };
 
         for (const m of Object.values(markets)) {
+          if (isChainId(m.id)) continue; // on-chain markets resolve via the program + oracle
           if (m.status === "open" && Date.now() >= m.endTime) {
             // Locked: propose a deterministic outcome and open the challenge window.
             const mm = structuredClone(m);

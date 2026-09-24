@@ -6,12 +6,21 @@ import { Button } from "@/components/ui/button";
 import { cn, fmtUsd } from "@/lib/format";
 import { lmsrPositionValue } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 export function PositionCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
   const sellBinary = useSim((s) => s.sellBinary);
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
+
+  const onSell = async (side: "yes" | "no", shares: number) => {
+    const sig = chainMarket ? await chain.sell(m, side, shares) : null;
+    sellBinary(m.id, side, shares);
+  };
 
   const summary = useMemo<
     | null
@@ -84,7 +93,7 @@ export function PositionCard({ market }: { market: Market }) {
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => sellBinary(m.id, "yes", summary.yes)}
+                  onClick={() => onSell("yes", summary.yes)}
                 >
                   Sell YES
                 </Button>
@@ -94,7 +103,7 @@ export function PositionCard({ market }: { market: Market }) {
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={() => sellBinary(m.id, "no", summary.no)}
+                  onClick={() => onSell("no", summary.no)}
                 >
                   Sell NO
                 </Button>

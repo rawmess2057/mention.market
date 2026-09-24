@@ -2,18 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { Check, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/format";
 import { useSim } from "@/lib/sim";
+import { useChain } from "@/hooks/useChain";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 
 const WORD_LIMIT = 12;
 
 export default function CreateMarketPage() {
   const router = useRouter();
+  const { connected } = useWallet();
   const createMarket = useSim((s) => s.createMarket);
+  const chain = useChain();
+  const [submitting, setSubmitting] = useState(false);
 
   const [step, setStep] = useState(0);
   const [vertical, setVertical] = useState<Vertical>("streams");
@@ -31,8 +36,9 @@ export default function CreateMarketPage() {
     (step === 2 && (type === "binary" ? question.trim().length > 5 : words.length >= 2)) ||
     step === 3;
 
-  const submit = () => {
-    const id = createMarket({
+  const submit = async () => {
+    setSubmitting(true);
+    const params = {
       title:
         type === "binary"
           ? question.trim()
@@ -40,14 +46,29 @@ export default function CreateMarketPage() {
       event: event.trim(),
       vertical,
       type,
-      words,
+      words:
+        type === "binary" ? [question.trim()] : words,
       minutes: Math.max(5, parseInt(minutes) || 60),
       rules:
         rules.trim() ||
         (type === "binary"
           ? `Resolves YES if the exact phrase from the title is spoken during the event (case-insensitive). Transcript: Deepgram primary feed.`
           : `First phrase from the board spoken during the event wins. Case-insensitive. 1% rake.`),
-    });
+    };
+    try {
+      if (connected) {
+        const chainId = await chain.create(params);
+        if (chainId != null) {
+          const id = createMarket({ ...params, chainId });
+          const created = useSim.getState().markets[id];
+          router.push(`/market/${created.slug}`);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("on-chain market creation failed — creating locally instead:", err);
+    }
+    const id = createMarket(params);
     const created = useSim.getState().markets[id];
     router.push(`/market/${created.slug}`);
   };
@@ -258,8 +279,14 @@ export default function CreateMarketPage() {
             Continue <ChevronRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button variant="yes" className="flex-[2]" size="lg" onClick={submit}>
-            Launch market 🚀
+          <Button
+            variant="yes"
+            className="flex-[2]"
+            size="lg"
+            disabled={submitting}
+            onClick={submit}
+          >
+            {submitting ? "Launching…" : "Launch market 🚀"}
           </Button>
         )}
       </div>

@@ -9,6 +9,7 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { useEffect } from "react";
 import { startSim, stopSim } from "@/lib/sim";
 import { WalletSync } from "@/components/wallet-sync";
+import { ChainSync } from "@/components/chain-sync";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <WalletSync />
+          <ChainSync />
           {children}
         </WalletModalProvider>
       </WalletProvider>

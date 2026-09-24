@@ -12,6 +12,8 @@ import { cn, fmtUsd, shortAddr } from "@/lib/format";
 import { lmsrBuyCost, lmsrPriceAfterBuy, lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 const QUICK = [10, 25, 50, 100];
@@ -30,6 +32,8 @@ export function TradePanel({ market }: { market: Market }) {
   const pendingTrade = useSim((s) => s.pendingTrade);
   const showToast = useSim((s) => s.showToast);
   const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
 
   const [side, setSide] = useState<"yes" | "no">("yes");
   const [amount, setAmount] = useState("10");
@@ -204,7 +208,9 @@ export function TradePanel({ market }: { market: Market }) {
             onClick={async () => {
               if (!pendingTrade) return;
               setSubmitting(true);
-              const sig = await walletBuy(pendingTrade.amount);
+              const sig = chainMarket
+                ? await chain.buy(m, pendingTrade.side as "yes" | "no", pendingTrade.amount)
+                : await walletBuy(pendingTrade.amount);
               buyBinary(m.id, pendingTrade.side as "yes" | "no", pendingTrade.amount, sig ?? undefined);
               setPendingTrade(null);
               setSubmitting(false);
@@ -217,11 +223,14 @@ export function TradePanel({ market }: { market: Market }) {
           >
             {submitting || usdcBusy
               ? "Confirming…"
-              : "Confirm · Sign & buy (demo)"}
+              : chainMarket
+                ? "Confirm & sign on-chain"
+                : "Confirm · Sign & buy (demo)"}
           </Button>
           <p className="text-center text-[10px] text-gray-mid">
-            Confirming signs a devnet USDC transfer to the demo vault, then the simulated fill
-            executes against your book.
+            {chainMarket
+              ? "Confirming sends one real devnet SOL buy to the program (vault escrow) and your position is mirrored on-chain."
+              : "Confirming signs a devnet USDC transfer to the demo vault, then the simulated fill executes against your book."}
           </p>
         </DialogContent>
       </Dialog>

@@ -14,6 +14,8 @@ import { quoteBack } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 const QUICK = [5, 10, 25, 100];
@@ -26,6 +28,8 @@ export function WordBoard({ market }: { market: Market }) {
   const showToast = useSim((s) => s.showToast);
   const balance = useSim((s) => s.user.balance);
   const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
   const [selected, setSelected] = useState<string | null>(null);
   const [amount, setAmount] = useState("10");
   const [submitting, setSubmitting] = useState(false);
@@ -161,7 +165,9 @@ export function WordBoard({ market }: { market: Market }) {
                   if (!selected || amt <= 0) return;
                   const word = selected;
                   setSubmitting(true);
-                  const sig = await walletBuy(amt);
+                  const sig = chainMarket
+                    ? await chain.back(m, word, amt)
+                    : await walletBuy(amt);
                   backWord(m.id, word, amt, sig ?? undefined);
                   setSelected(null);
                   setSubmitting(false);

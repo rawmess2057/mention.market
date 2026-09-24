@@ -7,12 +7,16 @@ import { Confetti } from "@/components/viz/confetti";
 import { cn, fmtUsd } from "@/lib/format";
 import { settleMajority } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market, Position } from "@/lib/types";
 
 export function ClaimCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
   const claim = useSim((s) => s.claim);
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
   const [flash, setFlash] = useState(false);
   const [confetti, setConfetti] = useState(0);
 
@@ -68,7 +72,8 @@ export function ClaimCard({ market }: { market: Market }) {
         size="lg"
         className="mt-3 w-full"
         disabled={pos.claimed || payout <= 0}
-        onClick={() => {
+        onClick={async () => {
+          if (chainMarket) await chain.claim(m.id);
           claim(m.id);
           setFlash(true);
           setConfetti((c) => c + 1);

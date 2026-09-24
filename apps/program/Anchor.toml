@@ -1,5 +1,6 @@
 [toolchain]
 package_manager = "pnpm"
+anchor_version = "1.0.2"
 
 [features]
 resolution = true
@@ -8,11 +9,12 @@ skip-lint = false
 [programs.localnet]
 mention = "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV"
 
+[programs.devnet]
+mention = "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV"
+
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "cargo test"
-
-[hooks]

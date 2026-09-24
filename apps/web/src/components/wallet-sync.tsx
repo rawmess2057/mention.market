@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 import { useSim } from "@/lib/sim";
+import { knownChainIds } from "@/lib/chain";
 
 /**
  * Bridges the connected wallet into the per-wallet sim book:
@@ -23,8 +24,9 @@ export function WalletSync() {
 
   useEffect(() => {
     if (!connected || !publicKey) return;
-    const usdcOk = usdcBalance !== null && usdcBalance > 0;
-    const solOk = usdcBalance !== null && usdcBalance <= 0 && solBalance !== null;
+    const chainActive = knownChainIds().length > 0;
+    const usdcOk = !chainActive && usdcBalance !== null && usdcBalance > 0;
+    const solOk = solBalance !== null;
     if (!usdcOk && !solOk) return; // balance pin still resolving (or connection failed)
     const kind: "usdc" | "sol" = usdcOk ? "usdc" : "sol";
     const amount = kind === "usdc" ? (usdcBalance ?? 0) : (solBalance ?? 0);

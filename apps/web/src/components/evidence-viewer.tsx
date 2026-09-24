@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Progress } from "@/components/ui/progress";
 import { cn, fmtClock } from "@/lib/format";
 import { useSim } from "@/lib/sim";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 export function EvidenceSection({ market }: { market: Market }) {
@@ -93,6 +95,8 @@ function EvidenceModal({
   onOpenChange: (o: boolean) => void;
 }) {
   const challenge = useSim((s) => s.challenge);
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
   const ev = m.evidence;
 
   return (
@@ -128,8 +132,10 @@ function EvidenceModal({
 
             <div className="rounded-lg bg-cream-dark p-3 text-xs text-gray-mid">
               Proposed by <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
-              <span className="font-mono text-navy">{fmtUsd2(ev.bondUsd)}</span> · hash{" "}
-              <span className="font-mono text-navy">{ev.evidenceHash}</span>
+              <span className="font-mono text-navy">
+                {chainMarket ? `1 SOL` : fmtUsd2(ev.bondUsd)}
+              </span>{" "}
+              · hash <span className="font-mono text-navy">{ev.evidenceHash}</span>
             </div>
 
             <div>
@@ -159,12 +165,13 @@ function EvidenceModal({
                 variant="destructive"
                 size="lg"
                 className="w-full"
-                onClick={() => {
+                onClick={async () => {
+                  if (chainMarket) await chain.challenge(m.id);
                   challenge(m.id);
                   onOpenChange(false);
                 }}
               >
-                Challenge (bond 50 USDC)
+                Challenge (bond 1 SOL)
               </Button>
             )}
           </div>

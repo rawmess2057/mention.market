@@ -23,6 +23,8 @@ import { lmsrPositionValue, lmsrProbYes } from "@/lib/lmsr";
 import { pnlSeries, summarizePnl, verticalBreakdown } from "@/lib/pnl";
 import { claimableAmounts } from "@/lib/settle";
 import { useSim } from "@/lib/sim";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import { STATUS_META, type Market, type TradeRecord } from "@/lib/types";
 
 type FilterStatus = "all" | "open" | "resolving" | "resolved";
@@ -435,6 +437,7 @@ function PositionsTab({ className }: { className?: string }) {
   const user = useSim((s) => s.user);
   const sellBinary = useSim((s) => s.sellBinary);
   const claim = useSim((s) => s.claim);
+  const chain = useChain();
   const claimable = useMemo(
     () => claimableAmounts(positions, markets),
     [positions, markets]
@@ -609,7 +612,14 @@ function PositionsTab({ className }: { className?: string }) {
                     </div>
                   </div>
                   <span className="font-mono text-lg font-bold text-green">{fmtUsd(amt)}</span>
-                  <Button variant="yes" size="sm" onClick={() => claim(mid)}>
+                  <Button
+                    variant="yes"
+                    size="sm"
+                    onClick={async () => {
+                      if (isChainId(mid)) await chain.claim(mid);
+                      claim(mid);
+                    }}
+                  >
                     Claim
                   </Button>
                 </div>
@@ -641,7 +651,14 @@ function PositionsTab({ className }: { className?: string }) {
               <PositionRowCard
                 key={row.marketId}
                 row={row}
-                onSell={(side, shares) => sellBinary(row.marketId, side as "yes" | "no", shares)}
+                onSell={async (side, shares) => {
+                  const id = row.marketId;
+                  if (isChainId(id)) {
+                    const m = markets[id];
+                    if (m) await chain.sell(m, side as "yes" | "no", shares);
+                  }
+                  sellBinary(id, side as "yes" | "no", shares);
+                }}
               />
             ))}
           </div>

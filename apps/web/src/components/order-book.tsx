@@ -11,6 +11,8 @@ import { cn, fmtUsd, shortAddr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { lmsrProbYes, lmsrBuyCost } from "@/lib/lmsr";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
+import { useChain } from "@/hooks/useChain";
+import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 const QUICK = [10, 25, 50, 100];
@@ -29,6 +31,8 @@ export function OrderBook({ market }: { market: Market }) {
   const activity = useSim((s) => s.activity);
   const showToast = useSim((s) => s.showToast);
   const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
+  const chain = useChain();
+  const chainMarket = isChainId(m.id);
 
   const [side, setSide] = useState<"yes" | "no">("yes");
   const [amount, setAmount] = useState("10");
@@ -174,7 +178,9 @@ export function OrderBook({ market }: { market: Market }) {
                 return;
               }
               setSubmitting(true);
-              const sig = await walletBuy(amt);
+              const sig = chainMarket
+                ? await chain.buy(m, side, amt)
+                : await walletBuy(amt);
               buyBinary(m.id, side, amt, sig ?? undefined);
               setSubmitting(false);
               if (sig) showToast(`Bought ${side.toUpperCase()} · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);

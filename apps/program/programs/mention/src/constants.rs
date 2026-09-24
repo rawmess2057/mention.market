@@ -18,7 +18,8 @@ pub const USDC_DECIMALS: u64 = 1_000_000;
 pub const CHALLENGE_WINDOW_SECS: i64 = 120;
 /// Resolution proposal/challenge bond, expressed as UI units of the market
 /// asset. Converted to base units per market via [`bond_units`].
-pub const BOND_UI: u64 = 50;
+/// Demo value: 1 SOL on SOL markets (production would use a larger bond).
+pub const BOND_UI: u64 = 1;
 
 /// Bond in base units for a market's asset: nominally `BOND_UI` of the
 /// denominating currency (50 USDC micro-units, or 50 SOL lamports).

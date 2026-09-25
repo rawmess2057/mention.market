@@ -12,7 +12,7 @@ import { Connection, PublicKey, Keypair, ComputeBudgetProgram, Transaction, Tran
 // Import the CJS entry explicitly: anchor's ESM build drops `Wallet`/`BN`
 // and webpack's interop leaves the default export empty in SSR bundles.
 // (This is the same build shape the anchor CLI scripts use.)
-import { AnchorProvider, Program, Wallet, BN } from "@coral-xyz/anchor/dist/cjs/index.js";
+import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js";
 import mentionIdl from "@/lib/idl/mention.json";
 import { DEVNET_USDC_MINT } from "@/lib/usdc";
 import type { Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
@@ -32,9 +32,20 @@ export function connection(): Connection {
   return new Connection("https://api.devnet.solana.com", "confirmed");
 }
 
+// anchor's CJS entry gates the real `Wallet` (and `workspace`) behind
+// `!isBrowser`, so it is undefined in webpack browser bundles. We never send
+// through the provider here — instructions are built with `.instruction()`
+// and sent via the connected wallet adapter — so a structural stub satisfies
+// AnchorProvider and keeps `connection`/`publicKey` for account reads.
+const dummyWallet = {
+  publicKey: Keypair.generate().publicKey,
+  signTransaction: async <T extends Transaction>(tx: T): Promise<T> => tx,
+  signAllTransactions: async <T extends Transaction>(txs: T[]): Promise<T[]> => txs,
+};
+
 const dummyProvider = new AnchorProvider(
   connection(),
-  new Wallet(Keypair.generate()),
+  dummyWallet as never,
   { commitment: "confirmed", preflightCommitment: "confirmed" }
 );
 

@@ -9,7 +9,7 @@ import { cn, fmtClock } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
-import type { Market } from "@/lib/types";
+import type { Evidence, Market } from "@/lib/types";
 
 export function EvidenceSection({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
@@ -132,9 +132,7 @@ function EvidenceModal({
 
             <div className="rounded-lg bg-cream-dark p-3 text-xs text-gray-mid">
               Proposed by <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
-              <span className="font-mono text-navy">
-                {chainMarket ? `1 SOL` : fmtUsd2(ev.bondUsd)}
-              </span>{" "}
+              <span className="font-mono text-navy">{fmtBond(ev, m)}</span>{" "}
               · hash <span className="font-mono text-navy">{ev.evidenceHash}</span>
             </div>
 
@@ -171,7 +169,7 @@ function EvidenceModal({
                   onOpenChange(false);
                 }}
               >
-                Challenge (bond 1 SOL)
+                Challenge (bond {fmtBond(ev, m)})
               </Button>
             )}
           </div>
@@ -183,4 +181,14 @@ function EvidenceModal({
 
 function fmtUsd2(n: number) {
   return `$${n.toLocaleString()}`;
+}
+
+/**
+ * Bond amount with its unit. Simulated markets carry a USD figure, but a
+ * chain market's `bondUsd` holds base units of whatever asset that market is
+ * denominated in — labelling a 1 SOL bond "$1" would be a lie.
+ */
+function fmtBond(ev: NonNullable<Evidence>, m: Market): string {
+  if (!m.asset) return fmtUsd2(ev.bondUsd);
+  return `${ev.bondUsd} ${m.asset === "usdc" ? "USDC" : "SOL"}`;
 }

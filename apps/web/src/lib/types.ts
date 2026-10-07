@@ -8,6 +8,9 @@ export type MarketType = "binary" | "majority";
 
 export type MarketStatus = "open" | "locked" | "resolving" | "resolved";
 
+/** Currency a market is denominated in; decides its base-unit scale. */
+export type MarketAsset = "sol" | "usdc";
+
 export interface WordPool {
   word: string;
   pool: number;
@@ -23,6 +26,8 @@ export interface Market {
   vertical: Vertical;
   type: MarketType;
   status: MarketStatus;
+  /** On-chain markets only; omitted for simulated markets (implied USD demo). */
+  asset?: MarketAsset;
   createdAt: number;
   startsAt?: number;
   endTime: number;

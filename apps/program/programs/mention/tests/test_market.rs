@@ -1011,7 +1011,7 @@ fn test_resolution_state_machine() {
         "non-resolver must not be able to propose"
     );
 
-    let bond = 50_000_000_000u64;
+    let bond = mention::constants::bond_units(mention::AssetKind::Sol);
     let resolver_before = svm.get_account(&resolver.pubkey()).unwrap().lamports;
     let now = unix_now(&svm);
     send(

@@ -181,6 +181,7 @@ pub struct PayoutClaimed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::bond_units;
     use crate::state::{AssetKind, Market, MarketStatus, MarketType, Position, Vertical, WordBack, WordPool};
 
     fn market(market_type: MarketType) -> Market {
@@ -279,7 +280,7 @@ mod tests {
         let mut m = market(MarketType::Majority);
         m.words = vec![WordPool { word: "AI".into(), pool: 1_000, bettors: 1 }];
         m.total_pool = 1_000;
-        m.bond = 50_000_000_000;
+        m.bond = bond_units(m.asset);
         let mut p = position();
         p.word_backs = vec![WordBack { word: "AI".into(), amount: 1_000 }];
         assert_eq!(payout_for(&m, &p, "AI").unwrap(), 990);

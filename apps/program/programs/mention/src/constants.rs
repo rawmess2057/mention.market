@@ -21,8 +21,8 @@ pub const CHALLENGE_WINDOW_SECS: i64 = 120;
 /// Demo value: 1 SOL on SOL markets (production would use a larger bond).
 pub const BOND_UI: u64 = 1;
 
-/// Bond in base units for a market's asset: nominally `BOND_UI` of the
-/// denominating currency (50 USDC micro-units, or 50 SOL lamports).
+/// Bond in base units for a market's asset: `BOND_UI` UI units of the
+/// currency the market is denominated in, scaled by that asset's decimals.
 pub fn bond_units(asset: crate::state::AssetKind) -> u64 {
     match asset {
         crate::state::AssetKind::Usdc => BOND_UI * USDC_DECIMALS,

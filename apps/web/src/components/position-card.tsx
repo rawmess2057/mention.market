@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, fmtUsd } from "@/lib/format";
+import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
 import { lmsrPositionValue } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
@@ -14,12 +14,23 @@ export function PositionCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
   const sellBinary = useSim((s) => s.sellBinary);
+  const showToast = useSim((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
+  const [selling, setSelling] = useState(false);
 
   const onSell = async (side: "yes" | "no", shares: number) => {
-    const sig = chainMarket ? await chain.sell(m, side, shares) : null;
-    sellBinary(m.id, side, shares);
+    if (selling) return;
+    setSelling(true);
+    try {
+      const sig = chainMarket ? await chain.sell(m, side, shares) : null;
+      sellBinary(m.id, side, shares);
+      if (sig) showToast(`Sold ${side.toUpperCase()} · tx ${shortAddr(sig)}`);
+    } catch (err) {
+      showToast(`Sell failed: ${fmtErr(err)}`);
+    } finally {
+      setSelling(false);
+    }
   };
 
   const summary = useMemo<
@@ -93,9 +104,10 @@ export function PositionCard({ market }: { market: Market }) {
                   variant="outline"
                   size="sm"
                   className="flex-1"
+                  disabled={selling}
                   onClick={() => onSell("yes", summary.yes)}
                 >
-                  Sell YES
+                  {selling ? "Selling…" : "Sell YES"}
                 </Button>
               )}
               {summary.no > 0 && (
@@ -103,9 +115,10 @@ export function PositionCard({ market }: { market: Market }) {
                   variant="outline"
                   size="sm"
                   className="flex-1"
+                  disabled={selling}
                   onClick={() => onSell("no", summary.no)}
                 >
-                  Sell NO
+                  {selling ? "Selling…" : "Sell NO"}
                 </Button>
               )}
             </div>

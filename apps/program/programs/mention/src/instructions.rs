@@ -4,6 +4,7 @@ pub mod create_market;
 pub mod initialize_config;
 pub mod lock_market;
 pub mod resolve;
+pub mod set_paused;
 pub mod token_util;
 pub mod trade;
 
@@ -13,4 +14,5 @@ pub use create_market::*;
 pub use initialize_config::*;
 pub use lock_market::*;
 pub use resolve::*;
+pub use set_paused::*;
 pub use trade::*;

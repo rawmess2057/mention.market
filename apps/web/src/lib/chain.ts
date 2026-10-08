@@ -18,6 +18,7 @@ import { Connection, PublicKey, Keypair, ComputeBudgetProgram, Transaction, Tran
 import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js";
 import mentionIdl from "@/lib/idl/mention.json";
 import { DEVNET_USDC_MINT } from "@/lib/usdc";
+import { lmsrBuyCost, lmsrSellReturn } from "@/lib/lmsr";
 import type { Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
 
 export const PROGRAM_ID = new PublicKey("E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV");
@@ -613,9 +614,19 @@ export async function chainCreateMarket(
 }
 
 /* ------------------------------------------------------------------ */
-/* LMSR mirrors on ChainMarketAccount raw values (all in base units)   */
+/* LMSR mirrors over the raw ChainMarketAccount (base units in,        */
+/* UI units out — callers convert back with `* scale`).                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Shares bought for `costUi`, in UI units.
+ *
+ * Solves `C(q + shares) - C(q) = cost` by monotonic binary search — the same
+ * method the program's `shares_for_cost` uses, so the value agrees with the
+ * on-chain result to float precision. (A closed-form inversion is not used:
+ * the previous one was both dimensionally wrong and returned base units,
+ * which made every buy revert with `SlippageTooHigh`.)
+ */
 export function sharesForCostUi(
   m: ChainMarketAccount,
   side: "yes" | "no",
@@ -626,16 +637,26 @@ export function sharesForCostUi(
   const ys = m.yesShares.toNumber();
   const ns = m.noShares.toNumber();
   const cost = costUi * scale;
-  if (side === "yes") {
-    const eY = Math.exp(ys / b);
-    const eN = Math.exp(ns / b);
-    return (b * Math.log(eY + cost / b)) - ys;
+  if (!Number.isFinite(cost) || cost <= 0) return 0;
+
+  let lo = 0;
+  let hi = 1;
+  while (lmsrBuyCost(ys, ns, b, side, hi) < cost) hi *= 2;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (lmsrBuyCost(ys, ns, b, side, mid) < cost) lo = mid;
+    else hi = mid;
   }
-  const eY = Math.exp(ys / b);
-  const eN = Math.exp(ns / b);
-  return (b * Math.log(eN + cost / b)) - ns;
+  return (lo + hi) / 2 / scale;
 }
 
+/**
+ * Proceeds from selling `sharesUi`, in UI units.
+ *
+ * Matches the program's `sell_return` exactly (the formula was already
+ * correct); only the missing `/ scale` here previously inflated
+ * `min_proceeds` by 1e9 and made every sell revert.
+ */
 export function proceedsForSellUi(
   m: ChainMarketAccount,
   side: "yes" | "no",
@@ -646,12 +667,6 @@ export function proceedsForSellUi(
   const ys = m.yesShares.toNumber();
   const ns = m.noShares.toNumber();
   const shares = sharesUi * scale;
-  const eY = Math.exp(ys / b);
-  const eN = Math.exp(ns / b);
-  if (side === "yes") {
-    const after = b * Math.log(Math.exp(-shares / b) * eY + eN);
-    return (b * Math.log(eY + eN)) - after;
-  }
-  const after = b * Math.log(eY + Math.exp(-shares / b) * eN);
-  return (b * Math.log(eY + eN)) - after;
+  if (!Number.isFinite(shares) || shares <= 0) return 0;
+  return lmsrSellReturn(ys, ns, b, side, shares) / scale;
 }

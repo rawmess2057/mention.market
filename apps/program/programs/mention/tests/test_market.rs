@@ -86,6 +86,19 @@ fn create_market_ix(
     words: Vec<String>,
     end_time: i64,
 ) -> (Instruction, Pubkey) {
+    create_market_with_b_ix(program_id, creator, id, market_type, asset, words, end_time, 100_000)
+}
+
+fn create_market_with_b_ix(
+    program_id: Pubkey,
+    creator: Pubkey,
+    id: u64,
+    market_type: mention::MarketType,
+    asset: mention::AssetKind,
+    words: Vec<String>,
+    end_time: i64,
+    b: u64,
+) -> (Instruction, Pubkey) {
     let id_bytes = id.to_le_bytes();
     let market =
         Pubkey::find_program_address(&[b"market", &id_bytes], &program_id).0;
@@ -99,7 +112,7 @@ fn create_market_ix(
             vertical: mention::Vertical::Streams,
             market_type,
             asset,
-            b: 100_000,
+            b,
             words,
             end_time,
             creator_fee_bps: 100,
@@ -122,6 +135,18 @@ fn lock_market_ix(program_id: Pubkey, signer: Pubkey, market: Pubkey) -> Instruc
         program_id,
         &mention::instruction::LockMarket {}.data(),
         mention::accounts::LockMarket { signer, market }.to_account_metas(None),
+    )
+}
+
+fn set_paused_ix(program_id: Pubkey, authority: Pubkey, paused: bool) -> Instruction {
+    Instruction::new_with_bytes(
+        program_id,
+        &mention::instruction::SetPaused { paused }.data(),
+        mention::accounts::SetPaused {
+            authority,
+            config: config_pda(program_id),
+        }
+        .to_account_metas(None),
     )
 }
 
@@ -1413,13 +1438,16 @@ fn test_claim_before_resolved_rejected() {
     );
 }
 
+/// The USDC vault path is not wired end to end yet, so no USDC market may be
+/// created. This is also what keeps the `trader_ata`/`vault_ata` handling
+/// unreachable until it is properly constrained and tested.
 #[test]
-fn test_usdc_buy_requires_ata() {
+fn test_create_market_rejects_usdc() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
-    let (ix, market) = create_market_ix(
+    let (ix, _market) = create_market_ix(
         program_id,
         payer.pubkey(),
         53,
@@ -1428,25 +1456,254 @@ fn test_usdc_buy_requires_ata() {
         vec![],
         end,
     );
+    let err = send(&mut svm, &[ix], &payer).unwrap_err();
+    assert!(err.contains("AssetNotSupported"), "unexpected error: {err}");
+}
+
+/// The vault must start with the LMSR reserve ante, `ceil(b * ln 2)` — the
+/// worst-case payout the AMM can owe. Without it the vault is rent-only and
+/// `vault_balance >= C(q)` fails from the first trade.
+#[test]
+fn test_create_market_funds_reserve_ante() {
+    let (mut svm, payer, program_id) = setup();
+    bootstrap(&mut svm, &payer, program_id);
+    svm.airdrop(&payer.pubkey(), 500 * LAMPORTS).unwrap();
+
+    // b = 100 SOL in base units -> ante ≈ 69.3 SOL, three orders of magnitude
+    // above the vault's rent, so the assertion actually pins the ante.
+    let b: u64 = 100 * LAMPORTS;
+    let end = unix_now(&svm) + 3_600;
+    let (ix, market) = create_market_with_b_ix(
+        program_id,
+        payer.pubkey(),
+        54,
+        mention::MarketType::Binary,
+        mention::AssetKind::Sol,
+        vec![],
+        end,
+        b,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let expected = mention::reserve_ante(b);
+    let vault = svm.get_account(&vault_pda(program_id, market)).unwrap();
+    assert!(
+        vault.lamports >= expected,
+        "vault holds {} lamports, reserve ante requires {expected}",
+        vault.lamports
+    );
+}
+
+/// Trading stops when the clock runs out, not when someone gets around to
+/// calling `lock_market`.
+#[test]
+fn test_trade_rejected_after_end_time() {
+    let (mut svm, payer, program_id) = setup();
+    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        55,
+        mention::MarketType::Binary,
+        mention::AssetKind::Sol,
+        vec![],
+        end,
+    );
     send(&mut svm, &[ix], &payer).unwrap();
 
     let trader = Keypair::new();
     svm.airdrop(&trader.pubkey(), 10 * LAMPORTS).unwrap();
-    // No ATAs passed: the USDC branch must reject before any transfer.
+    let buy = || {
+        buy_binary_ix(
+            program_id,
+            trader.pubkey(),
+            market,
+            0,
+            1_000_000_000,
+            0,
+            usdc_mint,
+        )
+    };
+
+    send(&mut svm, &[buy()], &trader).unwrap();
+
+    advance(&mut svm, 6);
+    // Deliberately *not* locked — status is still Open.
+    assert_eq!(
+        read_market(&svm, market).status,
+        mention::MarketStatus::Open
+    );
+    let err = send(&mut svm, &[buy()], &trader).unwrap_err();
+    assert!(err.contains("MarketClosed"), "unexpected error: {err}");
+}
+
+/// `finalize` is permissionless by design, but the bond must go back to the
+/// resolver who posted it rather than to an account the caller chooses.
+#[test]
+fn test_finalize_refund_goes_to_proposer() {
+    let (mut svm, payer, program_id) = setup();
+    let (usdc_mint, resolver) = bootstrap(&mut svm, &payer, program_id);
+    svm.airdrop(&resolver.pubkey(), 300 * LAMPORTS).unwrap();
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        56,
+        mention::MarketType::Binary,
+        mention::AssetKind::Sol,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+    send(
+        &mut svm,
+        &[propose_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            "yes".into(),
+            100,
+            [7u8; 32],
+            usdc_mint,
+        )],
+        &resolver,
+    )
+    .unwrap();
+    advance(&mut svm, 121);
+
+    let bond = mention::constants::bond_units(mention::AssetKind::Sol);
+    let attacker = Keypair::new();
+    svm.airdrop(&attacker.pubkey(), 100 * LAMPORTS).unwrap();
+    let attacker_before = svm.get_account(&attacker.pubkey()).unwrap().lamports;
+    let resolver_before = svm.get_account(&resolver.pubkey()).unwrap().lamports;
+
+    // Passing an attacker-owned `proposer_account` must not redirect the refund.
+    let err = send(
+        &mut svm,
+        &[finalize_ix(
+            program_id,
+            attacker.pubkey(),
+            market,
+            attacker.pubkey(),
+            usdc_mint,
+        )],
+        &attacker,
+    )
+    .unwrap_err();
+    assert!(err.contains("Unauthorized"), "unexpected error: {err}");
+
+    // The legitimate refund still lands with the proposer.
+    send(
+        &mut svm,
+        &[finalize_ix(
+            program_id,
+            payer.pubkey(),
+            market,
+            resolver.pubkey(),
+            usdc_mint,
+        )],
+        &payer,
+    )
+    .unwrap();
+
+    let resolver_after = svm.get_account(&resolver.pubkey()).unwrap().lamports;
+    assert!(
+        resolver_after >= resolver_before + bond,
+        "proposer must receive the bond back"
+    );
+    let attacker_after = svm.get_account(&attacker.pubkey()).unwrap().lamports;
+    assert!(
+        attacker_after < attacker_before,
+        "attacker must not end up with the bond"
+    );
+}
+
+/// The kill switch must be reachable: only the config authority flips it, and
+/// once flipped, creation and trading both stop.
+#[test]
+fn test_set_paused_blocks_trading() {
+    let (mut svm, payer, program_id) = setup();
+    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 3_600;
+    let (create_ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        57,
+        mention::MarketType::Binary,
+        mention::AssetKind::Sol,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[create_ix], &payer).unwrap();
+
+    let trader = Keypair::new();
+    svm.airdrop(&trader.pubkey(), 10 * LAMPORTS).unwrap();
+    let buy = || {
+        buy_binary_ix(
+            program_id,
+            trader.pubkey(),
+            market,
+            0,
+            1_000_000_000,
+            0,
+            usdc_mint,
+        )
+    };
+    send(&mut svm, &[buy()], &trader).unwrap();
+
+    // Anyone other than the config authority is refused.
+    let rando = Keypair::new();
+    svm.airdrop(&rando.pubkey(), LAMPORTS).unwrap();
     assert!(
         send(
             &mut svm,
-            &[buy_binary_ix(
-                program_id,
-                trader.pubkey(),
-                market,
-                0,
-                1_000_000_000,
-                0,
-                usdc_mint,
-            )],
-            &trader,
+            &[set_paused_ix(program_id, rando.pubkey(), true)],
+            &rando,
         )
         .is_err()
     );
+
+    send(
+        &mut svm,
+        &[set_paused_ix(program_id, payer.pubkey(), true)],
+        &payer,
+    )
+    .unwrap();
+    // Same instruction as the successful buy above — re-borrow the blockhash
+    // or LiteSVM dedupes it as AlreadyProcessed instead of running it.
+    svm.expire_blockhash();
+    let err = send(&mut svm, &[buy()], &trader).unwrap_err();
+    assert!(err.contains("Paused"), "unexpected error: {err}");
+
+    let (create2, _) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        58,
+        mention::MarketType::Binary,
+        mention::AssetKind::Sol,
+        vec![],
+        end,
+    );
+    let err = send(&mut svm, &[create2], &payer).unwrap_err();
+    assert!(err.contains("Paused"), "unexpected error: {err}");
+
+    send(
+        &mut svm,
+        &[set_paused_ix(program_id, payer.pubkey(), false)],
+        &payer,
+    )
+    .unwrap();
+    svm.expire_blockhash();
+    send(&mut svm, &[buy()], &trader).unwrap();
 }

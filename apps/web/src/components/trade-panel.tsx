@@ -8,7 +8,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
 import { lmsrBuyCost, lmsrPriceAfterBuy, lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
@@ -208,16 +208,21 @@ export function TradePanel({ market }: { market: Market }) {
             onClick={async () => {
               if (!pendingTrade) return;
               setSubmitting(true);
-              const sig = chainMarket
-                ? await chain.buy(m, pendingTrade.side as "yes" | "no", pendingTrade.amount)
-                : await walletBuy(pendingTrade.amount);
-              buyBinary(m.id, pendingTrade.side as "yes" | "no", pendingTrade.amount, sig ?? undefined);
-              setPendingTrade(null);
-              setSubmitting(false);
-              if (sig) {
-                showToast(
-                  `Bought ${pendingTrade.side.toUpperCase()} · ${fmtUsd(pendingTrade.amount)} · tx ${shortAddr(sig)}`
-                );
+              try {
+                const sig = chainMarket
+                  ? await chain.buy(m, pendingTrade.side as "yes" | "no", pendingTrade.amount)
+                  : await walletBuy(pendingTrade.amount);
+                buyBinary(m.id, pendingTrade.side as "yes" | "no", pendingTrade.amount, sig ?? undefined);
+                setPendingTrade(null);
+                if (sig) {
+                  showToast(
+                    `Bought ${pendingTrade.side.toUpperCase()} · ${fmtUsd(pendingTrade.amount)} · tx ${shortAddr(sig)}`
+                  );
+                }
+              } catch (err) {
+                showToast(`Trade failed: ${fmtErr(err)}`);
+              } finally {
+                setSubmitting(false);
               }
             }}
           >

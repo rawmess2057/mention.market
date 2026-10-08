@@ -84,6 +84,11 @@ pub fn handler(ctx: Context<Claim>) -> Result<()> {
                 .vault_ata
                 .as_ref()
                 .ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                claimant_ata,
+                ctx.accounts.claimant.key(),
+                ctx.accounts.mint.key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &ctx.accounts.claimant.to_account_info(),
                 &ctx.accounts.vault.to_account_info(),

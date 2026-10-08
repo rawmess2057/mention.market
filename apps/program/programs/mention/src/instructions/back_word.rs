@@ -64,6 +64,10 @@ pub fn handler(ctx: Context<BackWord>, word: String, amount: u64) -> Result<()> 
     let market = &mut ctx.accounts.market;
     require!(market.status == MarketStatus::Open, ErrorCode::MarketNotOpen);
     require!(
+        Clock::get()?.unix_timestamp < market.end_time,
+        ErrorCode::MarketClosed
+    );
+    require!(
         market.market_type == MarketType::Majority,
         ErrorCode::NotMajority
     );
@@ -88,6 +92,11 @@ pub fn handler(ctx: Context<BackWord>, word: String, amount: u64) -> Result<()> 
                 .vault_ata
                 .as_ref()
                 .ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                backer_ata,
+                ctx.accounts.backer.key(),
+                ctx.accounts.mint.key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &ctx.accounts.backer.to_account_info(),
                 &ctx.accounts.vault.to_account_info(),

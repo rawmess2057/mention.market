@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/viz/confetti";
-import { cn, fmtUsd } from "@/lib/format";
+import { cn, fmtErr, fmtUsd } from "@/lib/format";
 import { settleMajority } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
@@ -15,10 +15,12 @@ export function ClaimCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
   const claim = useSim((s) => s.claim);
+  const showToast = useSim((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
   const [flash, setFlash] = useState(false);
   const [confetti, setConfetti] = useState(0);
+  const [claiming, setClaiming] = useState(false);
 
   if (!pos || m.status !== "resolved" || !m.winningOutcome) return null;
 
@@ -71,16 +73,24 @@ export function ClaimCard({ market }: { market: Market }) {
         variant="yes"
         size="lg"
         className="mt-3 w-full"
-        disabled={pos.claimed || payout <= 0}
+        disabled={claiming || pos.claimed || payout <= 0}
         onClick={async () => {
-          if (chainMarket) await chain.claim(m.id);
-          claim(m.id);
-          setFlash(true);
-          setConfetti((c) => c + 1);
-          setTimeout(() => setFlash(false), 1000);
+          if (claiming) return;
+          setClaiming(true);
+          try {
+            if (chainMarket) await chain.claim(m.id);
+            claim(m.id);
+            setFlash(true);
+            setConfetti((c) => c + 1);
+            setTimeout(() => setFlash(false), 1000);
+          } catch (err) {
+            showToast(`Claim failed: ${fmtErr(err)}`);
+          } finally {
+            setClaiming(false);
+          }
         }}
       >
-        {pos.claimed ? "Claimed ✓" : `Claim ${fmtUsd(payout)}`}
+        {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtUsd(payout)}`}
       </Button>
       <Confetti fire={confetti} />
     </div>

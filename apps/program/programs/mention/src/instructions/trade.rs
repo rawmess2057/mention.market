@@ -122,6 +122,13 @@ pub fn buy(
     let market_key = ctx.accounts.market.key();
     let market = &mut ctx.accounts.market;
     require!(market.status == MarketStatus::Open, ErrorCode::MarketNotOpen);
+    // Trade until the clock runs out, not until someone happens to call
+    // `lock_market` — otherwise the window between `end_time` and the lock is
+    // freely tradable.
+    require!(
+        Clock::get()?.unix_timestamp < market.end_time,
+        ErrorCode::MarketClosed
+    );
     require!(market.market_type == MarketType::Binary, ErrorCode::NotBinary);
     require!(cost > 0, ErrorCode::InvalidMarket);
 
@@ -134,6 +141,11 @@ pub fn buy(
                 .vault_ata
                 .as_ref()
                 .ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                trader_ata,
+                ctx.accounts.trader.key(),
+                ctx.accounts.mint.key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &ctx.accounts.trader.to_account_info(),
                 &ctx.accounts.vault.to_account_info(),
@@ -205,6 +217,10 @@ pub fn sell(
     let vault_bump = ctx.accounts.vault.bump;
     let market = &mut ctx.accounts.market;
     require!(market.status == MarketStatus::Open, ErrorCode::MarketNotOpen);
+    require!(
+        Clock::get()?.unix_timestamp < market.end_time,
+        ErrorCode::MarketClosed
+    );
     require!(market.market_type == MarketType::Binary, ErrorCode::NotBinary);
     require!(shares > 0, ErrorCode::InvalidMarket);
 
@@ -232,6 +248,11 @@ pub fn sell(
                 .vault_ata
                 .as_ref()
                 .ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                trader_ata,
+                ctx.accounts.trader.key(),
+                ctx.accounts.mint.key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &ctx.accounts.trader.to_account_info(),
                 &ctx.accounts.vault.to_account_info(),

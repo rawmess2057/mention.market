@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { LeaderBar } from "@/components/viz/leader-bar";
-import { cn, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
 import { quoteBack } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
@@ -165,13 +165,18 @@ export function WordBoard({ market }: { market: Market }) {
                   if (!selected || amt <= 0) return;
                   const word = selected;
                   setSubmitting(true);
-                  const sig = chainMarket
-                    ? await chain.back(m, word, amt)
-                    : await walletBuy(amt);
-                  backWord(m.id, word, amt, sig ?? undefined);
-                  setSelected(null);
-                  setSubmitting(false);
-                  if (sig) showToast(`Backed \u201c${word}\u201d · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);
+                  try {
+                    const sig = chainMarket
+                      ? await chain.back(m, word, amt)
+                      : await walletBuy(amt);
+                    backWord(m.id, word, amt, sig ?? undefined);
+                    setSelected(null);
+                    if (sig) showToast(`Backed \u201c${word}\u201d · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);
+                  } catch (err) {
+                    showToast(`Back failed: ${fmtErr(err)}`);
+                  } finally {
+                    setSubmitting(false);
+                  }
                 }}
               >
                 {submitting || usdcBusy

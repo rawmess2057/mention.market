@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::{MAX_FEE_BPS, MAX_TITLE_LEN, MAX_WORDS, MAX_WORD_LEN};
 use crate::error::ErrorCode;
+use crate::math::reserve_ante;
 use crate::state::{
     AssetKind, Config, Market, MarketStatus, MarketType, Vertical, Vault, WordPool,
 };
@@ -51,6 +52,10 @@ pub fn handler(
     creator_fee_bps: u16,
 ) -> Result<()> {
     require!(ctx.accounts.config.paused == false, ErrorCode::Paused);
+    // The USDC vault path is not wired end to end yet (no ATA plumbing in the
+    // clients). Rejecting here keeps every market on the SOL vault, which is
+    // the only path with tests and a funded reserve ante.
+    require!(asset == AssetKind::Sol, ErrorCode::AssetNotSupported);
     require!(title.len() <= MAX_TITLE_LEN, ErrorCode::TitleTooLong);
     require!(event.len() <= MAX_TITLE_LEN, ErrorCode::TitleTooLong);
     require!(b > 0, ErrorCode::InvalidMarket);
@@ -62,6 +67,19 @@ pub fn handler(
     );
     if market_type == MarketType::Majority {
         require!(!words.is_empty(), ErrorCode::InvalidMarket);
+    }
+
+    // Seed the AMM with its reserve ante, b * ln 2 — the worst-case payout the
+    // LMSR can owe. Without it the vault starts at rent only and the invariant
+    // `vault_balance >= C(q_bal)` fails from the first trade.
+    let ante = reserve_ante(b);
+    if ante > 0 {
+        crate::instructions::token_util::deposit_sol(
+            &ctx.accounts.system_program.to_account_info(),
+            &ctx.accounts.creator.to_account_info(),
+            &ctx.accounts.vault.to_account_info(),
+            ante,
+        )?;
     }
 
     let mut pools: Vec<WordPool> = Vec::with_capacity(words.len());

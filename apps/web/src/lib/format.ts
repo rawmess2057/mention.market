@@ -5,6 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Short, user-readable text for a caught error. Wallet and RPC errors arrive
+ * as multi-line prose; only the first line is worth putting in a toast.
+ */
+export function fmtErr(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : JSON.stringify(err);
+  const first = raw.split("\n")[0].trim();
+  if (!first) return "Transaction failed";
+  return first.length > 140 ? `${first.slice(0, 139)}…` : first;
+}
+
 export function fmtUsd(n: number, opts?: { compact?: boolean; decimals?: number }) {
   const d = opts?.decimals ?? 2;
   if (opts?.compact) {

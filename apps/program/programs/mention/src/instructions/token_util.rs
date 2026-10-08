@@ -14,6 +14,10 @@ use crate::error::ErrorCode;
 
 /// Idempotently create `associated_token` (an ATA for `owner` & `mint`) if it
 /// does not yet exist unless already initialised. `payer` funds rent.
+///
+/// The address is verified against the canonical derivation up front: without
+/// it, any account owned by the SPL Token program would satisfy the
+/// "already initialised" shortcut below and be treated as the vault's ATA.
 pub fn create_ata_if_needed<'info>(
     payer: &AccountInfo<'info>,
     owner: &AccountInfo<'info>,
@@ -23,10 +27,7 @@ pub fn create_ata_if_needed<'info>(
     token_program: &AccountInfo<'info>,
     system_program: &AccountInfo<'info>,
 ) -> Result<()> {
-    let owner_is_token_program = associated_token.owner == &spl_token::ID;
-    if owner_is_token_program {
-        return Ok(());
-    }
+    require_ata(associated_token, owner.key(), mint.key())?;
     let cpi = CpiContext::new(
         associated_token_program.key(),
         associated_token::Create {
@@ -39,6 +40,15 @@ pub fn create_ata_if_needed<'info>(
         },
     );
     associated_token::create_idempotent(cpi)
+}
+
+/// Reject `actual` unless it is the canonical associated token account for
+/// `owner` & `mint`. Every USDC branch must check the payer/destination side
+/// with this — only the vault side reaches `create_ata_if_needed`.
+pub fn require_ata(actual: &AccountInfo, owner: Pubkey, mint: Pubkey) -> Result<()> {
+    let expected = associated_token::get_associated_token_address(&owner, &mint);
+    require_keys_eq!(actual.key(), expected, ErrorCode::InvalidTokenAccount);
+    Ok(())
 }
 
 /// Manual ATA CPI via `spl_associated_token_account` (works even when no

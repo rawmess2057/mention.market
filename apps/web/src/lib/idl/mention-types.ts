@@ -994,6 +994,56 @@ export type Mention = {
       "args": []
     },
     {
+      "name": "setPaused",
+      "docs": [
+        "Flip the global kill switch. Only the config authority may call it."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "proposeResolution",
       "docs": [
         "Resolver proposes the winning outcome with a bond and an evidence hash."
@@ -1544,6 +1594,16 @@ export type Mention = {
       "code": 6024,
       "name": "slippageTooHigh",
       "msg": "Exit price moved beyond slippage tolerance"
+    },
+    {
+      "code": 6025,
+      "name": "assetNotSupported",
+      "msg": "This asset kind is not supported yet"
+    },
+    {
+      "code": 6026,
+      "name": "marketClosed",
+      "msg": "Trading has ended for this market"
     }
   ],
   "types": [

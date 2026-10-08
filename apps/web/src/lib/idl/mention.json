@@ -1290,6 +1290,56 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "set_paused",
+      "docs": [
+        "Flip the global kill switch. Only the config authority may call it."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1371,6 +1421,19 @@
         106,
         199,
         202
+      ]
+    },
+    {
+      "name": "PausedChanged",
+      "discriminator": [
+        12,
+        10,
+        153,
+        247,
+        60,
+        115,
+        137,
+        69
       ]
     },
     {
@@ -1538,6 +1601,16 @@
       "code": 6024,
       "name": "SlippageTooHigh",
       "msg": "Exit price moved beyond slippage tolerance"
+    },
+    {
+      "code": 6025,
+      "name": "AssetNotSupported",
+      "msg": "This asset kind is not supported yet"
+    },
+    {
+      "code": 6026,
+      "name": "MarketClosed",
+      "msg": "Trading has ended for this market"
     }
   ],
   "types": [
@@ -1831,6 +1904,22 @@
           },
           {
             "name": "Majority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PausedChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
           }
         ]
       }

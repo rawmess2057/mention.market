@@ -52,4 +52,8 @@ pub enum ErrorCode {
     InvalidResolution,
     #[msg("Exit price moved beyond slippage tolerance")]
     SlippageTooHigh,
+    #[msg("This asset kind is not supported yet")]
+    AssetNotSupported,
+    #[msg("Trading has ended for this market")]
+    MarketClosed,
 }

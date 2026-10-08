@@ -5,7 +5,7 @@ import { BadgeCheck, FileAudio, Gavel, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { cn, fmtClock } from "@/lib/format";
+import { cn, fmtClock, fmtErr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
@@ -95,9 +95,11 @@ function EvidenceModal({
   onOpenChange: (o: boolean) => void;
 }) {
   const challenge = useSim((s) => s.challenge);
+  const showToast = useSim((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
   const ev = m.evidence;
+  const [challenging, setChallenging] = useState(false);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,10 +165,19 @@ function EvidenceModal({
                 variant="destructive"
                 size="lg"
                 className="w-full"
+                disabled={challenging}
                 onClick={async () => {
-                  if (chainMarket) await chain.challenge(m.id);
-                  challenge(m.id);
-                  onOpenChange(false);
+                  if (challenging) return;
+                  setChallenging(true);
+                  try {
+                    if (chainMarket) await chain.challenge(m.id);
+                    challenge(m.id);
+                    onOpenChange(false);
+                  } catch (err) {
+                    showToast(`Challenge failed: ${fmtErr(err)}`);
+                  } finally {
+                    setChallenging(false);
+                  }
                 }}
               >
                 Challenge (bond {fmtBond(ev, m)})

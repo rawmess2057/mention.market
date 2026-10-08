@@ -61,6 +61,11 @@ pub mod mention {
         lock_market::handler(ctx)
     }
 
+    /// Flip the global kill switch. Only the config authority may call it.
+    pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+        set_paused::handler(ctx, paused)
+    }
+
     /// Buy `side` (0 = YES, 1 = NO) for `cost` base units, minting at least
     /// `min_shares` shares via LMSR.
     pub fn buy_binary(

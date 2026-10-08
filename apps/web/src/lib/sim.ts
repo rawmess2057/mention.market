@@ -793,8 +793,9 @@ export const useSim = create<SimState>()(persist((set, get) => {
           endTime: now + minutes * MIN,
           volume: 0,
           traders: 0,
-          yesShares: 100,
-          noShares: 100,
+          asset: "sol",
+          yesShares: 0,
+          noShares: 0,
           b: Math.max(50, minutes * 2),
           words:
             type === "majority"

@@ -7,7 +7,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { lmsrProbYes, lmsrBuyCost } from "@/lib/lmsr";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
@@ -178,12 +178,17 @@ export function OrderBook({ market }: { market: Market }) {
                 return;
               }
               setSubmitting(true);
-              const sig = chainMarket
-                ? await chain.buy(m, side, amt)
-                : await walletBuy(amt);
-              buyBinary(m.id, side, amt, sig ?? undefined);
-              setSubmitting(false);
-              if (sig) showToast(`Bought ${side.toUpperCase()} · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);
+              try {
+                const sig = chainMarket
+                  ? await chain.buy(m, side, amt)
+                  : await walletBuy(amt);
+                buyBinary(m.id, side, amt, sig ?? undefined);
+                if (sig) showToast(`Bought ${side.toUpperCase()} · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);
+              } catch (err) {
+                showToast(`Buy failed: ${fmtErr(err)}`);
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             <Zap className="h-3.5 w-3.5" />

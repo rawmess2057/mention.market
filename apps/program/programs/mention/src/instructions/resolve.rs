@@ -350,6 +350,11 @@ fn pay_bond<'info, A: BondAccounts<'info> + Bumps>(
             let payer = ctx.accounts.bond_payer();
             let payer_ata = ctx.accounts.bond_payer_ata().ok_or(ErrorCode::InsufficientAmount)?;
             let vault_ata = ctx.accounts.vault_ata().ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                &payer_ata,
+                payer.key(),
+                ctx.accounts.mint().key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &payer,
                 &vault,
@@ -377,6 +382,9 @@ fn pay_bond<'info, A: BondAccounts<'info> + Bumps>(
 }
 
 /// Refund `bond` from the vault to the proposing resolver.
+///
+/// `finalize` is permissionless, so neither refund destination may be chosen
+/// by the caller: the bond goes back to whoever posted it (`market.proposer`).
 fn refund_bond(ctx: &Context<FinalizeResolution>, bond: u64) -> Result<()> {
     let vault = ctx.accounts.vault.to_account_info();
     match ctx.accounts.market.asset {
@@ -391,6 +399,11 @@ fn refund_bond(ctx: &Context<FinalizeResolution>, bond: u64) -> Result<()> {
                 .vault_ata
                 .as_ref()
                 .ok_or(ErrorCode::InsufficientAmount)?;
+            crate::instructions::token_util::require_ata(
+                proposer_ata,
+                ctx.accounts.market.proposer,
+                ctx.accounts.mint.key(),
+            )?;
             crate::instructions::token_util::ensure_vault_ata(
                 &ctx.accounts.finalizer.to_account_info(),
                 &vault,
@@ -416,6 +429,11 @@ fn refund_bond(ctx: &Context<FinalizeResolution>, bond: u64) -> Result<()> {
                 .proposer_account
                 .as_ref()
                 .ok_or(ErrorCode::InvalidTokenAccount)?;
+            require_keys_eq!(
+                proposer_account.key(),
+                ctx.accounts.market.proposer,
+                ErrorCode::Unauthorized
+            );
             crate::instructions::token_util::withdraw_sol(
                 &ctx.accounts.system_program.to_account_info(),
                 &vault,

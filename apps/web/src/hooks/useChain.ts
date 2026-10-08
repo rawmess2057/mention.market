@@ -25,6 +25,7 @@ import type { Market } from "@/lib/types";
 export function useChain() {
   const { connected, publicKey, sendTransaction } = useWallet();
   const setBalance = useSim((s) => s.setBalance);
+  const bumpChainActivity = useSim((s) => s.bumpChainActivity);
 
   const refreshBalance = useCallback(
     async (wallet: string, result: ChainTradeResult) => {
@@ -44,9 +45,10 @@ export function useChain() {
       const signer = { publicKey, sendTransaction };
       const result = await chainBuyBinary(signer, num, side, amountUi);
       await refreshBalance(publicKey.toBase58(), result);
+      bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
   );
 
   const sell = useCallback(
@@ -56,9 +58,10 @@ export function useChain() {
       const signer = { publicKey, sendTransaction };
       const result = await chainSellBinary(signer, num, side, sharesUi);
       await refreshBalance(publicKey.toBase58(), result);
+      bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
   );
 
   const back = useCallback(
@@ -68,9 +71,10 @@ export function useChain() {
       const signer = { publicKey, sendTransaction };
       const result = await chainBackWord(signer, num, word, amountUi);
       await refreshBalance(publicKey.toBase58(), result);
+      bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
   );
 
   const claim = useCallback(
@@ -80,9 +84,10 @@ export function useChain() {
       const signer = { publicKey, sendTransaction };
       const result = await chainClaim(signer, num);
       await refreshBalance(publicKey.toBase58(), result);
+      bumpChainActivity(marketId);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
   );
 
   const challenge = useCallback(

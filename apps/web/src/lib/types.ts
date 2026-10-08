@@ -39,6 +39,8 @@ export interface Market {
   b: number;
   words?: WordPool[];
   rules: string;
+  /** Terse resolution grammar (e.g. seeded/demo markets); falls back to `rules`. */
+  resolution?: string;
   winningOutcome?: string;
   confidence?: number;
   evidence?: Evidence;
@@ -83,7 +85,7 @@ export interface Position {
 export interface ActivityItem {
   id: string;
   marketId: string;
-  kind: "buy" | "sell" | "back" | "resolve" | "create";
+  kind: "buy" | "sell" | "back" | "resolve" | "create" | "claim";
   side?: "yes" | "no" | string;
   amount: number;
   user: string;
@@ -123,6 +125,17 @@ export interface LeaderboardRow {
   profit: number;
   winRate: number;
   trades: number;
+}
+
+export interface NotificationItem {
+  id: string;
+  at: number;
+  kind: "resolved" | "watch" | "proposal" | "challenge" | "chain-resolved";
+  marketId: string;
+  marketSlug?: string;
+  marketTitle: string;
+  text: string;
+  read?: boolean;
 }
 
 export interface User {

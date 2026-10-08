@@ -21,7 +21,17 @@ export function TickerTape() {
           const h = toValues(history[m.id]);
           const cur = h.length > 0 ? h[h.length - 1] : 0.5;
           const prev = h.length > 8 ? h[h.length - 8] : cur;
-          return { m, cur, delta: cur - prev };
+          const lead =
+            m.type === "binary"
+              ? null
+              : [...(m.words ?? [])].sort(
+                  (a, b) => b.pool - a.pool || b.bettors - a.bettors
+                )[0]?.word ?? null;
+          const label =
+            m.type === "binary"
+              ? m.title.replace(/^Will they say /, "").slice(0, 22)
+              : (lead ?? "race").slice(0, 22);
+          return { m, cur, delta: cur - prev, label };
         }),
     [markets, history]
   );
@@ -30,11 +40,7 @@ export function TickerTape() {
 
   const row = (
     <div className="flex shrink-0 items-center">
-      {items.map(({ m, cur, delta }) => {
-        const label =
-          m.type === "binary"
-            ? m.title.replace(/^Will they say /, "").slice(0, 22)
-            : (m.words?.[0]?.word ?? "race");
+      {items.map(({ m, cur, delta, label }) => {
         return (
           <Link
             key={m.id}

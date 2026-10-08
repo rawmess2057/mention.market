@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
-import { lmsrBuyCost, lmsrPriceAfterBuy, lmsrProbYes } from "@/lib/lmsr";
+import { lmsrBuyQuote, lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 import { useChain } from "@/hooks/useChain";
@@ -45,19 +45,7 @@ export function TradePanel({ market }: { market: Market }) {
 
   const quote = useMemo(() => {
     if (amt <= 0) return null;
-    let lo = 0;
-    let hi = 1;
-    const cost = (sh: number) =>
-      lmsrBuyCost(m.yesShares, m.noShares, m.b, side, sh);
-    while (cost(hi) < amt) hi *= 2;
-    for (let i = 0; i < 40; i++) {
-      const mid = (lo + hi) / 2;
-      if (cost(mid) < amt) lo = mid;
-      else hi = mid;
-    }
-    const shares = (lo + hi) / 2;
-    const after = lmsrPriceAfterBuy(m.yesShares, m.noShares, m.b, side, shares);
-    return { shares, after, probNow: lmsrProbYes(m.yesShares, m.noShares, m.b) };
+    return lmsrBuyQuote(m.yesShares, m.noShares, m.b, side, amt);
   }, [m, side, amt]);
 
   const price = lmsrProbYes(m.yesShares, m.noShares, m.b);
@@ -136,17 +124,26 @@ export function TradePanel({ market }: { market: Market }) {
         {quote && (
           <div className="mt-4 space-y-1 rounded-lg bg-cream-dark p-3 text-xs">
             <Row label="You receive" value={`${quote.shares.toFixed(1)} shares`} />
+            <Row label="Avg price / share" value={`~${fmtUsd(quote.avgPrice)}`} />
+            <Row
+              label="Price impact"
+              value={`${quote.impactPct >= 0 ? "+" : ""}${quote.impactPct.toFixed(1)}%`}
+              className={quote.impactPct > 2 ? "text-orange-600" : ""}
+            />
             <Row
               label="Implied prob. shift"
-              value={`${Math.round(quote.probNow * 100)}% → ${Math.round(
-                (side === "yes" ? quote.after.yes : quote.after.no) * 100
-              )}%`}
+              value={`${Math.round(quote.before * 100)}% → ${Math.round(quote.after * 100)}%`}
             />
             <Row
               label="Payout if you win"
               value={fmtUsd(quote.shares)}
               className="text-green"
             />
+            {chainMarket && (
+              <div className="border-t border-gray-warm pt-1 text-[10px] text-gray-mid">
+                On-chain execution applies a ±2% slippage tolerance (min proceeds = 98% of this quote).
+              </div>
+            )}
           </div>
         )}
 
@@ -194,6 +191,7 @@ export function TradePanel({ market }: { market: Market }) {
               <Row label="Side" value={side.toUpperCase()} />
               <Row label="Cost" value={fmtUsd(pendingTrade.amount)} />
               <Row label="Shares" value={quote.shares.toFixed(1)} />
+              <Row label="Avg price / share" value={`~${fmtUsd(quote.avgPrice)}`} />
               <Row
                 label="Potential payout"
                 value={fmtUsd(quote.shares)}

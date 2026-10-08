@@ -19,6 +19,7 @@ import type {
   ActivityItem,
   LeaderboardRow,
   Market,
+  NotificationItem,
   Position,
   TradeRecord,
   TranscriptSnippet,
@@ -33,6 +34,46 @@ import type {
 const NOW = Date.now();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
+
+/** Leaderboard points: everyone earns the same amounts, so rank = activity. */
+export const POINTS_PER_USDC = 2; // per USDC/SOL unit spent on a buy or back
+export const POINTS_HOLD_TO_RESOLVE = 10; // per position still held when its market resolves
+export const POINTS_CLAIM = 25; // one-time bonus when a resolved winner is claimed
+
+/** Points earned by spending `amount` on an open market. */
+export function pointsForTrade(amount: number): number {
+  return Math.max(0, Math.floor(amount)) * POINTS_PER_USDC;
+}
+
+/** Points earned for still holding (unclaimed) a stake when its market resolves. */
+export function holdToResolvePoints(
+  positions: Record<string, Position>,
+  marketId: string
+): number {
+  const pos = positions[marketId];
+  return pos && !pos.claimed ? POINTS_HOLD_TO_RESOLVE : 0;
+}
+
+const NOTIF_DEDUPE_MS = 2 * MIN;
+
+/** Prepend a notification, deduping the same event firing repeatedly. */
+export function addNotification(
+  list: NotificationItem[],
+  n: Omit<NotificationItem, "id" | "at">
+): NotificationItem[] {
+  const now = Date.now();
+  const dup = list.some(
+    (x) =>
+      now - x.at < NOTIF_DEDUPE_MS &&
+      x.kind === n.kind &&
+      x.marketId === n.marketId &&
+      x.text === n.text
+  );
+  if (dup) return list;
+  return [{ id: `n-${now}-${Math.floor(Math.random() * 1e6)}`, at: now, ...n }, ...list].slice(
+    0, 40
+  );
+}
 
 export const WATCH_WORDS: Record<string, string[]> = {
   "sol-ai": ["AI", "Solana", "agent"],
@@ -73,6 +114,8 @@ export const SEED_MARKETS: Market[] = [
     b: 300,
     rules:
       "Resolves YES if the exact word \u201cAI\u201d (case-insensitive, standalone) is spoken by the host during the live segment. Track: twitch.tv/solspeedrun. Transcript from Deepgram primary feed.",
+    resolution:
+      "YES if the exact word \u201cAI\u201d (case-insensitive, standalone) is spoken by the host during the live segment; tracked on twitch.tv/solspeedrun via the Deepgram primary feed.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "twitch.tv/solspeedrun",
@@ -105,6 +148,8 @@ export const SEED_MARKETS: Market[] = [
     ]),
     rules:
       "Pot is split among backers of the first word/phrase (from the board) spoken by the presenter. Case-insensitive. First occurrence per Deepgram feed wins. 1% rake.",
+    resolution:
+      "Pot is split among backers of the first board word/phrase the presenter speaks (case-insensitive); the first occurrence on the Deepgram feed wins.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "x.com/xai",
@@ -127,6 +172,8 @@ export const SEED_MARKETS: Market[] = [
     b: 500,
     rules:
       "Resolves YES if \u201cpause\u201d appears in the official presser transcript (Federal Reserve feed, primary source). Derivative forms (\u201cpaused\u201d, \u201cpausing\u201d) do NOT count.",
+    resolution:
+      "YES if \u201cpause\u201d appears in the official Federal Reserve presser transcript; derivatives like \u201cpaused\u201d or \u201cpausing\u201d do NOT count.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "federalreserve.gov",
@@ -156,6 +203,8 @@ export const SEED_MARKETS: Market[] = [
     ]),
     rules:
       "First phrase from the board said during the post-game court interview wins. Broadcast audio only. 1% rake.",
+    resolution:
+      "First phrase from the board said during the post-game court interview wins; broadcast audio is the only accepted source.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "nba.com/broadcast",
@@ -178,6 +227,8 @@ export const SEED_MARKETS: Market[] = [
     b: 150,
     rules:
       "Resolves YES if the phrase \u201cW in the chat\u201d is spoken by the streamer. Chat messages don\u2019t count. Twitch VOD audio is the source of truth.",
+    resolution:
+      "YES if the streamer speaks the phrase \u201cW in the chat\u201d; chat messages do not count, Twitch VOD audio is the source of truth.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "twitch.tv/kaicenat",
@@ -207,6 +258,8 @@ export const SEED_MARKETS: Market[] = [
     ]),
     rules:
       "First phrase from the board said by management during prepared remarks or Q&A wins. Official earnings transcript is the source. 1% rake.",
+    resolution:
+      "First board phrase said by management during prepared remarks or Q&A wins; the official earnings transcript is the source of truth.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "nvidia.com/ir",
@@ -229,6 +282,8 @@ export const SEED_MARKETS: Market[] = [
     b: 400,
     rules:
       "Resolves YES if \u201chousing\u201d is spoken in the first minute of the debate by any candidate. Official broadcast transcript.",
+    resolution:
+      "YES if any candidate speaks \u201chousing\u201d during the first minute of the debate; the official broadcast transcript decides.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "nyc.gov/tv",
@@ -252,6 +307,8 @@ export const SEED_MARKETS: Market[] = [
     b: 250,
     rules:
       "Resolves YES if \u201csimulation\u201d (any form: simulate, simulated) is spoken by Lex during the episode. Podcast audio, Deepgram feed.",
+    resolution:
+      "YES if Lex speaks \u201csimulation\u201d (any form: simulate, simulated) during the episode; podcast audio via the Deepgram feed decides.",
     creator: "mention",
     creatorFeeBps: 100,
     source: "lexfridman.com",
@@ -439,6 +496,11 @@ interface SimState {
   markets: Record<string, Market>;
   positions: Record<string, Position>;
   activity: ActivityItem[];
+  /** Decoded on-chain trade history per chain market, kept apart from the
+   *  simulated `activity` feed so the bot loop's 60-item cap can't evict it. */
+  chainActivity: Record<string, ActivityItem[]>;
+  /** Per-market counter bumped when a just-sent chain trade should refetch. */
+  chainActivityNonce: Record<string, number>;
   transcript: Record<string, TranscriptSnippet[]>;
   history: Record<string, PricePoint[]>; // timestamped sparkline/chart data per market
   user: User;
@@ -447,6 +509,7 @@ interface SimState {
   activeWallet: string | null;
   pendingTrade: ConfirmTrade | null;
   toast: string | null;
+  notifications: NotificationItem[];
 
   // actions
   setWallet: (wallet: string | null) => void;
@@ -468,9 +531,13 @@ interface SimState {
   }) => string;
   ingestChainMarkets: (markets: Market[]) => void;
   ingestChainPositions: (positions: Position[]) => void;
+  ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
+  bumpChainActivity: (marketId: string) => void;
   setPendingTrade: (t: ConfirmTrade | null) => void;
   showToast: (msg: string | null) => void;
   tick: () => void;
+  pushNotification: (n: Omit<NotificationItem, "id" | "at">) => void;
+  markAllRead: () => void;
 }
 
 const FIRST = ["degen", "quant", "macro", "ai", "crypto", "stream", "hoops", "bag", "moon", "floor"];
@@ -491,6 +558,7 @@ interface PersistedState {
   activeWallet: string | null;
   activity: ActivityItem[];
   customMarkets: Record<string, Market>;
+  notifications?: NotificationItem[];
 }
 
 const SEED_IDS = new Set(SEED_MARKETS.map((m) => m.id));
@@ -523,6 +591,8 @@ export const useSim = create<SimState>()(persist((set, get) => {
     markets,
     positions,
     activity: [...SEED_ACTIVITY],
+    chainActivity: {},
+    chainActivityNonce: {},
     history,
     transcript,
     user: { ...CURRENT_USER },
@@ -531,6 +601,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
     activeWallet: null,
     pendingTrade: null,
     toast: null,
+    notifications: [],
 
     setWallet: (wallet) =>
       set((s) => {
@@ -612,7 +683,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         }
         positions[marketId] = p;
 
-        const user = { ...s.user, balance: Math.max(0, s.user.balance - cost) };
+        const user = { ...s.user, balance: Math.max(0, s.user.balance - cost), points: s.user.points + pointsForTrade(cost) };
         const trades = [trade, ...s.trades].slice(0, 500);
         const book = { user, positions, trades };
         return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
@@ -719,7 +790,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         p.wordBacks[word] = (p.wordBacks[word] ?? 0) + amount;
         positions[marketId] = p;
 
-        const user = { ...s.user, balance: Math.max(0, s.user.balance - amount) };
+        const user = { ...s.user, balance: Math.max(0, s.user.balance - amount), points: s.user.points + pointsForTrade(amount) };
         const trades = [trade, ...s.trades].slice(0, 500);
         const book = { user, positions, trades };
         return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
@@ -756,7 +827,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const user = {
           ...st.user,
           balance: st.user.balance + q.payout,
-          points: st.user.points + 25,
+          points: st.user.points + POINTS_CLAIM,
         };
         const trades = [trade, ...st.trades].slice(0, 500);
         const book = { user, positions, trades };
@@ -772,7 +843,16 @@ export const useSim = create<SimState>()(persist((set, get) => {
         if (!mm.evidence) return {};
         mm.evidence.challenged = true;
         markets[marketId] = mm;
-        return { markets };
+        return {
+          markets,
+          notifications: addNotification(s.notifications, {
+            kind: "challenge",
+            marketId,
+            marketSlug: mm.slug,
+            marketTitle: mm.title,
+            text: `Challenge submitted on \u201c${mm.title}\u201d — resolver review started`,
+          }),
+        };
       });
       get().showToast("Challenge submitted — resolver review started");
     },
@@ -868,8 +948,32 @@ export const useSim = create<SimState>()(persist((set, get) => {
       });
     },
 
+    ingestChainActivity: (marketId, items) =>
+      set((s) => {
+        const prev = s.chainActivity[marketId] ?? [];
+        const incoming = new Set(items.map((i) => i.id));
+        const merged = [...items, ...prev.filter((p) => !incoming.has(p.id))]
+          .sort((a, b) => b.at - a.at)
+          .slice(0, 40);
+        return { chainActivity: { ...s.chainActivity, [marketId]: merged } };
+      }),
+
+    bumpChainActivity: (marketId) =>
+      set((s) => ({
+        chainActivityNonce: {
+          ...s.chainActivityNonce,
+          [marketId]: (s.chainActivityNonce[marketId] ?? 0) + 1,
+        },
+      })),
+
     setPendingTrade: (t) => set({ pendingTrade: t }),
     showToast: (msg) => set({ toast: msg }),
+    pushNotification: (n) =>
+      set((s) => ({ notifications: addNotification(s.notifications, n) })),
+    markAllRead: () =>
+      set((s) => ({
+        notifications: s.notifications.map((n) => (n.read ? n : { ...n, read: true })),
+      })),
 
     tick: () => {
       const rnd = seededRandom(Math.floor(Date.now() / 1000));
@@ -878,14 +982,27 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const newActivity: ActivityItem[] = [];
         const newTranscript: Record<string, TranscriptSnippet[]> = { ...s.transcript };
         const newHistory: Record<string, PricePoint[]> = { ...s.history };
+        const resolveAwards: Record<string, number> = {};
+        let notifications = s.notifications;
+        let resolveToast: string | null = null;
 
         for (const m of Object.values(markets)) {
+          const heldHere = (mid: string) => !!s.positions[mid];
           if (isChainId(m.id)) continue; // on-chain markets resolve via the program + oracle
           if (m.status === "open" && Date.now() >= m.endTime) {
             // Locked: propose a deterministic outcome and open the challenge window.
             const mm = structuredClone(m);
             mm.status = "resolving";
             proposeResolution(mm, newTranscript[mm.slug] ?? []);
+            if (heldHere(m.id)) {
+              notifications = addNotification(notifications, {
+                kind: "proposal",
+                marketId: m.id,
+                marketSlug: mm.slug,
+                marketTitle: m.title,
+                text: `New resolution proposal on \u201c${m.title}\u201d`,
+              });
+            }
             markets[m.id] = mm;
             newActivity.push({
               id: `r-${m.id}-${Date.now()}`,
@@ -902,6 +1019,15 @@ export const useSim = create<SimState>()(persist((set, get) => {
             // A resolving market with no proposal (seeded/legacy) gets one now.
             if (!mm.evidence) {
               proposeResolution(mm, newTranscript[mm.slug] ?? []);
+              if (heldHere(m.id)) {
+                notifications = addNotification(notifications, {
+                  kind: "proposal",
+                  marketId: m.id,
+                  marketSlug: mm.slug,
+                  marketTitle: m.title,
+                  text: `New resolution proposal on \u201c${m.title}\u201d`,
+                });
+              }
               markets[m.id] = mm;
               continue;
             }
@@ -909,10 +1035,34 @@ export const useSim = create<SimState>()(persist((set, get) => {
             if (Date.now() >= mm.evidence.challengeDeadline) {
               if (mm.evidence.challenged) {
                 proposeResolution(mm, newTranscript[mm.slug] ?? []);
+                if (heldHere(m.id)) {
+                  notifications = addNotification(notifications, {
+                    kind: "proposal",
+                    marketId: m.id,
+                    marketSlug: mm.slug,
+                    marketTitle: m.title,
+                    text: `Re-proposed on \u201c${m.title}\u201d — review again`,
+                  });
+                }
               } else {
                 mm.status = "resolved";
                 mm.winningOutcome = mm.evidence.winningOutcome;
                 mm.resolvedAt = Date.now();
+                // +10 for anyone still holding an unclaimed stake in this market.
+                for (const [wk, book] of Object.entries(s.books)) {
+                  const pts = holdToResolvePoints(book.positions, m.id);
+                  if (pts) resolveAwards[wk] = (resolveAwards[wk] ?? 0) + pts;
+                }
+                if (heldHere(m.id)) {
+                  resolveToast = `\u201c${m.title}\u201d resolved — check your claims`;
+                  notifications = addNotification(notifications, {
+                    kind: "resolved",
+                    marketId: m.id,
+                    marketSlug: mm.slug,
+                    marketTitle: m.title,
+                    text: `\u201c${m.title}\u201d resolved ${(mm.evidence.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
+                  });
+                }
               }
               markets[m.id] = mm;
             }
@@ -980,23 +1130,49 @@ export const useSim = create<SimState>()(persist((set, get) => {
           const lines = newTranscript[m.slug] ?? [];
           if (rnd() < 0.22) {
             const t0 = lines.length > 0 ? lines[lines.length - 1].t : Date.now() % 3_600_000;
+            const text = randomLine(rnd, mm);
             newTranscript[m.slug] = [
               ...lines.slice(-30),
-              {
-                t: t0 + 8_000 + Math.floor(rnd() * 20_000),
-                speaker: "host",
-                text: randomLine(rnd, mm),
-              },
+              { t: t0 + 8_000 + Math.floor(rnd() * 20_000), speaker: "host", text },
             ];
+            // Alert a holder when a watched word is spoken on their market.
+            if (heldHere(m.id) && mm.type === "binary") {
+              for (const phrase of WATCH_WORDS[m.slug] ?? []) {
+                if (mentions(text, phrase)) {
+                  notifications = addNotification(notifications, {
+                    kind: "watch",
+                    marketId: m.id,
+                    marketSlug: m.slug,
+                    marketTitle: m.title,
+                    text: `Watch word \u201c${phrase}\u201d heard on \u201c${m.title}\u201d`,
+                  });
+                }
+              }
+            }
           }
         }
 
-        return {
+        // Apply hold-to-resolve points across wallet books (active wallet synced up).
+        const books = { ...s.books };
+        for (const [wk, pts] of Object.entries(resolveAwards)) {
+          const b = books[wk];
+          if (!b) continue;
+          books[wk] = { ...b, user: { ...b.user, points: b.user.points + pts } };
+        }
+        const user =
+          s.activeWallet && books[s.activeWallet] ? books[s.activeWallet].user : s.user;
+
+        const out: Partial<SimState> = {
           markets,
           activity: [...newActivity, ...s.activity].slice(0, 60),
           transcript: newTranscript,
           history: newHistory,
+          books,
+          user,
+          notifications,
         };
+        if (resolveToast) out.toast = resolveToast;
+        return out;
       });
     },
   };
@@ -1007,6 +1183,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
     books: s.books,
     activeWallet: s.activeWallet,
     activity: s.activity.slice(0, 200),
+    notifications: s.notifications.slice(0, 40),
     customMarkets: Object.fromEntries(
       Object.entries(s.markets).filter(([id]) => !SEED_IDS.has(id))
     ),
@@ -1025,6 +1202,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
       ...current,
       markets,
       activity: p.activity ?? current.activity,
+      notifications: p.notifications ?? current.notifications,
       books,
       activeWallet,
       positions: book.positions,

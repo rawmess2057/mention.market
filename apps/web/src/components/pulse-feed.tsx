@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn, fmtClock } from "@/lib/format";
-import { useSim, WATCH_WORDS } from "@/lib/sim";
+import { useSim } from "@/lib/sim";
 import { WaveformAvatar } from "@/components/waveform-avatar";
 
 export function PulseFeed({

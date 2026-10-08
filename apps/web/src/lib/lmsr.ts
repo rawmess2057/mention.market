@@ -68,6 +68,70 @@ export function lmsrPriceAfterBuy(
   return { yes: lmsrProbYes(qy, qn, b), no: 1 - lmsrProbYes(qy, qn, b) };
 }
 
+/**
+ * Largest share count a fixed `amount` buys, inverting `lmsrBuyCost` via
+ * binary search (40 iterations → sub-basis-point precision).
+ */
+export function lmsrSharesForCost(
+  qYes: number,
+  qNo: number,
+  b: number,
+  side: "yes" | "no",
+  amount: number
+): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const cost = (sh: number) => lmsrBuyCost(qYes, qNo, b, side, sh);
+  let lo = 0;
+  let hi = 1;
+  while (cost(hi) < amount && hi < Number.MAX_SAFE_INTEGER / 4) hi *= 2;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (cost(mid) < amount) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+export interface BuyQuote {
+  /** Shares granted for the fixed amount. */
+  shares: number;
+  /** Effective entry price: amount / shares (USDC per $1-outcome share). */
+  avgPrice: number;
+  /** The side's implied price before the buy. */
+  before: number;
+  /** The side's implied price after the buy. */
+  after: number;
+  /** Relative move of the side's price caused solely by this buy. */
+  impactPct: number;
+}
+
+/**
+ * Full quote for a fixed-size buy: how the order moves the AMM's price and
+ * what entry price the buyer actually gets (slippage = the implicit tax).
+ */
+export function lmsrBuyQuote(
+  qYes: number,
+  qNo: number,
+  b: number,
+  side: "yes" | "no",
+  amount: number
+): BuyQuote {
+  const shares = lmsrSharesForCost(qYes, qNo, b, side, amount);
+  const probYes = lmsrProbYes(qYes, qNo, b);
+  const before = side === "yes" ? probYes : 1 - probYes;
+  const after =
+    side === "yes"
+      ? lmsrPriceAfterBuy(qYes, qNo, b, side, shares).yes
+      : lmsrPriceAfterBuy(qYes, qNo, b, side, shares).no;
+  return {
+    shares,
+    avgPrice: shares > 0 ? amount / shares : 0,
+    before,
+    after,
+    impactPct: before > 0 ? ((after - before) / before) * 100 : 0,
+  };
+}
+
 /** Total LMSR cost function C(q) = b * ln(e^(qYes/b) + e^(qNo/b)). */
 function lmsrCost(qYes: number, qNo: number, b: number): number {
   if (!Number.isFinite(b) || b <= 0) return 0;

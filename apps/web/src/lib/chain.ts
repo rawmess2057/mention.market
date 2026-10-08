@@ -19,7 +19,8 @@ import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js
 import mentionIdl from "@/lib/idl/mention.json";
 import { DEVNET_USDC_MINT } from "@/lib/usdc";
 import { lmsrBuyCost, lmsrSellReturn } from "@/lib/lmsr";
-import type { Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
+import { shortAddr } from "@/lib/format";
+import type { ActivityItem, Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
 
 export const PROGRAM_ID = new PublicKey("E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV");
 export const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
@@ -432,6 +433,142 @@ export async function solBalanceUi(owner: PublicKey): Promise<number> {
     return (await connection().getBalance(owner)) / SOL_DECIMALS;
   } catch {
     return 0;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* On-chain activity (trade history)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Anchor's `BorshInstructionCoder` camelCases the IDL, but we normalize the
+ * name here so a raw snake_case name (e.g. from a fixture) maps too.
+ */
+function normalizeIxName(name: string): string {
+  return name.replace(/_/g, "").toLowerCase();
+}
+
+function bnToNumber(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "bigint") return Number(v);
+  if (v && typeof (v as { toNumber?: unknown }).toNumber === "function") {
+    return (v as { toNumber(): number }).toNumber();
+  }
+  return Number(v ?? 0);
+}
+
+/**
+ * Map a decoded program instruction to an {@link ActivityItem} payload, or
+ * `null` for instructions that don't belong in the trade feed (market
+ * creation, challenges, config/pause, oracle bookkeeping).
+ *
+ * Pure and RPC-free so it can be unit-tested with decoded-IDL fixtures.
+ */
+export function mapChainInstruction(
+  name: string,
+  data: Record<string, unknown>,
+  scale: number
+): { kind: ActivityItem["kind"]; side?: string; amount: number } | null {
+  switch (normalizeIxName(name)) {
+    case "buybinary":
+      return {
+        kind: "buy",
+        side: bnToNumber(data.side) === 0 ? "yes" : "no",
+        amount: bnToNumber(data.cost) / scale,
+      };
+    case "sellbinary":
+      return {
+        kind: "sell",
+        side: bnToNumber(data.side) === 0 ? "yes" : "no",
+        amount: bnToNumber(data.shares) / scale,
+      };
+    case "backword": {
+      const word = String(data.word ?? "");
+      return { kind: "back", side: word || undefined, amount: bnToNumber(data.amount) / scale };
+    }
+    case "claimpayout":
+      return { kind: "claim", amount: 0 };
+    case "lockmarket":
+      return { kind: "resolve", amount: 0 };
+    case "proposeresolution": {
+      const outcome = String(data.outcome ?? "");
+      return { kind: "resolve", side: outcome || undefined, amount: 0 };
+    }
+    case "finalizeresolution":
+      return { kind: "resolve", amount: 0 };
+    default:
+      return null;
+  }
+}
+
+interface BorshInstructionCoderLike {
+  decode(data: string, encoding: "base64"): { name: string; data: Record<string, unknown> } | null;
+}
+
+interface ParsedInstructionLike {
+  programId?: unknown;
+  data?: string;
+}
+
+/**
+ * Real on-chain trade history for a market, decoded from its account
+ * signatures. The program emits no events for trades, so the only source is
+ * the instructions in each transaction; `buy_binary`/`sell_binary`/`back_word`
+ * carry the amount, `claim_payout`/resolution instructions are shown without
+ * one (their values aren't in the instruction args).
+ *
+ * Best-effort: any RPC or decode failure yields `[]` rather than throwing, so
+ * the feed degrades to "no history" instead of breaking the page.
+ */
+export async function fetchChainActivity(
+  id: number,
+  scale: number,
+  limit = 25
+): Promise<ActivityItem[]> {
+  try {
+    const conn = connection();
+    const sigs = (await conn.getSignaturesForAddress(marketPda(id), { limit })).filter(
+      (s) => !s.err
+    );
+    if (sigs.length === 0) return [];
+
+    const txs = await conn.getParsedTransactions(
+      sigs.map((s) => s.signature),
+      { maxSupportedTransactionVersion: 0 }
+    );
+    const coder = (program as unknown as { coder: { instruction: BorshInstructionCoderLike } })
+      .coder;
+
+    const out: ActivityItem[] = [];
+    txs.forEach((tx, ti) => {
+      if (!tx || tx.meta?.err) return;
+      const at = (tx.blockTime ?? sigs[ti]?.blockTime ?? 0) * 1000;
+      const signer = tx.transaction.message.accountKeys.find((k) => k.signer)?.pubkey;
+      const user = signer ? shortAddr(signer.toBase58()) : "unknown";
+      const instructions = tx.transaction.message.instructions as unknown as ParsedInstructionLike[];
+
+      instructions.forEach((ix, ii) => {
+        const pid = ix.programId as { equals?: (p: PublicKey) => boolean } | undefined;
+        if (!pid?.equals || !pid.equals(PROGRAM_ID) || !ix.data) return;
+        const decoded = coder.instruction.decode(ix.data, "base64");
+        if (!decoded) return;
+        const mapped = mapChainInstruction(decoded.name, decoded.data, scale);
+        if (!mapped) return;
+        out.push({
+          id: `${sigs[ti]!.signature}:${ii}`,
+          marketId: `c${id}`,
+          kind: mapped.kind,
+          side: mapped.side,
+          amount: mapped.amount,
+          user,
+          at,
+        });
+      });
+    });
+
+    return out.sort((a, b) => b.at - a.at).slice(0, limit);
+  } catch {
+    return [];
   }
 }
 

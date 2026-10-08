@@ -42,6 +42,7 @@ export function WordBoard({ market }: { market: Market }) {
   const pot = words.reduce((s, w) => s + w.pool, 0);
   const amt = Math.max(0, parseFloat(amount) || 0);
   const sel = words.find((w) => w.word === selected);
+  const backQuote = useMemo(() => (selected ? quoteBack(words, selected, amt) : null), [words, selected, amt]);
 
   return (
     <>
@@ -143,14 +144,31 @@ export function WordBoard({ market }: { market: Market }) {
               <div className="space-y-1 rounded-lg bg-cream-dark p-3 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-mid">Pool after</span>
-                  <span className="font-mono font-semibold text-navy">{fmtUsd(sel.pool + amt)}</span>
+                  <span className="font-mono font-semibold text-navy">
+                    {backQuote ? fmtUsd(backQuote.poolAfter) : fmtUsd(sel.pool + amt)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-mid">Your pot share</span>
+                  <span className="font-mono font-semibold text-navy">
+                    {((backQuote?.potShare ?? 0) * 100).toFixed(2)}%
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-mid">Your cut if it wins</span>
                   <span className="font-mono font-semibold text-green">
-                    {fmtUsd(quoteBack(words, selected ?? "", amt).payoutIfWin)}
+                    {fmtUsd(backQuote?.payoutIfWin ?? 0)}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-mid">Min payout if the pot triples</span>
+                  <span className="font-mono font-semibold text-navy">
+                    {fmtUsd(backQuote?.minPayoutIfTripled ?? 0)}
+                  </span>
+                </div>
+                <p className="border-t border-gray-warm pt-1 text-[10px] text-gray-mid">
+                  Worst case assumes every new drop lands on this word &mdash; you always get at least that &ldquo;min payout&rdquo; floor.
+                </p>
               </div>
 
               <Button

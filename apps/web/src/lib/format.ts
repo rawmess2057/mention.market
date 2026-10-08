@@ -41,6 +41,30 @@ export function fmtUsd(n: number, opts?: { compact?: boolean; decimals?: number 
   })}`;
 }
 
+/**
+ * Format an amount in the unit its account is actually denominated in:
+ * `◎ SOL` for on-chain markets, `$ USDC` for the simulated demo book.
+ * Falling back to `$` keeps guests (no chain markets) on the implied-USD demo.
+ */
+export function fmtBalance(
+  n: number,
+  kind: "usdc" | "sol" | undefined,
+  opts?: { compact?: boolean; decimals?: number }
+) {
+  if (kind === "sol") {
+    const useCompact = (opts?.compact ?? false) && Math.abs(n) >= 1_000;
+    const num = n
+      .toLocaleString("en-US", {
+        maximumFractionDigits: opts?.decimals ?? (opts?.compact ? 1 : 4),
+        minimumFractionDigits: opts?.decimals ?? 0,
+        notation: useCompact ? "compact" : "standard",
+      })
+      .replace("K", "k");
+    return `◎ ${num}`;
+  }
+  return fmtUsd(n, { compact: opts?.compact, decimals: opts?.decimals });
+}
+
 export function fmtPct(n: number, decimals = 0) {
   return `${(n * 100).toFixed(decimals)}%`;
 }
@@ -73,6 +97,18 @@ export function fmtClock(t: number): string {
 export function shortAddr(a: string): string {
   if (a.length <= 6) return a;
   return `${a.slice(0, 4)}…${a.slice(-4)}`;
+}
+
+/** Roughly-rounded "time since" for the notification feed. */
+export function fmtAgo(t: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 export function seededRandom(seed: number): () => number {

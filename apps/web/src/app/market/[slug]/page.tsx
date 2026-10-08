@@ -13,12 +13,14 @@ import { TradePanel } from "@/components/trade-panel";
 import { WordBoard } from "@/components/word-board";
 import { PositionCard } from "@/components/position-card";
 import { EvidenceSection } from "@/components/evidence-viewer";
+import { ResolutionGrammar } from "@/components/resolution-grammar";
 import { ActivityFeed } from "@/components/activity-feed";
 import { ClaimCard } from "@/components/claim-card";
 import { TheWhisper } from "@/components/the-whisper";
 import { fmtTimeLeft, fmtUsd } from "@/lib/format";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
+import { useChainActivity } from "@/hooks/useChainActivity";
 import { VERTICAL_META } from "@/lib/types";
 
 const PriceChartWithTimeframe = dynamic(
@@ -38,6 +40,8 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
   const history = useSim((s) => s.history);
   const now = useNow(1000);
   const m = Object.values(markets).find((x) => x.slug === slug);
+
+  useChainActivity(m);
 
   if (!m) {
     return (
@@ -178,7 +182,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                     <div className="mb-2 flex items-center gap-1.5 font-semibold text-navy">
                       <ScrollText className="h-3.5 w-3.5" /> Resolution rules
                     </div>
-                    {m.rules}
+                    <ResolutionGrammar market={m} />
                   </div>
                 </TabsContent>
               </Tabs>

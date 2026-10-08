@@ -29,6 +29,11 @@ export function ChainSync() {
       try {
         const markets = (await fetchChainMarketsAll()).filter((m) => !isStaleChainMarket(m));
         if (!alive) return;
+        // Newly-resolved on-chain markets the wallet holds a stake in → notify.
+        const prev = useSim.getState().markets;
+        const fresh = markets.filter(
+          (m) => prev[m.id] && prev[m.id].status !== "resolved" && m.status === "resolved"
+        );
         useSim.getState().ingestChainMarkets(markets);
 
         if (connected && publicKey) {
@@ -42,6 +47,17 @@ export function ChainSync() {
           ).filter((p): p is NonNullable<typeof p> => !!p);
           if (!alive) return;
           useSim.getState().ingestChainPositions(positions);
+          const held = new Set(positions.map((p) => p.marketId));
+          for (const m of fresh) {
+            if (!held.has(m.id)) continue;
+            useSim.getState().pushNotification({
+              kind: "chain-resolved",
+              marketId: m.id,
+              marketSlug: m.slug,
+              marketTitle: m.title,
+              text: `\u201c${m.title}\u201d resolved on-chain ${(m.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
+            });
+          }
         }
       } catch (err) {
         console.warn("chain sync failed:", err);

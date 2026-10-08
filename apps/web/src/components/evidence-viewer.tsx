@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BadgeCheck, FileAudio, Gavel, ShieldAlert } from "lucide-react";
+import { BadgeCheck, ExternalLink, FileAudio, Gavel, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { cn, fmtClock, fmtErr } from "@/lib/format";
+import { cn, fmtAgo, fmtClock, fmtErr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
@@ -133,9 +133,20 @@ function EvidenceModal({
             </div>
 
             <div className="rounded-lg bg-cream-dark p-3 text-xs text-gray-mid">
-              Proposed by <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
-              <span className="font-mono text-navy">{fmtBond(ev, m)}</span>{" "}
-              · hash <span className="font-mono text-navy">{ev.evidenceHash}</span>
+              Proposed {fmtAgo(ev.proposedAt)} by{" "}
+              <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
+              <span className="font-mono text-navy">{fmtBond(ev, m)}</span> · hash{" "}
+              <span className="font-mono text-navy">{ev.evidenceHash}</span>
+              {chainMarket && m.sourceUrl && (
+                <a
+                  href={m.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-blue hover:underline"
+                >
+                  View on explorer <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </div>
 
             <div>

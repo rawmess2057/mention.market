@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
-import { cn, fmtUsd } from "@/lib/format";
 import { useSim } from "@/lib/sim";
+import { cn, fmtBalance } from "@/lib/format";
 
 export function ActivityFeed({ marketId, limit = 12 }: { marketId: string; limit?: number }) {
-  const activity = useSim((s) => s.activity);
+  const market = useSim((s) => s.markets[marketId]);
+  const chainActivity = useSim((s) => s.chainActivity[marketId]);
+  const simActivity = useSim((s) => s.activity);
+  const assetKind = market?.asset;
 
-  const items = useMemo(
-    () => activity.filter((a) => a.marketId === marketId).slice(0, limit),
-    [activity, marketId, limit]
-  );
+  const items = [
+    ...(chainActivity ?? []),
+    ...simActivity.filter((a) => a.marketId === marketId),
+  ]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, limit);
 
   if (items.length === 0) {
     return (
@@ -27,17 +31,25 @@ export function ActivityFeed({ marketId, limit = 12 }: { marketId: string; limit
           <span
             className={cn(
               "rounded px-1.5 py-0.5 font-bold",
-              a.kind === "resolve"
+              a.kind === "resolve" || a.kind === "claim"
                 ? "bg-blue-light text-blue"
                 : a.side === "yes" || (a.kind === "back" && a.side)
                   ? "bg-green-light text-green"
                   : "bg-red-light text-red-brand"
             )}
           >
-            {a.kind === "resolve" ? "RESOLVED" : a.kind === "back" ? "BACK" : a.side?.toUpperCase()}
+            {a.kind === "resolve"
+              ? "RESOLVED"
+              : a.kind === "claim"
+                ? "CLAIMED"
+                : a.kind === "back"
+                  ? "BACK"
+                  : a.side?.toUpperCase()}
           </span>
           <span className="font-medium text-navy">{a.user}</span>
-          <span className="ml-auto font-mono text-navy">{fmtUsd(a.amount)}</span>
+          <span className="ml-auto font-mono text-navy">
+            {a.amount > 0 ? fmtBalance(a.amount, assetKind) : ""}
+          </span>
           <span className="w-10 text-right text-gray-mid">
             {new Date(a.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
           </span>

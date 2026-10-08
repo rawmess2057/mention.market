@@ -32,6 +32,26 @@ describe("quoteBack", () => {
     expect(q.poolAfter).toBe(100);
     expect(q.payoutIfWin).toBeCloseTo(100 * 0.99, 6);
   });
+
+  it("reports the pot share of the winning pool", () => {
+    const q = quoteBack(words, "agents", 5_200);
+    // Half the winning pool after backing → half the pot share.
+    expect(q.potShare).toBeCloseTo(0.5, 6);
+  });
+
+  it("min payout floor holds even if new money floods your word", () => {
+    const q = quoteBack(words, "agents", 100);
+    // Pot triples, all growth lands on "agents": pool 5300 -> 5300 + 2*12100.
+    const winTripled = 5_300 + 2 * (5_200 + 4_150 + 2_640 + 100);
+    const netTripled = 3 * (5_200 + 4_150 + 2_640 + 100) * 0.99;
+    expect(q.minPayoutIfTripled).toBeCloseTo((100 / winTripled) * netTripled, 6);
+  });
+
+  it("min payout is never worse than zero", () => {
+    const q = quoteBack([], "", 0);
+    expect(q.minPayoutIfTripled).toBe(0);
+    expect(q.potShare).toBe(0);
+  });
 });
 
 describe("impliedOdds", () => {

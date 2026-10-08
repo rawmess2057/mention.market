@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   lmsrBuyCost,
+  lmsrBuyQuote,
   lmsrMaxSubsidy,
   lmsrPositionValue,
   lmsrPriceAfterBuy,
   lmsrProbYes,
   lmsrSellReturn,
+  lmsrSharesForCost,
 } from "../lmsr";
 
 describe("lmsrProbYes", () => {
@@ -109,5 +111,40 @@ describe("misc", () => {
     const v = lmsrPositionValue(500, 400, 300, { yesShares: 20, noShares: 10 });
     expect(Number.isFinite(v)).toBe(true);
     expect(v).toBeGreaterThan(0);
+  });
+});
+
+describe("lmsrSharesForCost / lmsrBuyQuote", () => {
+  it("inverts lmsrBuyCost within epsilon", () => {
+    const amount = 100;
+    const shares = lmsrSharesForCost(500, 400, 300, "yes", amount);
+    const cost = lmsrBuyCost(500, 400, 300, "yes", shares);
+    expect(Math.abs(cost - amount) / amount).toBeLessThan(1e-6);
+  });
+
+  it("returns zero shares for a zero amount", () => {
+    expect(lmsrSharesForCost(500, 400, 300, "yes", 0)).toBe(0);
+    expect(lmsrBuyQuote(500, 400, 300, "yes", 0).shares).toBe(0);
+  });
+
+  it("avg price equals amount over shares", () => {
+    const amount = 100;
+    const q = lmsrBuyQuote(500, 400, 300, "yes", amount);
+    expect(q.avgPrice).toBeCloseTo(amount / q.shares, 10);
+  });
+
+  it("buying YES moves the implied price up and reports impact", () => {
+    const before = lmsrProbYes(500, 400, 300);
+    const q = lmsrBuyQuote(500, 400, 300, "yes", 100);
+    expect(q.before).toBeCloseTo(before, 10);
+    expect(q.after).toBeGreaterThan(q.before);
+    expect(q.impactPct).toBeCloseTo(((q.after - q.before) / q.before) * 100, 6);
+  });
+
+  it("buying NO raises the NO price symmetrically", () => {
+    const q = lmsrBuyQuote(500, 400, 300, "no", 100);
+    expect(q.before).toBeCloseTo(1 - lmsrProbYes(500, 400, 300), 10);
+    expect(q.after).toBeGreaterThan(q.before);
+    expect(q.impactPct).toBeGreaterThan(0);
   });
 });

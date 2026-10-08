@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { cn, fmtTimeLeft, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtBalance, fmtTimeLeft, shortAddr } from "@/lib/format";
 import { lmsrPositionValue, lmsrProbYes } from "@/lib/lmsr";
 import { pnlSeries, summarizePnl, verticalBreakdown } from "@/lib/pnl";
 import { claimableAmounts } from "@/lib/settle";
@@ -191,6 +191,7 @@ function OverviewTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
+  const kind = user.balanceKind;
   const trades = useSim((s) => s.trades);
   const claimable = useMemo(
     () => claimableAmounts(positions, markets),
@@ -219,31 +220,31 @@ function OverviewTab({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <PnlCard
           label="Net P&L"
-          value={fmtSigned(overview.netPnl)}
+          value={fmtSigned(overview.netPnl, kind)}
           tone={toneOf(overview.netPnl)}
           icon={overview.netPnl >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Realized"
-          value={fmtSigned(overview.realizedPnl)}
+          value={fmtSigned(overview.realizedPnl, kind)}
           tone={toneOf(overview.realizedPnl)}
           icon={<Activity className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Unrealized"
-          value={fmtSigned(overview.unrealizedPnl)}
+          value={fmtSigned(overview.unrealizedPnl, kind)}
           tone={toneOf(overview.unrealizedPnl)}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Claimable"
-          value={fmtUsd(overview.claimableTotal)}
+          value={fmtBalance(overview.claimableTotal, kind)}
           tone="pos"
           icon={<Trophy className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Net Worth"
-          value={fmtUsd(overview.netWorth)}
+          value={fmtBalance(overview.netWorth, kind)}
           tone="neutral"
           icon={<Wallet className="h-3.5 w-3.5" />}
         />
@@ -274,7 +275,7 @@ function OverviewTab({ className }: { className?: string }) {
                   {best.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(best.side)} · {fmtWhen(best.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-green">+{fmtUsd(best.pnl)}</span>
+              <span className="font-mono text-sm font-bold text-green">+{fmtBalance(best.pnl, kind)}</span>
             </div>
           )}
           {worst && (
@@ -286,7 +287,7 @@ function OverviewTab({ className }: { className?: string }) {
                   {worst.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(worst.side)} · {fmtWhen(worst.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-red-brand">−{fmtUsd(Math.abs(worst.pnl))}</span>
+              <span className="font-mono text-sm font-bold text-red-brand">−{fmtBalance(Math.abs(worst.pnl), kind)}</span>
             </div>
           )}
         </div>
@@ -301,8 +302,7 @@ function OverviewTab({ className }: { className?: string }) {
             </h2>
             <span className="text-xs text-gray-mid">
               cumulative <span className={cn("font-mono font-semibold", overview.realizedPnl >= 0 ? "text-green" : "text-red-brand")}>
-                {overview.realizedPnl >= 0 ? "+" : ""}
-                {fmtUsd(overview.realizedPnl)}
+                {fmtSigned(overview.realizedPnl, kind)}
               </span>
             </span>
           </div>
@@ -326,12 +326,12 @@ function OverviewTab({ className }: { className?: string }) {
                       )}
                     >
                       {b.realizedPnl >= 0 ? "+" : ""}
-                      {fmtUsd(b.realizedPnl, { compact: true })}
+                      {fmtBalance(b.realizedPnl, kind, { compact: true })}
                     </span>
                     <div
                       className={cn("w-full rounded-t", b.realizedPnl >= 0 ? "bg-green/80" : "bg-red-brand/80")}
                       style={{ height: `${Math.max(3, h)}%` }}
-                      title={`${b.label}: ${fmtUsd(b.realizedPnl)}`}
+                      title={`${b.label}: ${fmtSigned(b.realizedPnl, kind)}`}
                     />
                     <span className="text-[9px] text-gray-mid">{b.label}</span>
                   </div>
@@ -363,7 +363,7 @@ function OverviewTab({ className }: { className?: string }) {
                         )}
                       >
                         {v.realizedPnl >= 0 ? "+" : ""}
-                        {fmtUsd(v.realizedPnl, { compact: true })}
+                        {fmtBalance(v.realizedPnl, kind, { compact: true })}
                       </span>
                     </span>
                   </div>
@@ -415,8 +415,9 @@ function PnlCard({
   );
 }
 
-function fmtSigned(n: number): string {
-  return `${n >= 0 ? "+" : ""}${fmtUsd(n)}`;
+function fmtSigned(n: number, kind: "usdc" | "sol" | undefined): string {
+  const sign = n >= 0 ? "+" : "−";
+  return `${sign}${fmtBalance(Math.abs(n), kind)}`;
 }
 
 function toneOf(n: number): "pos" | "neg" | "neutral" {
@@ -435,6 +436,7 @@ function PositionsTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
+  const kind = user.balanceKind;
   const sellBinary = useSim((s) => s.sellBinary);
   const claim = useSim((s) => s.claim);
   const chain = useChain();
@@ -491,12 +493,12 @@ function PositionsTab({ className }: { className?: string }) {
         />
         <SummaryCard
           label="Market Value"
-          value={fmtUsd(totals.value)}
+          value={fmtBalance(totals.value, kind)}
           icon={<Wallet className="h-3.5 w-3.5" />}
         />
         <SummaryCard
           label="Cost Basis"
-          value={fmtUsd(totals.cost)}
+          value={fmtBalance(totals.cost, kind)}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <SummaryCard
@@ -504,7 +506,7 @@ function PositionsTab({ className }: { className?: string }) {
           value={
             <span className={cn(totals.pnl >= 0 ? "text-green" : "text-red-brand")}>
               {totals.pnl >= 0 ? "+" : ""}
-              {fmtUsd(totals.pnl)}
+              {fmtBalance(totals.pnl, kind)}
             </span>
           }
           sub={
@@ -529,8 +531,8 @@ function PositionsTab({ className }: { className?: string }) {
           }
         />
         <SummaryCard
-          label="Free-play Balance"
-          value={fmtUsd(user.balance)}
+          label={kind === "sol" ? "Account Balance" : "Free-play Balance"}
+          value={fmtBalance(user.balance, kind)}
           accent="text-green"
           icon={<Trophy className="h-3.5 w-3.5" />}
         />
@@ -611,7 +613,7 @@ function PositionsTab({ className }: { className?: string }) {
                       {m.event} · winner: {m.winningOutcome?.toUpperCase()}
                     </div>
                   </div>
-                  <span className="font-mono text-lg font-bold text-green">{fmtUsd(amt)}</span>
+                  <span className="font-mono text-lg font-bold text-green">{fmtBalance(amt, kind)}</span>
                   <Button
                     variant="yes"
                     size="sm"
@@ -677,6 +679,7 @@ type HistFilter = "all" | "buy" | "sell" | "back" | "claim";
 function HistoryTab({ className }: { className?: string }) {
   const trades = useSim((s) => s.trades);
   const markets = useSim((s) => s.markets);
+  const kind = useSim((s) => s.user.balanceKind);
   const [filter, setFilter] = useState<HistFilter>("all");
 
   const filtered = useMemo(() => {
@@ -760,9 +763,9 @@ function HistoryTab({ className }: { className?: string }) {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
-                    <span className="text-red-brand">−{fmtUsd(footer.inflow)}</span>
+                    <span className="text-red-brand">−{fmtBalance(footer.inflow, kind)}</span>
                     <span className="text-gray-mid"> / </span>
-                    <span className="text-green">+{fmtUsd(footer.outflow)}</span>
+                    <span className="text-green">+{fmtBalance(footer.outflow, kind)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <span
@@ -771,13 +774,12 @@ function HistoryTab({ className }: { className?: string }) {
                         footer.net >= 0 ? "text-green" : "text-red-brand"
                       )}
                     >
-                      {fmtSigned(footer.net)}
+                      {fmtSigned(footer.net, kind)}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     <span className={cn("font-bold", footer.realized >= 0 ? "text-green" : "text-red-brand")}>
-                      {footer.realized >= 0 ? "+" : ""}
-                      {fmtUsd(footer.realized)}
+                      {fmtSigned(footer.realized, kind)}
                     </span>
                   </td>
                 </tr>
@@ -791,6 +793,7 @@ function HistoryTab({ className }: { className?: string }) {
 }
 
 function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
+  const kind = useSim((s) => s.user.balanceKind);
   const isOut = t.kind === "buy" || t.kind === "back";
   const kindLabel = t.kind === "buy" ? "Buy" : t.kind === "sell" ? "Sell" : t.kind === "back" ? "Back" : "Claim";
   const kindColor =
@@ -865,19 +868,18 @@ function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
         </div>
         <div className={cn("font-mono text-[11px]", isOut ? "text-red-brand" : "text-green")}>
           {isOut ? "−" : "+"}
-          {fmtUsd(t.amount)}
+          {fmtBalance(t.amount, kind)}
         </div>
         {t.kind === "back" && t.price > 0 && (
           <div className="mt-0.5 font-mono text-[11px] font-semibold text-navy">
-            → ≈ {fmtUsd(t.amount / t.price, { compact: true })} if it lands
+            → ≈ {fmtBalance(t.amount / t.price, kind, { compact: true })} if it lands
           </div>
         )}
       </td>
       <td className="px-4 py-3">
         {t.pnl !== 0 ? (
           <span className={cn("font-mono text-xs font-bold", t.pnl > 0 ? "text-green" : "text-red-brand")}>
-            {t.pnl > 0 ? "+" : ""}
-            {fmtUsd(t.pnl)}
+            {fmtSigned(t.pnl, kind)}
           </span>
         ) : (
           <span className="font-mono text-xs text-gray-mid">—</span>
@@ -957,6 +959,7 @@ function PositionRowCard({
 }) {
   const m = row.market;
   const status = STATUS_META[m.status];
+  const kind = useSim((s) => s.user.balanceKind);
 
   return (
     <Link
@@ -1017,7 +1020,7 @@ function PositionRowCard({
               ? row.shares.toFixed(1)
               : row.wordBacks
                   ? Object.entries(row.wordBacks)
-                      .map(([w, v]) => `${w} ${fmtUsd(v, { compact: true })}`)
+                      .map(([w, v]) => `${w} ${fmtBalance(v, kind, { compact: true })}`)
                       .join(" · ")
                   : "—"}
           </div>
@@ -1056,8 +1059,7 @@ function PositionRowCard({
                   row.pnl >= 0 ? "text-green" : "text-red-brand"
                 )}
               >
-                {row.pnl >= 0 ? "+" : ""}
-                {fmtUsd(row.pnl)}
+                {fmtSigned(row.pnl, kind)}
               </span>
               <span
                 className={cn(
@@ -1080,12 +1082,12 @@ function PositionRowCard({
         <div className="flex items-baseline gap-3">
           <div>
             <span className="text-[10px] uppercase tracking-wider text-gray-mid">Value</span>{" "}
-            <span className="font-mono text-sm font-bold text-navy">{fmtUsd(row.marketValue)}</span>
+            <span className="font-mono text-sm font-bold text-navy">{fmtBalance(row.marketValue, kind)}</span>
           </div>
           {m.type === "binary" && (
             <div>
               <span className="text-[10px] uppercase tracking-wider text-gray-mid">Cost</span>{" "}
-              <span className="font-mono text-sm text-gray-mid">{fmtUsd(row.costBasis)}</span>
+              <span className="font-mono text-sm text-gray-mid">{fmtBalance(row.costBasis, kind)}</span>
             </div>
           )}
         </div>

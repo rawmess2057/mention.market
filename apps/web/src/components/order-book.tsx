@@ -29,6 +29,7 @@ export function OrderBook({ market }: { market: Market }) {
   const user = useSim((s) => s.user);
   const buyBinary = useSim((s) => s.buyBinary);
   const activity = useSim((s) => s.activity);
+  const chainActivity = useSim((s) => s.chainActivity[m.id]);
   const showToast = useSim((s) => s.showToast);
   const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
   const chain = useChain();
@@ -45,8 +46,11 @@ export function OrderBook({ market }: { market: Market }) {
   const disabled = !connected || m.status !== "open" || amt <= 0 || amt > balance;
 
   const recentTrades = useMemo(
-    () => activity.filter((a) => a.marketId === m.id).slice(0, 5),
-    [activity, m.id]
+    () =>
+      [...(chainActivity ?? []), ...activity.filter((a) => a.marketId === m.id)]
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 5),
+    [chainActivity, activity, m.id]
   );
 
   const positionSummary = useMemo(() => {
@@ -218,15 +222,21 @@ export function OrderBook({ market }: { market: Market }) {
                   <span
                     className={cn(
                       "rounded px-1 py-0.5 font-bold",
-                      t.side === "yes" ? "bg-green-light text-green" : "bg-red-light text-red-brand"
+                      t.kind === "resolve" || t.kind === "claim"
+                        ? "bg-blue-light text-blue"
+                        : t.side === "yes"
+                          ? "bg-green-light text-green"
+                          : "bg-red-light text-red-brand"
                     )}
                   >
-                    {t.side?.toUpperCase()}
+                    {t.kind === "resolve" ? "RESOLVED" : t.kind === "claim" ? "CLAIMED" : t.side?.toUpperCase()}
                   </span>
                   <span className="text-navy">{t.user}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-semibold text-navy">{fmtUsd(t.amount)}</span>
+                  <span className="font-mono font-semibold text-navy">
+                    {t.amount > 0 ? fmtBalance(t.amount, m.asset) : ""}
+                  </span>
                   <Clock className="h-2.5 w-2.5 text-gray-mid" />
                 </div>
               </div>

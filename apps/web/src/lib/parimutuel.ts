@@ -15,6 +15,14 @@ export interface BackQuote {
   payoutIfWin: number;
   /** Total pot across all words after your backing. */
   potAfter: number;
+  /** Fraction of the winning word's pool you own after backing. */
+  potShare: number;
+  /**
+   * Worst-case payout if the pot triples before the event ends, assuming
+   * (conservatively) every new USDC lands on your own word. Real payouts are
+   * never lower than this unless the pool grows on other words.
+   */
+  minPayoutIfTripled: number;
 }
 
 /** Quote for backing `word` with `amount` USDC. */
@@ -28,10 +36,19 @@ export function quoteBack(
   const poolAfter = (words.find((w) => w.word === word)?.pool ?? 0) + amount;
   const winningPoolAfter = poolAfter;
   const net = pot * (1 - feeBps / 10_000);
+  const potShare = winningPoolAfter > 0 ? amount / winningPoolAfter : 0;
+
+  const potTripled = pot * 3;
+  const winTripled = poolAfter + (potTripled - pot); // all new money lands on your word
+  const netTripled = potTripled * (1 - feeBps / 10_000);
+  const minPayoutIfTripled = winTripled > 0 ? (amount / winTripled) * netTripled : 0;
+
   return {
     poolAfter,
     potAfter: pot,
     payoutIfWin: winningPoolAfter > 0 ? (amount / winningPoolAfter) * net : 0,
+    potShare,
+    minPayoutIfTripled,
   };
 }
 

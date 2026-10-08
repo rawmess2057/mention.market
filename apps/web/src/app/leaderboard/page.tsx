@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Medal } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { cn, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtBalance, fmtUsd, shortAddr } from "@/lib/format";
 import { LEADERBOARD, useSim } from "@/lib/sim";
 
 const MEDALS = ["text-amber-600", "text-gray-cool", "text-orange-600"];
@@ -13,22 +13,33 @@ export default function LeaderboardPage() {
   const user = useSim((s) => s.user);
   const trades = useSim((s) => s.trades);
   const leaderboard = LEADERBOARD;
+  const kind = user.balanceKind;
 
   const me = useMemo(() => {
     if (!connected || !publicKey) return null;
     const realized = trades.reduce((s, t) => s + t.pnl, 0);
+    const closed = trades.filter((t) => t.kind === "sell" || t.kind === "claim");
+    const wins = closed.filter((t) => (t.pnl ?? 0) > 0).length;
     return {
-      rank: leaderboard.length + 1,
+      rank: 0, // recomputed below after sorting
       handle: shortAddr(publicKey.toBase58()),
       avatarSeed: "you",
       points: user.points,
       profit: realized,
-      winRate: 0,
+      winRate: closed.length > 0 ? wins / closed.length : 0,
+      closedTrades: closed.length,
       trades: trades.length,
     };
-  }, [connected, publicKey, user.points, trades, leaderboard.length]);
+  }, [connected, publicKey, user.points, trades]);
 
-  const rows = me ? [...leaderboard, me] : leaderboard;
+  const rows = useMemo(
+    () =>
+      [...leaderboard]
+        .concat(me ?? [])
+        .sort((a, b) => b.points - a.points)
+        .map((r, i) => ({ ...r, rank: i + 1 })),
+    [leaderboard, me]
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -62,12 +73,12 @@ export default function LeaderboardPage() {
                 {row.handle}
                 {row.handle === user.handle && (
                   <span className="rounded bg-blue-light px-1.5 py-0.5 text-[10px] font-bold text-blue">
-                    YOU
+                    YOU · #{row.rank}
                   </span>
                 )}
               </div>
               <div className="text-[11px] text-gray-mid">
-                {row.trades} trades · {me && row.handle === me.handle ? "—" : `${(row.winRate * 100).toFixed(0)}% win rate`}
+                {row.trades} trades · {me && row.handle === me.handle && me.closedTrades === 0 ? "—" : `${(row.winRate * 100).toFixed(0)}% win rate`}
               </div>
             </div>
             <div className="text-right">
@@ -80,8 +91,9 @@ export default function LeaderboardPage() {
                   row.profit >= 0 ? "text-green" : "text-red-brand"
                 )}
               >
-                {row.profit >= 0 ? "+" : ""}
-                {fmtUsd(row.profit, { compact: true })}
+                {me && row.handle === me.handle
+                  ? `${row.profit >= 0 ? "+" : ""}${fmtBalance(row.profit, kind, { compact: true })}`
+                  : `${row.profit >= 0 ? "+" : ""}${fmtUsd(row.profit, { compact: true })}`}
               </div>
             </div>
           </div>
@@ -93,7 +105,7 @@ export default function LeaderboardPage() {
           How points work
         </div>
         <ul className="space-y-1 text-sm text-gray-mid">
-          <li>+2 pts per USDC traded</li>
+          <li>+2 pts per USDC / SOL traded</li>
           <li>+25 pts per winning claim</li>
           <li>+10 pts for holding through resolution</li>
         </ul>

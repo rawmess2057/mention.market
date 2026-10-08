@@ -18,9 +18,13 @@ import {
   Copy,
   ExternalLink,
   LogOut,
+  CheckCircle2,
+  Radio,
+  ShieldAlert,
 } from "lucide-react";
-import { cn, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtAgo, fmtUsd, shortAddr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
+import type { NotificationItem } from "@/lib/types";
 import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 
 const WalletMultiButton = dynamic(
@@ -89,12 +93,7 @@ export function TopBar() {
                 <span className="font-mono font-semibold text-blue">{fmtUsd(usdcBalance)}</span>
               </a>
             )}
-            <button
-              aria-label="Notifications"
-              className="rounded-full p-2 text-gray-mid transition-colors hover:bg-cream-dark hover:text-navy"
-            >
-              <Bell className="h-4 w-4" />
-            </button>
+            <NotifBell />
             <div className="flex items-center gap-1.5">
               {connected && publicKey ? (
                 <DropdownMenu.Root>
@@ -176,6 +175,84 @@ export function TopBar() {
         </div>
       )}
     </>
+  );
+}
+
+const NOTIF_ICON: Record<NotificationItem["kind"], React.ReactNode> = {
+  resolved: <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
+  "chain-resolved": <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
+  watch: <Radio className="h-3.5 w-3.5 shrink-0 text-blue" />,
+  proposal: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />,
+  challenge: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />,
+};
+
+function NotifBell() {
+  const notifications = useSim((s) => s.notifications);
+  const markAllRead = useSim((s) => s.markAllRead);
+  const unread = notifications.filter((n) => !n.read).length;
+
+  return (
+    <DropdownMenu.Root onOpenChange={(open) => open && markAllRead()}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
+          className="relative rounded-full p-2 text-gray-mid transition-colors hover:bg-cream-dark hover:text-navy"
+        >
+          <Bell className="h-4 w-4" />
+          {unread > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue px-1 text-[9px] font-bold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          className="z-50 w-[340px] overflow-hidden rounded-lg border border-gray-warm bg-white shadow-dropdown"
+        >
+          <div className="flex items-center justify-between border-b border-gray-warm/60 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-mid">
+              Notifications
+            </span>
+            {unread > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-[11px] font-medium text-blue hover:underline"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-[320px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="px-3 py-8 text-center text-xs text-gray-mid">
+                No updates yet — resolution, challenges and watch-word alerts land here.
+              </p>
+            ) : (
+              notifications.slice(0, 10).map((n) => (
+                <DropdownMenu.Item key={n.id} asChild>
+                  <Link
+                    href={n.marketSlug ? `/market/${n.marketSlug}` : "/"}
+                    className="flex items-start gap-2.5 px-3 py-2.5 outline-none transition-colors hover:bg-blue-light/50"
+                  >
+                    {NOTIF_ICON[n.kind]}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs leading-snug text-navy">{n.text}</span>
+                      <span className="mt-0.5 block text-[10px] font-mono text-gray-mid">
+                        {fmtAgo(n.at)}
+                      </span>
+                    </span>
+                    {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue" />}
+                  </Link>
+                </DropdownMenu.Item>
+              ))
+            )}
+          </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 

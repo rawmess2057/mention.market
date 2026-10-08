@@ -87,6 +87,113 @@ export const SEEDS = [
     endMin: 18,
     outcome: "yes",
   },
+  {
+    id: 9,
+    title: "Will they say \u201cAI\u201d?",
+    event: "Solana Speedrun #14 — live dev stream",
+    vertical: "streams",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 6,
+    outcome: "yes",
+  },
+  {
+    id: 10,
+    title: "Q2 call buzzword race",
+    event: "NVDA earnings call — live",
+    vertical: "earnings",
+    type: "majority",
+    b: 1_000_000_000,
+    words: ["data center", "AI demand", "guidance", "supply", "sovereign AI"],
+    endMin: 10,
+    outcome: "data center",
+  },
+  {
+    id: 11,
+    title: "Word race: post-game interview",
+    event: "NBA Finals G8 — courtside mic",
+    vertical: "sports",
+    type: "majority",
+    b: 1_000_000_000,
+    words: ["credit the team", "we fought", "MVP", "God bless", "next season"],
+    endMin: 15,
+    outcome: "MVP",
+  },
+  {
+    id: 12,
+    title: "Will the guest say \u201cagenda\u201d?",
+    event: "Lex Fridman #413 — live podcast",
+    vertical: "podcasts",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 20,
+    outcome: "yes",
+  },
+  {
+    id: 13,
+    title: "Will he say \u201cW in the chat\u201d?",
+    event: "Kai Cenat — subathon stream day 2",
+    vertical: "streams",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 25,
+    outcome: "yes",
+  },
+  {
+    id: 14,
+    title: "Will the CEO say \u201crecord\u201d?",
+    event: "TSLA shareholder call — live",
+    vertical: "earnings",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 30,
+    outcome: "yes",
+  },
+  {
+    id: 15,
+    title: "Will the mayor say \u201chousing\u201d first?",
+    event: "NYC mayoral debate — 2nd round",
+    vertical: "politics",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 40,
+    outcome: "yes",
+  },
+  {
+    id: 16,
+    title: "Will the analyst say \u201ccompound\u201d?",
+    event: "FOMC press briefing — live",
+    vertical: "earnings",
+    type: "binary",
+    b: 1_000_000_000,
+    words: [],
+    endMin: 45,
+    outcome: "no",
+  },
 ];
 
-export const END_OFFSETS = { 1: 25, 2: 40, 3: 15, 4: 30, 5: 20, 6: 45, 7: 12, 8: 18 };
+export const END_OFFSETS = {
+  1: 25, 2: 40, 3: 15, 4: 30, 5: 20, 6: 45, 7: 12, 8: 18,
+  9: 6, 10: 10, 11: 15, 12: 20, 13: 25, 14: 30, 15: 40, 16: 45,
+};
+
+/**
+ * A fresh copy of the demonstration batch (ids 9–16) shifted to the next free
+ * block, so `SEED_BLOCK=1` seeds a new live batch at ids 25–32, `SEED_BLOCK=2`
+ * at 41–48, and so on. On-chain markets are immutable and a reused id cannot
+ * be re-seeded with fresh timers, so each demo run takes the next block.
+ */
+export const SEED_BLOCK_STEP = 16;
+
+export function demoBatch(block = 0) {
+  const n = Number(block) || 0;
+  return SEEDS.filter((s) => s.id >= 9 && s.id <= 16).map((s) => ({
+    ...s,
+    id: s.id + n * SEED_BLOCK_STEP,
+  }));
+}

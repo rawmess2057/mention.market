@@ -14,7 +14,7 @@ import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
 import { claimPayout } from "./settle";
-import { isChainId } from "./chain";
+import { CHAIN_CREATE_B_UI, isChainId } from "./chain";
 import type {
   ActivityItem,
   LeaderboardRow,
@@ -796,7 +796,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
           asset: "sol",
           yesShares: 0,
           noShares: 0,
-          b: Math.max(50, minutes * 2),
+          b: CHAIN_CREATE_B_UI,
           words:
             type === "majority"
               ? words.map((w) => ({ word: w, pool: 0, bettors: 0, lastBetAt: 0 }))

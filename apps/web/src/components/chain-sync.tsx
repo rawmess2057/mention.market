@@ -2,15 +2,16 @@
 
 import { useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { fetchChainMarkets, fetchChainPosition, knownChainIds, scaleForMarket } from "@/lib/chain";
+import { fetchChainMarketsAll, fetchChainPosition, isStaleChainMarket, scaleForMarket } from "@/lib/chain";
 import { useSim } from "@/lib/sim";
 
 const POLL_MS = 15_000;
 
 /**
- * Polls the known chain markets (curated seeds + session creations) and
- * merges the latest on-chain state into the sim store. Also mirrors the
- * connected wallet's on-chain positions. Renders nothing.
+ * Polls every on-chain market (single GPA, so reseeded batches need no id
+ * registry changes) and merges the latest state into the sim store, hidden
+ * from the "live" bay once they go stale. Also mirrors the connected wallet's
+ * on-chain positions. Renders nothing.
  */
 export function ChainSync() {
   const { connected, publicKey } = useWallet();
@@ -21,9 +22,12 @@ export function ChainSync() {
     started.current = true;
 
     let alive = true;
+    let inspecting = false;
     const ingest = async () => {
+      if (inspecting) return; // a slow devnet cycle must never stack on the next tick
+      inspecting = true;
       try {
-        const markets = await fetchChainMarkets(knownChainIds());
+        const markets = (await fetchChainMarketsAll()).filter((m) => !isStaleChainMarket(m));
         if (!alive) return;
         useSim.getState().ingestChainMarkets(markets);
 
@@ -31,10 +35,9 @@ export function ChainSync() {
           // Reuse the scale already read above rather than re-fetching each
           // market just to learn its asset.
           const scaleById = new Map(markets.map((m) => [m.id, scaleForMarket(m)]));
-          const ids = knownChainIds();
           const positions = (
             await Promise.all(
-              ids.map((id) => fetchChainPosition(id, publicKey, scaleById.get(`c${id}`)))
+              markets.map((m) => fetchChainPosition(Number(m.slug.slice(1)), publicKey, scaleById.get(m.id)))
             )
           ).filter((p): p is NonNullable<typeof p> => !!p);
           if (!alive) return;
@@ -42,6 +45,8 @@ export function ChainSync() {
         }
       } catch (err) {
         console.warn("chain sync failed:", err);
+      } finally {
+        inspecting = false;
       }
     };
 

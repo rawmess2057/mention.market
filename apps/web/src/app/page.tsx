@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
+import { isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META, type Vertical } from "@/lib/types";
 
 const FILTERS: Array<{ key: Vertical | "all"; label: string }> = [
@@ -32,7 +33,10 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("trending");
 
-  const all = useMemo(() => Object.values(markets), [markets]);
+  const all = useMemo(
+    () => Object.values(markets).filter((m) => !isStaleChainMarket(m)),
+    [markets]
+  );
   const live = all.filter((m) => m.status === "open");
   const listed = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -66,7 +66,10 @@ interface ChainMethodsBuilder {
 }
 interface ProgramLite {
   account: {
-    market: { fetch(a: PublicKey): Promise<unknown> };
+    market: {
+      fetch(a: PublicKey): Promise<unknown>;
+      all(): Promise<Array<{ account: ChainMarketAccount; publicKey: PublicKey }>>;
+    };
     position: { fetch(a: PublicKey): Promise<unknown> };
   };
   methods: {
@@ -148,6 +151,24 @@ export function isChainMarket(m: Market): boolean {
 }
 
 /**
+ * A chain market that should stay out of the live lists:
+ * - `open` but past its `end_time` and never locked is dead — the program now
+ *   rejects trades on it (`MarketClosed`).
+ * - `resolved` with zero traders is script/test noise (evergreen seeds that no
+ *   one touched); there is nothing to claim.
+ * - `resolved` more than an hour ago is ancient history — our demo resolves
+ *   markets live, and older resolutions still have their evidence + on-chain
+ *   claim paths, just not billboards on the home page.
+ */
+export function isStaleChainMarket(m: Market, now = Date.now()): boolean {
+  if (!isChainId(m.id)) return false;
+  if (m.status === "open" && m.endTime <= now) return true;
+  if (m.status === "resolved" && (m.traders ?? 0) === 0) return true;
+  if (m.status === "resolved" && m.resolvedAt !== undefined && m.resolvedAt <= now - 60 * 60_000) return true;
+  return false;
+}
+
+/**
  * Scale for a store-level `Market`. Simulated markets have no `asset` (their
  * numbers are already UI units) and are not scaled here, so this only ever
  * sees chain markets — but a missing `asset` is a bug, not a default.
@@ -172,7 +193,7 @@ export function bytesToHex(bytes: Uint8Array | number[]): string {
 
 const KNOWN_KEY = "mention_chain_ids";
 
-export const DEFAULT_CHAIN_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9002];
+export const DEFAULT_CHAIN_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 
 /** Persisted registry of on-chain market ids we should poll. */
 export function knownChainIds(): number[] {
@@ -361,6 +382,19 @@ export async function fetchChainMarkets(ids: number[]): Promise<Market[]> {
     if (m) out.push(m);
   }
   return out;
+}
+
+/**
+ * Fetch every on-chain market in a single RPC (GPA over the Market
+ * discriminator). This is what the demo poll uses: no id registry to keep in
+ * sync — any market the seed/official scripts or the UI created shows up, and
+ * reseeded batches are picked up automatically.
+ */
+export async function fetchChainMarketsAll(): Promise<Market[]> {
+  const accounts = await program.account.market.all();
+  return accounts
+    .sort((a, b) => a.account.id.toNumber() - b.account.id.toNumber())
+    .map(({ account }) => mapMarketToStore(account as unknown as ChainMarketAccount));
 }
 
 /**
@@ -570,6 +604,15 @@ export interface ChainCreateParams {
   minutes: number;
 }
 
+/**
+ * UI-units liquidity for markets created from the UI. On-chain this maps to
+ * `1 SOL` of `b` (base units `1e9`), matching the seeded markets so the
+ * reserve ante (~0.69 SOL from the creator) stays affordable and prices move
+ * sensibly. The store uses this same value (not the sim-market `max(50, …)`)
+ * for chain-created markets so quotes agree with the program between polls.
+ */
+export const CHAIN_CREATE_B_UI = 1;
+
 export interface ChainCreateResult {
   id: number;
   sig: string;
@@ -582,7 +625,7 @@ export async function chainCreateMarket(
 ): Promise<ChainCreateResult> {
   const id = nextChainId();
   const market = marketPda(id);
-  const bUi = Math.max(50, params.minutes * 2);
+  const bUi = CHAIN_CREATE_B_UI;
   const nowSec = Math.floor(Date.now() / 1000);
   // Every market this UI creates is SOL-denominated; keep the scale in lockstep.
   const asset = enumArg("sol");

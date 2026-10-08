@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SOL_DECIMALS,
   USDC_DECIMALS,
+  isStaleChainMarket,
   mapMarketToStore,
   mapPositionToStore,
   proceedsForSellUi,
@@ -79,6 +80,73 @@ describe("scaleForMarket", () => {
   it("throws when the market has no asset", () => {
     const market = { id: "c1" } as Market;
     expect(() => scaleForMarket(market)).toThrow(/no asset/);
+  });
+});
+
+describe("isStaleChainMarket", () => {
+  const now = 1_800_000_000_000;
+  const base: Market = {
+    id: "c9",
+    slug: "c9",
+    title: "t",
+    event: "e",
+    vertical: "streams",
+    type: "binary",
+    asset: "sol",
+    status: "open",
+    createdAt: now - 60_000,
+    endTime: now + 600_000,
+    resolvedAt: undefined,
+    volume: 0,
+    traders: 0,
+    yesShares: 0,
+    noShares: 0,
+    b: 1,
+    rules: "",
+    winningOutcome: undefined,
+    creator: "c",
+    creatorFeeBps: 100,
+    source: "",
+    sourceUrl: "",
+  };
+
+  it("keeps a live open market", () => {
+    expect(isStaleChainMarket({ ...base, endTime: now + 600_000 }, now)).toBe(false);
+  });
+
+  it("hides an open market past its end time (dead, never locked)", () => {
+    expect(isStaleChainMarket({ ...base, endTime: now - 1 }, now)).toBe(true);
+  });
+
+  it("hides a resolved market with no traders (script/test noise)", () => {
+    expect(
+      isStaleChainMarket(
+        { ...base, status: "resolved", resolvedAt: now - 1_000, traders: 0, winningOutcome: "yes" },
+        now
+      )
+    ).toBe(true);
+  });
+
+  it("keeps a freshly resolved market that people traded", () => {
+    expect(
+      isStaleChainMarket(
+        { ...base, status: "resolved", resolvedAt: now - 5_000, traders: 3, winningOutcome: "yes" },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("hides a resolved market older than an hour (ancient history)", () => {
+    expect(
+      isStaleChainMarket(
+        { ...base, status: "resolved", resolvedAt: now - 61 * 60_000, traders: 3, winningOutcome: "yes" },
+        now
+      )
+    ).toBe(true);
+  });
+
+  it("never filters simulated markets", () => {
+    expect(isStaleChainMarket({ ...base, id: "s1", slug: "s1", status: "open", endTime: now - 1000 }, now)).toBe(false);
   });
 });
 

@@ -46,7 +46,7 @@ pnpm install
 pnpm dev        # http://localhost:3000
 pnpm build      # production build
 
-cd apps/program && cargo test   # on-chain program tests (19, LiteSVM)
+cd apps/program && cargo test   # on-chain program tests (32, LiteSVM)
 ```
 
 ## Where things stand
@@ -73,3 +73,42 @@ LMSR, pari-mutuel, PnL and settlement math has its own vitest suite under
 
 See `docs/RESEARCH.md` for the full comparison of Polymarket/Azuro/World/Kalshi
 and the design rationale.
+
+## Demo runbook (devnet)
+
+The seeded on-chain markets live in `apps/program/scripts/seed-config.mjs`
+(ids 1–16; 9–16 are a demo batch with staggered end times 6→45 min). Run the
+whole flow a bit before presenting:
+
+```bash
+cd apps/program
+
+# 1. One-time: initialize the config + resolver, then fund it.
+node scripts/bootstrap.mjs
+
+# 2. Create any missing markets (idempotent). The seeding wallet pays each
+#    market's reserve ante + rent, so you can point it at a funded keypair.
+SEED_KEYPAIR_PATH=$PWD/scripts/keys/resolver.json node scripts/seed.mjs
+
+#    If an earlier demo batch already expired, seed the NEXT free block:
+SEED_BLOCK=1 SEED_KEYPAIR_PATH=$PWD/scripts/keys/resolver.json node scripts/seed.mjs
+
+# 3. Leave this running in a second terminal for the whole demo: it locks
+#    markets when they end, proposes a resolution, waits out the 120s
+#    challenge window, then finalizes — so audiences see live resolution.
+#    Use the same SEED_BLOCK so the oracle resolves the batch you just seeded.
+node scripts/oracle.mjs --watch
+```
+
+Notes:
+
+- The app auto-discovers on-chain markets with a single RPC every 15s — no id
+  registry edits when you reseed. Use `SEED_BLOCK` (0 → ids 9–16, 1 → 25–32, …)
+  for each fresh demo batch.
+- The browser wallet (and the seeding wallet) need devnet SOL. `solana airdrop`
+  is rate-limited, so top up from a wallet that has SOL:
+  `solana transfer <addr> 5 --allow-unfunded-recipient`.
+- Clear the demo browser's `localStorage` (`mention_chain_ids`) or use a fresh
+  profile, otherwise leftover ids from earlier sessions clutter the list.
+- Create a market in the UI to launch it on-chain (`b = 1 SOL`, reserve ante
+  ≈ 0.69 SOL + rent from the creator wallet) or create a simulated/offline one.

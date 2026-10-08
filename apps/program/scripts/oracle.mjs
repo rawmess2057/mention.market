@@ -1,9 +1,12 @@
 import fs from "node:fs";
 import { programFor, ensureResolverKeypair, marketPda, vaultPda, CONFIG_PDA, SYSTEM_PROGRAM, TOKEN_PROGRAM, ATA_PROGRAM, USDC_MINT, sha256Hex, hexToBytes, fetchOrNull , budget } from "./lib.mjs";
-import { SEEDS } from "./seed-config.mjs";
+import { SEEDS, demoBatch } from "./seed-config.mjs";
 
+// Scripted outcomes cover the canonical batch and (if seeding re-ran with
+// SEED_BLOCK) the active shifted demo batch, e.g. ids 25–32 for SEED_BLOCK=1.
+const SEED_BLOCK = Number(process.env.SEED_BLOCK || 0);
 const SCRIPTED_OUTCOMES = {};
-for (const s of SEEDS) SCRIPTED_OUTCOMES[s.id] = s.outcome;
+for (const s of [...SEEDS, ...demoBatch(SEED_BLOCK)]) SCRIPTED_OUTCOMES[s.id] = s.outcome;
 
 const MODE = process.argv.includes("--watch") || process.env.MODE === "watch" ? "watch" : "once";
 const DRY = process.argv.includes("--dry") || process.env.DRY === "1";
@@ -25,7 +28,7 @@ if (!status.resolver.equals(resolver.publicKey)) {
 }
 
 const ids = process.argv.includes("--all")
-  ? SEEDS.map((s) => s.id)
+  ? [...SEEDS.filter((s) => s.id <= 8), ...demoBatch(SEED_BLOCK)].map((s) => s.id)
   : (process.env.IDS || "").split(",").map((x) => Number(x.trim())).filter(Boolean);
 
 const confidence = Number(process.env.CONFIDENCE || 100);

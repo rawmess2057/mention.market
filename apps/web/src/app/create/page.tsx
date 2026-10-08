@@ -6,9 +6,10 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Check, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/format";
+import { cn, fmtErr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
+import { CHAIN_CREATE_B_UI } from "@/lib/chain";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 
 const WORD_LIMIT = 12;
@@ -17,6 +18,7 @@ export default function CreateMarketPage() {
   const router = useRouter();
   const { connected } = useWallet();
   const createMarket = useSim((s) => s.createMarket);
+  const showToast = useSim((s) => s.showToast);
   const chain = useChain();
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +38,7 @@ export default function CreateMarketPage() {
     (step === 2 && (type === "binary" ? question.trim().length > 5 : words.length >= 2)) ||
     step === 3;
 
-  const submit = async () => {
+  const submit = async (local = false) => {
     setSubmitting(true);
     const params = {
       title:
@@ -55,8 +57,8 @@ export default function CreateMarketPage() {
           ? `Resolves YES if the exact phrase from the title is spoken during the event (case-insensitive). Transcript: Deepgram primary feed.`
           : `First phrase from the board spoken during the event wins. Case-insensitive. 1% rake.`),
     };
-    try {
-      if (connected) {
+    if (!local && connected) {
+      try {
         const chainId = await chain.create(params);
         if (chainId != null) {
           const id = createMarket({ ...params, chainId });
@@ -64,9 +66,13 @@ export default function CreateMarketPage() {
           router.push(`/market/${created.slug}`);
           return;
         }
+      } catch (err) {
+        // Never fake the on-chain moment: surface the failure and let the
+        // presenter retry or explicitly pick the offline mode below.
+        showToast(`On-chain create failed: ${fmtErr(err)}`);
+        setSubmitting(false);
+        return;
       }
-    } catch (err) {
-      console.warn("on-chain market creation failed — creating locally instead:", err);
     }
     const id = createMarket(params);
     const created = useSim.getState().markets[id];
@@ -250,6 +256,13 @@ export default function CreateMarketPage() {
             onChange={(e) => setRules(e.target.value)}
           />
 
+          {connected && (
+            <p className="rounded-lg bg-cream-dark p-2.5 text-[11px] leading-relaxed text-gray-mid">
+              On-chain launch escrows the LMSR reserve ante (≈0.69 SOL at b = {CHAIN_CREATE_B_UI} SOL) plus
+              rent for the market + vault accounts from your wallet.
+            </p>
+          )}
+
           {/* Preview */}
           <div className="rounded-xl border border-blue/15 bg-blue-light/30 p-4 text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue">
@@ -279,15 +292,31 @@ export default function CreateMarketPage() {
             Continue <ChevronRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button
-            variant="yes"
-            className="flex-[2]"
-            size="lg"
-            disabled={submitting}
-            onClick={submit}
-          >
-            {submitting ? "Launching…" : "Launch market 🚀"}
-          </Button>
+          <div className="flex flex-[2] flex-col gap-2">
+            <Button
+              variant="yes"
+              size="lg"
+              className="w-full"
+              disabled={submitting}
+              onClick={() => submit(false)}
+            >
+              {submitting
+                ? "Launching…"
+                : connected
+                  ? "Launch on-chain 🚀"
+                  : "Launch market 🚀"}
+            </Button>
+            {connected && (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => submit(true)}
+                className="text-[11px] text-gray-mid underline-offset-2 hover:text-navy hover:underline"
+              >
+                or create a simulated (offline) market instead
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

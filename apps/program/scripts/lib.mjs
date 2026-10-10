@@ -50,8 +50,9 @@ export function connection() {
   return new Connection("https://api.devnet.solana.com", "confirmed");
 }
 
-/** Pre-instruction to raise the per-tx compute budget above the 200k default. */
-export function budget(units = 1_000_000) {
+/** Pre-instruction to raise the per-tx compute budget above the 200k default.
+ * 1.4M (the protocol max) is required by the CU-heavy on-chain LMSR math. */
+export function budget(units = 1_400_000) {
   return [ComputeBudgetProgram.setComputeUnitLimit({ units })];
 }
 

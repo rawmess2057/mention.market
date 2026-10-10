@@ -6,13 +6,12 @@ import type { ISeriesApi } from "lightweight-charts";
 import { cn } from "@/lib/format";
 import { useNow } from "@/hooks/useNow";
 import {
-  normalizeHistory,
-  resample,
+  CHART_TIMEFRAMES,
+  selectChartPoints,
+  type ChartTimeframe,
   type HistoryInput,
   type PricePoint,
 } from "@/lib/history";
-
-type Timeframe = "1m" | "5m" | "1h" | "1d";
 
 function toLineData(
   points: PricePoint[]
@@ -32,11 +31,13 @@ export function PriceChart({
   className,
   showBaseline = false,
   emptyLabel = "No price history yet",
+  resetKey,
 }: {
   data: Array<{ time: number; value: number }>;
   className?: string;
   showBaseline?: boolean;
   emptyLabel?: string;
+  resetKey?: string | number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
@@ -98,6 +99,7 @@ export function PriceChart({
           data.map((d) => ({ t: d.time, v: d.value / 100 }))
         ) as any
       );
+      chart.timeScale().fitContent();
     }
     if (showBaseline) {
       try {
@@ -162,6 +164,14 @@ export function PriceChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
+  // Reframe the visible range when the consumer asks for a reset (e.g. a
+  // timeframe switch) or when data first arrives (chain markets mount empty),
+  // without resetting the user's zoom on every live update.
+  const isEmpty = data.length < 2;
+  useEffect(() => {
+    if (!isEmpty) chartRef.current?.timeScale().fitContent();
+  }, [resetKey, isEmpty]);
+
   return (
     <div className={cn("relative", className)}>
       <div ref={containerRef} className="h-full w-full" />
@@ -193,34 +203,21 @@ export function PriceChartWithTimeframe({
   className?: string;
   showBaseline?: boolean;
 }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("1m");
+  const [timeframe, setTimeframe] = useState<ChartTimeframe>("all");
   const now = useNow(30_000);
 
   const { chartData, pointCount } = useMemo(() => {
-    const tfMs: Record<Timeframe, number> = {
-      "1m": 60_000,
-      "5m": 300_000,
-      "1h": 3_600_000,
-      "1d": 86_400_000,
-    };
-    const all = normalizeHistory(history);
-    if (all.length === 0) return { chartData: [], pointCount: 0 };
-    // Real windowing: only points inside the selected timeframe.
-    // Fall back to last 20 pts (not 2) so slow markets still show shape.
-    let inWindow = all.filter((p) => p.t >= now - tfMs[timeframe]);
-    if (inWindow.length < 2) inWindow = all.slice(-20);
-    // Cap render cost + make TF switch visibly change density.
-    const sampled = resample(inWindow, 60);
+    const { points, count } = selectChartPoints(history, timeframe, now);
     return {
-      chartData: sampled.map((p) => ({ time: p.t, value: p.v * 100 })),
-      pointCount: sampled.length,
+      chartData: points.map((p) => ({ time: p.t, value: p.v * 100 })),
+      pointCount: count,
     };
   }, [history, timeframe, now]);
 
   return (
     <div className={cn("flex flex-col", className)}>
       <div className="flex items-center gap-1 border-b border-gray-warm px-3 py-2">
-        {(["1m", "5m", "1h", "1d"] as Timeframe[]).map((tf) => (
+        {CHART_TIMEFRAMES.map((tf) => (
           <button
             key={tf}
             onClick={() => setTimeframe(tf)}
@@ -231,14 +228,19 @@ export function PriceChartWithTimeframe({
                 : "text-gray-mid hover:text-navy hover:bg-cream-dark"
             )}
           >
-            {tf}
+            {tf === "all" ? "All" : tf}
           </button>
         ))}
         <span className="ml-auto font-mono text-[10px] text-gray-mid">
-          {pointCount} pts · {timeframe}
+          {pointCount} pts · {timeframe === "all" ? "all" : timeframe}
         </span>
       </div>
-      <PriceChart data={chartData} className="h-[280px]" showBaseline={showBaseline} />
+      <PriceChart
+        data={chartData}
+        className="h-[280px]"
+        showBaseline={showBaseline}
+        resetKey={timeframe}
+      />
     </div>
   );
 }

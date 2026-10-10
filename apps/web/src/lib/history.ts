@@ -66,6 +66,26 @@ export function toChartData(
 }
 
 /**
+ * Merge two ascending price series idempotently: points keyed by timestamp
+ * (ms), later wins, sorted ascending, capped to the last `cap` points.
+ * Lets on-chain backfills and live poll appends coexist without duplicates
+ * or gridlock on the timeline.
+ */
+export function mergePricePoints(
+  base: PricePoint[],
+  incoming: PricePoint[],
+  cap = 2000
+): PricePoint[] {
+  const merged = new Map<number, number>();
+  for (const p of base) merged.set(p.t, p.v);
+  for (const p of incoming) merged.set(p.t, p.v);
+  return [...merged.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .slice(-Math.max(cap, 0))
+    .map(([t, v]) => ({ t, v }));
+}
+
+/**
  * Bucket points into `maxPoints` time buckets (last-write-wins per bucket).
  * Used by timeframe switching so 1m/5m/1h/1d actually change shape.
  */
@@ -85,6 +105,45 @@ export function resample(points: PricePoint[], maxPoints: number): PricePoint[] 
   return buckets
     .map((b) => b[b.length - 1])
     .filter(Boolean) as PricePoint[];
+}
+
+/** Timeframe options for the price chart. `"all"` = full available history. */
+export type ChartTimeframe = "all" | "1m" | "5m" | "1h" | "1d";
+
+export const CHART_TIMEFRAMES: ChartTimeframe[] = ["all", "1m", "5m", "1h", "1d"];
+
+const CHART_TF_MS: Record<Exclude<ChartTimeframe, "all">, number> = {
+  "1m": 60_000,
+  "5m": 300_000,
+  "1h": 3_600_000,
+  "1d": 86_400_000,
+};
+
+/**
+ * Window + resample history for a chart timeframe. `"all"` keeps the entire
+ * series (so the full reconstructed/on-chain history shows by default); the
+ * others window to the trailing span. A narrow window that would otherwise
+ * hold < 2 points falls back to the last 20 points so slow markets still show
+ * shape instead of a single dot. `maxPoints` defaults to 240 for "all" (more
+ * detail) and 60 for the zoomed windows (cheaper render, visibly denser).
+ */
+export function selectChartPoints(
+  input: HistoryInput,
+  timeframe: ChartTimeframe,
+  now: number,
+  maxPoints?: number
+): { points: PricePoint[]; count: number } {
+  const all = normalizeHistory(input);
+  if (all.length === 0) return { points: [], count: 0 };
+  let inWindow: PricePoint[];
+  if (timeframe === "all") {
+    inWindow = all;
+  } else {
+    inWindow = all.filter((p) => p.t >= now - CHART_TF_MS[timeframe]);
+    if (inWindow.length < 2) inWindow = all.slice(-20);
+  }
+  const points = resample(inWindow, maxPoints ?? (timeframe === "all" ? 240 : 60));
+  return { points, count: points.length };
 }
 
 /** Filter to last `windowMs` of points. */

@@ -9,13 +9,19 @@
  */
 
 import { Connection, PublicKey, Keypair, ComputeBudgetProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import type { ParsedTransactionWithMeta } from "@solana/web3.js";
+
+type ParsedTx = ParsedTransactionWithMeta;
 // Import the CJS entry explicitly: anchor's ESM build drops `Wallet`/`BN`
 // and webpack's interop leaves the default export empty in SSR bundles.
 // (This is the same build shape the anchor CLI scripts use.)
 import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js";
+import bs58 from "bs58";
 import mentionIdl from "@/lib/idl/mention.json";
 import { canonicalJson } from "@mention/resolution/canonical-json";
-import { lmsrBuyCost, lmsrSellReturn } from "@/lib/lmsr";
+import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn, lmsrSharesForCost } from "@/lib/lmsr";
+import { resample } from "@/lib/history";
+import type { PricePoint } from "@/lib/history";
 import { shortAddr } from "@/lib/format";
 import type { ActivityItem, Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
 
@@ -25,11 +31,78 @@ export const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
 /** Raw base units per UI unit for SOL markets. */
 export const SOL_DECIMALS = 1_000_000_000;
 
+/**
+ * Compute-unit budget for value instructions. The program's on-chain integer
+ * LMSR (`buy_binary`/`sell_binary`) is CU-heavy (~1.30M for a typical trade),
+ * so the default 200k/1M budgets make the tx fail simulation (`ProgramFailed
+ * toComplete`) — which Phantom surfaces as "Confirming is unsafe". 1.4M is the
+ * protocol maximum; unused CU is not charged.
+ */
+export const COMPUTE_UNIT_LIMIT = 1_400_000;
+
 /** On-chain challenge window (seconds) used to derive evidence metadata. */
 export const CHALLENGE_WINDOW_SECS = 120;
 
+/** Resolve the devnet RPC endpoint (env override, else the public endpoint). */
+export function rpcEndpoint(): string {
+  return (
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+    process.env.NEXT_PUBLIC_RPC_URL ??
+    "https://api.devnet.solana.com"
+  );
+}
+
 export function connection(): Connection {
-  return new Connection("https://api.devnet.solana.com", "confirmed");
+  return new Connection(rpcEndpoint(), "confirmed");
+}
+
+/** Retry an RPC call with backoff; the public devnet RPC is flaky and 429s hard. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 6, baseMs = 600): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        const code = (err as { code?: number } | null)?.code;
+        const msg = String((err as { message?: string } | null)?.message ?? err);
+        const rateLimited = code === 429 || /429|too many requests|rate limit/i.test(msg);
+        const base = rateLimited ? baseMs * 2 : baseMs;
+        const wait = Math.min(base * 2 ** i, 10_000) + Math.random() * 250;
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Fetch parsed transactions for a set of signatures. The public RPC throttles
+ * the batched `getParsedTransactions` method specifically ("Too many requests
+ * for a specific RPC call") while single `getTransaction` calls stay reliable,
+ * so we always fetch each signature individually with bounded concurrency.
+ */
+async function fetchParsedTxs(
+  conn: Connection,
+  sigs: string[]
+): Promise<Array<ParsedTx | null>> {
+  const out: Array<ParsedTx | null> = new Array(sigs.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < sigs.length) {
+      const i = next;
+      next += 1;
+      out[i] = await withRetry(
+        () => conn.getParsedTransaction(sigs[i], { maxSupportedTransactionVersion: 0 }),
+        5,
+        500
+      ).catch(() => null);
+    }
+  };
+  const concurrency = Math.min(4, sigs.length);
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return out;
 }
 
 // anchor's CJS entry gates the real `Wallet` (and `workspace`) behind
@@ -476,46 +549,21 @@ export async function fetchChainActivity(
   limit = 25
 ): Promise<ActivityItem[]> {
   try {
-    const conn = connection();
-    const sigs = (await conn.getSignaturesForAddress(marketPda(id), { limit })).filter(
-      (s) => !s.err
-    );
-    if (sigs.length === 0) return [];
-
-    const txs = await conn.getParsedTransactions(
-      sigs.map((s) => s.signature),
-      { maxSupportedTransactionVersion: 0 }
-    );
-    const coder = (program as unknown as { coder: { instruction: BorshInstructionCoderLike } })
-      .coder;
-
+    const records = await fetchDecodedChainIxs(id);
     const out: ActivityItem[] = [];
-    txs.forEach((tx, ti) => {
-      if (!tx || tx.meta?.err) return;
-      const at = (tx.blockTime ?? sigs[ti]?.blockTime ?? 0) * 1000;
-      const signer = tx.transaction.message.accountKeys.find((k) => k.signer)?.pubkey;
-      const user = signer ? shortAddr(signer.toBase58()) : "unknown";
-      const instructions = tx.transaction.message.instructions as unknown as ParsedInstructionLike[];
-
-      instructions.forEach((ix, ii) => {
-        const pid = ix.programId as { equals?: (p: PublicKey) => boolean } | undefined;
-        if (!pid?.equals || !pid.equals(PROGRAM_ID) || !ix.data) return;
-        const decoded = coder.instruction.decode(ix.data, "base64");
-        if (!decoded) return;
-        const mapped = mapChainInstruction(decoded.name, decoded.data, scale);
-        if (!mapped) return;
-        out.push({
-          id: `${sigs[ti]!.signature}:${ii}`,
-          marketId: `c${id}`,
-          kind: mapped.kind,
-          side: mapped.side,
-          amount: mapped.amount,
-          user,
-          at,
-        });
+    for (const r of records) {
+      const mapped = mapChainInstruction(r.name, r.data, scale);
+      if (!mapped) continue;
+      out.push({
+        id: `${r.sig}:${r.ix}`,
+        marketId: `c${id}`,
+        kind: mapped.kind,
+        side: mapped.side,
+        amount: mapped.amount,
+        user: r.user,
+        at: r.at,
       });
-    });
-
+    }
     return out.sort((a, b) => b.at - a.at).slice(0, limit);
   } catch {
     return [];
@@ -523,13 +571,270 @@ export async function fetchChainActivity(
 }
 
 /* ------------------------------------------------------------------ */
+/* Decoded instruction records + price-series reconstruction           */
+/* ------------------------------------------------------------------ */
+
+/** A single program instruction decoded off the chain, with provenance. */
+export interface DecodedChainIx {
+  /** Anchor instruction name as decoded (e.g. `buyBinary`). */
+  name: string;
+  /** Decoded instruction args (BN/numbers/enums as the coder returns them). */
+  data: Record<string, unknown>;
+  /** Block time in ms (0 when the RPC didn't report one). */
+  at: number;
+  /** Slot — tie-break for transactions sharing a block time. */
+  slot: number;
+  /** Transaction signature. */
+  sig: string;
+  /** Message-level instruction index (stable feed id). */
+  ix: number;
+  /** Short display address of the paying signer. */
+  user: string;
+}
+
+/**
+ * Fetch and decode every program instruction on a market's account, in
+ * ascending `(blockTime, slot)` order. Paginates through the account's
+ * signatures so the reconstruction below sees the full trade history instead
+ * of only the most recent page.
+ *
+ * Best-effort: returns `[]` on any RPC/decode failure.
+ */
+async function fetchDecodedChainIxsUncached(id: number): Promise<DecodedChainIx[]> {
+  try {
+    const conn = connection();
+    const addr = marketPda(id);
+    const sigs: string[] = [];
+    let before: string | undefined;
+    const pageSize = 100;
+    let pages = 0;
+    while (pages < 20) {
+      pages += 1;
+      const batch = await withRetry(() =>
+        conn.getSignaturesForAddress(addr, { limit: pageSize, before })
+      );
+      if (batch.length === 0) break;
+      sigs.push(...batch.filter((s) => !s.err).map((s) => s.signature));
+      before = batch[batch.length - 1].signature;
+      if (batch.length < pageSize) break;
+    }
+    if (sigs.length === 0) return [];
+
+    const txs = await fetchParsedTxs(conn, sigs);
+    const coder = (program as unknown as { coder: { instruction: BorshInstructionCoderLike } })
+      .coder;
+
+    const out: DecodedChainIx[] = [];
+    for (let ti = 0; ti < sigs.length; ti += 1) {
+      const tx = txs[ti];
+      if (!tx || tx.meta?.err) continue;
+      const at = (tx.blockTime ?? 0) * 1000;
+      const slot = tx.slot ?? 0;
+      const signer = tx.transaction.message.accountKeys.find((k) => k.signer)?.pubkey;
+      const user = signer ? shortAddr(signer.toBase58()) : "unknown";
+      const instructions = tx.transaction.message.instructions as unknown as ParsedInstructionLike[];
+      instructions.forEach((ix, ii) => {
+        const pid = ix.programId as { equals?: (p: PublicKey) => boolean } | undefined;
+        if (!pid?.equals || !pid.equals(PROGRAM_ID) || !ix.data) return;
+        const decoded = coder.instruction.decode(ix.data, "base64");
+        if (!decoded) return;
+        out.push({
+          name: decoded.name,
+          data: decoded.data,
+          at,
+          slot,
+          sig: sigs[ti]!,
+          ix: ii,
+          user,
+        });
+      });
+    }
+
+    return out.sort((a, b) => a.at - b.at || a.slot - b.slot);
+  } catch {
+    return [];
+  }
+}
+
+// Decoded history is shared by the activity feed and the price-series
+// reconstruction; cache non-empty results briefly and dedupe concurrent
+// callers so the 15s poller and the page don't refetch the same transactions.
+const ixsCache = new Map<number, { t: number; recs: DecodedChainIx[] }>();
+const ixsInflight = new Map<number, Promise<DecodedChainIx[]>>();
+const IXS_TTL_MS = 30_000;
+
+export async function fetchDecodedChainIxs(id: number): Promise<DecodedChainIx[]> {
+  const cached = ixsCache.get(id);
+  if (cached && Date.now() - cached.t < IXS_TTL_MS) return cached.recs;
+  const inflight = ixsInflight.get(id);
+  if (inflight) return inflight;
+  const p = (async () => {
+    try {
+      const recs = await fetchDecodedChainIxsUncached(id);
+      if (recs.length > 0) ixsCache.set(id, { t: Date.now(), recs });
+      return recs;
+    } finally {
+      ixsInflight.delete(id);
+    }
+  })();
+  ixsInflight.set(id, p);
+  return p;
+}
+
+/** Snapshot of the market state the price series replays / validates against. */
+export interface ChainSeriesMarket {
+  type: MarketType;
+  /** LMSR liquidity parameter, base units. */
+  b: number;
+  /** Current YES/NO shares, base units (validation anchor). */
+  yesShares: number;
+  noShares: number;
+  /** Current total pari-mutuel pool, base units (validation anchor). */
+  totalPool: number;
+  /** Word pools, base units (validation anchor). */
+  words: Array<{ word: string; pool: number }>;
+}
+
+/**
+ * Reconstruct a market's price history from its decoded trade instructions by
+ * replaying the program's LMSR / pari-mutuel math in order. For binary markets
+ * every `buy_binary` mints `floor(sharesForCost(...))` shares and every
+ * `sell_binary` burns its exact share count, so the price at each trade is
+ * `lmsrProbYes`. For majority markets `back_word` grows a word's pool and the
+ * series tracks the leading word's pot share — the same convention the sim
+ * chart uses.
+ *
+ * Pure and RPC-free so it can be unit-tested with decoded fixtures.
+ *
+ * Self-validating: after replaying the *whole* history the cumulative shares
+ * (binary) or pools (majority) must converge to the current account state; if
+ * the mirror math drifts past a small tolerance (or the history was
+ * truncated), `[]` is returned so callers fall back to live-append points
+ * instead of drawing a wrong curve.
+ */
+export function buildChainPriceSeries(
+  market: ChainSeriesMarket,
+  records: DecodedChainIx[],
+  opts?: { cap?: number }
+): PricePoint[] {
+  const cap = opts?.cap ?? 240;
+
+  if (market.type === "binary") {
+    let yes = 0;
+    let no = 0;
+    const b = market.b;
+    const points: PricePoint[] = [];
+    for (const r of records) {
+      const norm = normalizeIxName(r.name);
+      if (norm === "buybinary") {
+        const side = bnToNumber(r.data.side) === 0 ? "yes" : "no";
+        const cost = bnToNumber(r.data.cost);
+        if (cost > 0) {
+          const shares = Math.floor(lmsrSharesForCost(yes, no, b, side, cost));
+          if (shares > 0) {
+            if (side === "yes") yes += shares;
+            else no += shares;
+            points.push({ t: r.at || Date.now(), v: lmsrProbYes(yes, no, b) });
+          }
+        }
+      } else if (norm === "sellbinary") {
+        const side = bnToNumber(r.data.side) === 0 ? "yes" : "no";
+        const shares = bnToNumber(r.data.shares);
+        if (shares > 0) {
+          if (side === "yes") yes = Math.max(0, yes - shares);
+          else no = Math.max(0, no - shares);
+          points.push({ t: r.at || Date.now(), v: lmsrProbYes(yes, no, b) });
+        }
+      }
+    }
+    const tol = Math.max(2, (market.yesShares + market.noShares) * 0.01);
+    if (Math.abs(yes - market.yesShares) > tol || Math.abs(no - market.noShares) > tol) {
+      return [];
+    }
+    return points.length === 0 ? [] : resample(points, cap);
+  }
+
+  const pools = new Map(market.words.map((w) => [w.word, 0]));
+  let total = 0;
+  const points: PricePoint[] = [];
+  for (const r of records) {
+    const norm = normalizeIxName(r.name);
+    if (norm !== "backword") continue;
+    const word = String(r.data.word ?? "");
+    const amount = bnToNumber(r.data.amount);
+    if (amount <= 0) continue;
+    pools.set(word, (pools.get(word) ?? 0) + amount);
+    total += amount;
+    points.push({
+      t: r.at || Date.now(),
+      v: total > 0 ? Math.max(...pools.values()) / total : 0,
+    });
+  }
+  const poolTol = Math.max(2, (market.totalPool + pools.size) * 0.01);
+  if (
+    Math.abs(total - market.totalPool) > poolTol ||
+    [...market.words].some((w) => Math.abs((pools.get(w.word) ?? 0) - w.pool) > poolTol)
+  ) {
+    return [];
+  }
+  return points.length === 0 ? [] : resample(points, cap);
+}
+
+const seriesCache = new Map<number, { t: number; pts: PricePoint[] }>();
+const seriesInflight = new Map<number, Promise<PricePoint[]>>();
+const SERIES_TTL_MS = 30_000;
+
+/**
+ * Fetch the reconstructed price series for an on-chain market (one account
+ * read + the decoded trade history). Returns `[]` on any failure or when the
+ * replay can't be validated, so callers can degrade to live-append points.
+ *
+ * Non-empty results are cached briefly and concurrent requests are deduped to
+ * avoid hammering the (rate-limited) RPC from the poller, cards and header.
+ */
+export async function fetchChainPriceSeries(id: number): Promise<PricePoint[]> {
+  const cached = seriesCache.get(id);
+  if (cached && cached.pts.length > 0 && Date.now() - cached.t < SERIES_TTL_MS) {
+    return cached.pts;
+  }
+  const inflight = seriesInflight.get(id);
+  if (inflight) return inflight;
+
+  const p = (async () => {
+    try {
+      const [account, records] = await Promise.all([
+        program.account.market.fetch(marketPda(id)) as unknown as ChainMarketAccount,
+        fetchDecodedChainIxs(id),
+      ]);
+      const market: ChainSeriesMarket = {
+        type: enumKey(account.marketType) as MarketType,
+        b: account.b.toNumber(),
+        yesShares: account.yesShares.toNumber(),
+        noShares: account.noShares.toNumber(),
+        totalPool: account.totalPool.toNumber(),
+        words: account.words.map((w) => ({ word: w.word, pool: w.pool.toNumber() })),
+      };
+      const pts = buildChainPriceSeries(market, records, { cap: 240 });
+      if (pts.length > 0) seriesCache.set(id, { t: Date.now(), pts });
+      return pts;
+    } catch {
+      return [];
+    } finally {
+      seriesInflight.delete(id);
+    }
+  })();
+  seriesInflight.set(id, p);
+  return p;
+}
+
+/* ------------------------------------------------------------------ */
 /* Transactions                                                        */
 /* ------------------------------------------------------------------ */
 
-/** A minimal wallet-adapter-like signer (publicKey + sendTransaction). */
+/** A minimal wallet-adapter-like signer (publicKey + signTransaction). */
 export interface ChainSigner {
   publicKey: PublicKey;
-  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
 }
 
 /** Build a transaction from program instructions (always raises CU budget). */
@@ -540,17 +845,69 @@ export function signAndSend(
   return sendAll(signer, ixs);
 }
 
+/** Sleep helper for send backoff. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Send already-signed raw bytes, retrying transient/rate-limit failures.
+ * Re-sending identical bytes is idempotent (the signature is deterministic), so
+ * a "already processed" error means an earlier attempt actually landed.
+ */
+async function sendRawWithRetry(
+  conn: Connection,
+  raw: Uint8Array,
+  sig: string
+): Promise<string> {
+  let lastErr: unknown;
+  for (let i = 0; i < 6; i += 1) {
+    try {
+      return await conn.sendRawTransaction(raw, { preflightCommitment: "confirmed" });
+    } catch (err) {
+      const code = (err as { code?: number } | null)?.code;
+      const msg = String((err as { message?: string } | null)?.message ?? err);
+      if (/already been processed|already processed|has already been/i.test(msg)) return sig;
+      lastErr = err;
+      const rateLimited = code === 429 || /429|too many requests|rate limit/i.test(msg);
+      const wait = Math.min((rateLimited ? 1200 : 700) * 2 ** i, 8000) + Math.random() * 250;
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Send a batch of instructions for a signer. Signs once (a single wallet
+ * prompt) then retries the send and confirms against the block height, so a
+ * flaky/rate-limited RPC never turns into a spurious "unexpected error" or a
+ * second signature prompt.
+ */
 export async function sendAll(
   signer: ChainSigner,
   ixs: TransactionInstruction[]
 ): Promise<string> {
   const conn = connection();
   const tx = new Transaction();
-  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 }));
+  tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }));
   tx.add(...ixs);
-  const sig = await signer.sendTransaction(tx, conn);
-  await conn.confirmTransaction(sig, "confirmed");
-  return sig;
+
+  const { blockhash, lastValidBlockHeight } = await withRetry(
+    () => conn.getLatestBlockhash("confirmed"),
+    4,
+    500
+  );
+  tx.feePayer = signer.publicKey;
+  tx.recentBlockhash = blockhash;
+
+  const signed = await signer.signTransaction(tx);
+  const sig = signed.signature ? bs58.encode(signed.signature) : "";
+  const raw = signed.serialize();
+
+  const sentSig = await sendRawWithRetry(conn, raw, sig);
+  await conn.confirmTransaction(
+    { signature: sentSig, blockhash, lastValidBlockHeight },
+    "confirmed"
+  );
+  return sentSig;
 }
 
 /** Accounts shared by every value-moving instruction (SOL: no token plumbing). */
@@ -576,7 +933,9 @@ export async function chainBuyBinary(
   amountUi: number
 ): Promise<ChainTradeResult> {
   const market = marketPda(marketId);
-  const current = (await program.account.market.fetch(market)) as unknown as ChainMarketAccount;
+  const current = (await withRetry(() =>
+    program.account.market.fetch(market)
+  )) as unknown as ChainMarketAccount;
   const scale = SOL_DECIMALS;
   const cost = Math.round(amountUi * scale);
   const expectedUi = sharesForCostUi(current, side, amountUi, scale);
@@ -600,7 +959,9 @@ export async function chainSellBinary(
   sharesUi: number
 ): Promise<ChainTradeResult> {
   const market = marketPda(marketId);
-  const current = (await program.account.market.fetch(market)) as unknown as ChainMarketAccount;
+  const current = (await withRetry(() =>
+    program.account.market.fetch(market)
+  )) as unknown as ChainMarketAccount;
   const scale = SOL_DECIMALS;
   const shares = Math.round(sharesUi * scale);
   const proceedsUi = proceedsForSellUi(current, side, sharesUi, scale);

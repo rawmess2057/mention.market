@@ -21,6 +21,8 @@ import { fmtTimeLeft, fmtSol } from "@/lib/format";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
 import { useChainActivity } from "@/hooks/useChainActivity";
+import { lmsrProbYes } from "@/lib/lmsr";
+import { isChainId } from "@/lib/chain";
 import { VERTICAL_META } from "@/lib/types";
 
 const PriceChartWithTimeframe = dynamic(
@@ -56,6 +58,10 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
 
   const watch = WATCH_WORDS[m.slug] ?? [m.title.replace(/[^a-zA-Z ]/g, "").trim()];
   const marketHistory = history[m.id] ?? [];
+  const chainYes =
+    isChainId(m.id) && m.type === "binary"
+      ? lmsrProbYes(m.yesShares, m.noShares, m.b)
+      : null;
 
   return (
     <>
@@ -101,6 +107,12 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
               </span>{" "}
               traders
             </span>
+            {chainYes !== null && (
+              <span className="flex items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-2.5 py-1 font-mono font-semibold text-green">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+                {Math.round(chainYes * 100)}% YES
+              </span>
+            )}
             <span
               suppressHydrationWarning
               className="flex items-center gap-1.5 rounded-full border border-blue/20 bg-blue-light px-2.5 py-1 font-mono font-semibold text-blue"

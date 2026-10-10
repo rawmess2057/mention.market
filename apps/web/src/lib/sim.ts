@@ -10,6 +10,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { seededRandom, shortAddr } from "./format";
+import { mergePricePoints } from "./history";
 import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
@@ -530,6 +531,7 @@ interface SimState {
   ingestChainMarkets: (markets: Market[]) => void;
   ingestChainPositions: (positions: Position[]) => void;
   ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
+  ingestChainHistory: (marketId: string, points: PricePoint[]) => void;
   bumpChainActivity: (marketId: string) => void;
   setPendingTrade: (t: ConfirmTrade | null) => void;
   showToast: (msg: string | null) => void;
@@ -944,6 +946,18 @@ export const useSim = create<SimState>()(persist((set, get) => {
         return { positions, books };
       });
     },
+
+    ingestChainHistory: (marketId, points) =>
+      set((s) =>
+        points.length === 0
+          ? s
+          : {
+              history: {
+                ...s.history,
+                [marketId]: mergePricePoints(s.history[marketId] ?? [], points),
+              },
+            }
+      ),
 
     ingestChainActivity: (marketId, items) =>
       set((s) => {

@@ -5,7 +5,8 @@ import { fetchChainActivity, isChainId, SOL_DECIMALS } from "@/lib/chain";
 import { useSim } from "@/lib/sim";
 import type { Market } from "@/lib/types";
 
-const POLL_MS = 15_000;
+const POLL_MS = 30_000;
+const JITTER_MS = 5_000;
 
 /**
  * Backfill real on-chain trade history for a chain market into
@@ -33,11 +34,16 @@ export function useChainActivity(market: Market | undefined): void {
       if (!cancelled) ingest(marketId, items);
     };
 
-    load();
-    const timer = setInterval(load, POLL_MS);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = async () => {
+      await load();
+      if (cancelled) return;
+      timer = setTimeout(run, POLL_MS + Math.random() * JITTER_MS);
+    };
+    run();
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
   }, [marketId, volume, nonce, ingest]);
 }

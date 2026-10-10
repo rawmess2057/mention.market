@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   changePct,
+  mergePricePoints,
   normalizeHistory,
   resample,
+  selectChartPoints,
   sessionChange,
   toChartData,
   toValues,
@@ -88,6 +90,52 @@ describe("windowed", () => {
     ];
     expect(windowed(pts, 10_000, 25_000)).toHaveLength(2);
     expect(windowed(pts, 1, 25_000)).toHaveLength(2); // floor of 2
+  });
+});
+
+describe("selectChartPoints", () => {
+  const now = 10_000_000;
+
+  it('"all" returns the full series, including old points', () => {
+    const pts = [
+      { t: now - 2 * 3_600_000, v: 0.3 },
+      { t: now - 60_000, v: 0.5 },
+      { t: now, v: 0.6 },
+    ];
+    const { points, count } = selectChartPoints(pts, "all", now);
+    expect(count).toBe(3);
+    expect(points[0].t).toBe(now - 2 * 3_600_000);
+    expect(points[points.length - 1].t).toBe(now);
+  });
+
+  it('"1m" windows to the trailing minute', () => {
+    const pts = [
+      { t: now - 3_600_000, v: 0.2 },
+      { t: now - 30_000, v: 0.5 },
+      { t: now - 10_000, v: 0.6 },
+    ];
+    const { points } = selectChartPoints(pts, "1m", now);
+    expect(points.map((p) => p.t)).toEqual([now - 30_000, now - 10_000]);
+  });
+
+  it("falls back to the last 20 points when the window is too sparse", () => {
+    const pts = Array.from({ length: 30 }, (_, i) => ({ t: now - (30 - i) * 3_600_000, v: i / 30 }));
+    const { points } = selectChartPoints(pts, "1m", now);
+    expect(points.length).toBe(20);
+    expect(points[points.length - 1].t).toBe(pts[pts.length - 1].t);
+  });
+
+  it("is safe on empty input", () => {
+    expect(selectChartPoints(undefined, "all", now)).toEqual({ points: [], count: 0 });
+  });
+});
+
+describe("mergePricePoints retention", () => {
+  it("keeps every point under the (raised) cap so real history survives", () => {
+    const base = Array.from({ length: 150 }, (_, i) => ({ t: i, v: i / 150 }));
+    const out = mergePricePoints(base, [{ t: 1_000, v: 0.9 }]);
+    expect(out).toHaveLength(151);
+    expect(out[0].t).toBe(0);
   });
 });
 

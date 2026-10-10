@@ -18,6 +18,9 @@ export function fmtErr(err: unknown): string {
         : JSON.stringify(err);
   const first = raw.split("\n")[0].trim();
   if (!first) return "Transaction failed";
+  if (/429|too many requests|rate limit/i.test(raw)) {
+    return "Network busy (rate limited) — please retry in a moment";
+  }
   return first.length > 140 ? `${first.slice(0, 139)}…` : first;
 }
 

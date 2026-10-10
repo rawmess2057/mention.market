@@ -23,7 +23,7 @@ import type { Market } from "@/lib/types";
  * null so callers fall back to the existing SOL demo-vault flow.
  */
 export function useChain() {
-  const { connected, publicKey, sendTransaction } = useWallet();
+  const { connected, publicKey, signTransaction } = useWallet();
   const setBalance = useSim((s) => s.setBalance);
   const bumpChainActivity = useSim((s) => s.bumpChainActivity);
 
@@ -40,77 +40,77 @@ export function useChain() {
       side: "yes" | "no",
       amountUi: number
     ): Promise<string | null> => {
-      if (!connected || !publicKey || !sendTransaction || !isChainId(market.id)) return null;
+      if (!connected || !publicKey || !signTransaction || !isChainId(market.id)) return null;
       const num = Number(market.id.slice(1));
-      const signer = { publicKey, sendTransaction };
+      const signer = { publicKey, signTransaction };
       const result = await chainBuyBinary(signer, num, side, amountUi);
       await refreshBalance(publicKey.toBase58(), result);
       bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
+    [connected, publicKey, signTransaction, refreshBalance, bumpChainActivity]
   );
 
   const sell = useCallback(
     async (market: Market, side: "yes" | "no", sharesUi: number): Promise<string | null> => {
-      if (!connected || !publicKey || !sendTransaction || !isChainId(market.id)) return null;
+      if (!connected || !publicKey || !signTransaction || !isChainId(market.id)) return null;
       const num = Number(market.id.slice(1));
-      const signer = { publicKey, sendTransaction };
+      const signer = { publicKey, signTransaction };
       const result = await chainSellBinary(signer, num, side, sharesUi);
       await refreshBalance(publicKey.toBase58(), result);
       bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
+    [connected, publicKey, signTransaction, refreshBalance, bumpChainActivity]
   );
 
   const back = useCallback(
     async (market: Market, word: string, amountUi: number): Promise<string | null> => {
-      if (!connected || !publicKey || !sendTransaction || !isChainId(market.id)) return null;
+      if (!connected || !publicKey || !signTransaction || !isChainId(market.id)) return null;
       const num = Number(market.id.slice(1));
-      const signer = { publicKey, sendTransaction };
+      const signer = { publicKey, signTransaction };
       const result = await chainBackWord(signer, num, word, amountUi);
       await refreshBalance(publicKey.toBase58(), result);
       bumpChainActivity(market.id);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
+    [connected, publicKey, signTransaction, refreshBalance, bumpChainActivity]
   );
 
   const claim = useCallback(
     async (marketId: string): Promise<string | null> => {
-      if (!connected || !publicKey || !sendTransaction || !isChainId(marketId)) return null;
+      if (!connected || !publicKey || !signTransaction || !isChainId(marketId)) return null;
       const num = Number(marketId.slice(1));
-      const signer = { publicKey, sendTransaction };
+      const signer = { publicKey, signTransaction };
       const result = await chainClaim(signer, num);
       await refreshBalance(publicKey.toBase58(), result);
       bumpChainActivity(marketId);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance, bumpChainActivity]
+    [connected, publicKey, signTransaction, refreshBalance, bumpChainActivity]
   );
 
   const challenge = useCallback(
     async (marketId: string): Promise<string | null> => {
-      if (!connected || !publicKey || !sendTransaction || !isChainId(marketId)) return null;
+      if (!connected || !publicKey || !signTransaction || !isChainId(marketId)) return null;
       const num = Number(marketId.slice(1));
-      const signer = { publicKey, sendTransaction };
+      const signer = { publicKey, signTransaction };
       const result = await chainChallenge(signer, num);
       await refreshBalance(publicKey.toBase58(), result);
       return result.sig;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, signTransaction, refreshBalance]
   );
 
   const create = useCallback(
     async (params: ChainCreateParams): Promise<number | null> => {
-      if (!connected || !publicKey || !sendTransaction) return null;
-      const signer = { publicKey, sendTransaction };
+      if (!connected || !publicKey || !signTransaction) return null;
+      const signer = { publicKey, signTransaction };
       const result = await chainCreateMarket(signer, params);
       await refreshBalance(publicKey.toBase58(), result);
       return result.id;
     },
-    [connected, publicKey, sendTransaction, refreshBalance]
+    [connected, publicKey, signTransaction, refreshBalance]
   );
 
   return { connected, buy, sell, back, claim, challenge, create };

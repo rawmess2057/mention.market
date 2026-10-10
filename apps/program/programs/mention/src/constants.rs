@@ -8,6 +8,8 @@ pub const MAX_TITLE_LEN: usize = 64;
 pub const MAX_WORD_LEN: usize = 32;
 /// Maximum bytes for the winning outcome label ("yes"/"no"/a backed word).
 pub const MAX_OUTCOME_LEN: usize = 32;
+/// Maximum raw bytes for a posted evidence manifest payload.
+pub const MAX_EVIDENCE_LEN: usize = 4096;
 /// Minimum challenge window (seconds) for an optimistic resolution.
 pub const MIN_CHALLENGE_WINDOW: i64 = 60;
 /// Lamports-per-UI-unit scale for a SOL-denominated market.

@@ -15,6 +15,10 @@ use {
 
 const LAMPORTS: u64 = 1_000_000_000;
 
+/// Non-zero resolution-spec hash used by markets that are later resolved. The
+/// program rejects proposals against an all-zero (legacy/demo) spec.
+const TEST_SPEC: [u8; 32] = [9u8; 32];
+
 fn setup() -> (LiteSVM, Keypair, Pubkey) {
     let program_id = mention::id();
     let payer = Keypair::new();
@@ -99,7 +103,7 @@ fn create_market_with_b_ix(
         words,
         end_time,
         b,
-        [0; 32],
+        TEST_SPEC,
     )
 }
 
@@ -380,6 +384,65 @@ fn position_pda(program_id: Pubkey, market: Pubkey, owner: Pubkey) -> Pubkey {
     .0
 }
 
+fn resolution_spec_pda(program_id: Pubkey, market: Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"resolution-spec", market.as_ref()], &program_id).0
+}
+
+fn evidence_sha256(bytes: &[u8]) -> [u8; 32] {
+    solana_sha256_hasher::hash(bytes).to_bytes()
+}
+
+fn evidence_pda(program_id: Pubkey, market: Pubkey, sha256: [u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[b"evidence", market.as_ref(), sha256.as_ref()],
+        &program_id,
+    )
+    .0
+}
+
+fn read_spec(svm: &LiteSVM, program_id: Pubkey, market: Pubkey) -> [u8; 32] {
+    let acct = svm
+        .get_account(&resolution_spec_pda(program_id, market))
+        .expect("resolution spec account");
+    let mut data = acct.data.as_slice();
+    mention::ResolutionSpecCommitment::try_deserialize(&mut data)
+        .expect("deserialize resolution spec")
+        .spec_sha256
+}
+
+fn read_evidence(svm: &LiteSVM, pda: Pubkey) -> mention::EvidenceManifest {
+    let acct = svm.get_account(&pda).expect("evidence account");
+    let mut data = acct.data.as_slice();
+    mention::EvidenceManifest::try_deserialize(&mut data).expect("deserialize evidence")
+}
+
+fn post_evidence_ix(
+    program_id: Pubkey,
+    resolver: Pubkey,
+    market: Pubkey,
+    bytes: Vec<u8>,
+    spec_sha256: [u8; 32],
+) -> Instruction {
+    let sha256 = evidence_sha256(&bytes);
+    Instruction::new_with_bytes(
+        program_id,
+        &mention::instruction::PostEvidence {
+            bytes,
+            sha256,
+            spec_sha256,
+        }
+        .data(),
+        mention::accounts::PostEvidence {
+            resolver,
+            config: config_pda(program_id),
+            market,
+            evidence: evidence_pda(program_id, market, sha256),
+            system_program: anchor_lang::system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
 fn read_position(svm: &LiteSVM, pda: Pubkey) -> mention::Position {
     let acct = svm.get_account(&pda).expect("position account");
     let mut data = acct.data.as_slice();
@@ -477,14 +540,14 @@ fn propose_ix(
     market: Pubkey,
     outcome: String,
     confidence: u8,
-    evidence_hash: [u8; 32],
+    evidence_sha256: [u8; 32],
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
         &mention::instruction::ProposeResolution {
             outcome,
             confidence,
-            evidence_hash,
+            evidence_sha256,
         }
         .data(),
         mention::accounts::ProposeResolution {
@@ -492,6 +555,8 @@ fn propose_ix(
             config: config_pda(program_id),
             market,
             vault: vault_pda(program_id, market),
+            resolution_spec: resolution_spec_pda(program_id, market),
+            evidence: evidence_pda(program_id, market, evidence_sha256),
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -993,7 +1058,22 @@ fn test_resolution_state_machine() {
     advance(&mut svm, 6);
     send(&mut svm, &[lock_market_ix(program_id, payer.pubkey(), market)], &payer).unwrap();
 
-    // Propose while locked is fine; non-resolver is not.
+    // Post evidence, then propose. Non-resolver must not be able to propose.
+    let evidence1 = b"{\"outcome\":\"yes\",\"reason\":\"stream clip 1\"}".to_vec();
+    let sha1 = evidence_sha256(&evidence1);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            evidence1,
+            TEST_SPEC,
+        )],
+        &resolver,
+    )
+    .unwrap();
+
     let attacker = Keypair::new();
     svm.airdrop(&attacker.pubkey(), 100 * LAMPORTS).unwrap();
     assert!(
@@ -1005,7 +1085,7 @@ fn test_resolution_state_machine() {
                 market,
                 "yes".into(),
                 100,
-                [7u8; 32],
+                sha1,
             )],
             &attacker,
         )
@@ -1024,7 +1104,7 @@ fn test_resolution_state_machine() {
             market,
             "yes".into(),
             100,
-            [7u8; 32],
+            sha1,
         )],
         &resolver,
     )
@@ -1037,6 +1117,7 @@ fn test_resolution_state_machine() {
     assert_eq!(m.bond, bond);
     assert_eq!(m.proposed_at, now);
     assert_eq!(m.challenge_deadline, now + 120);
+    assert_eq!(m.evidence_hash, sha1);
     let resolver_after_propose = svm.get_account(&resolver.pubkey()).unwrap().lamports;
     assert!(
         resolver_before - resolver_after_propose >= bond
@@ -1055,7 +1136,25 @@ fn test_resolution_state_machine() {
     assert_eq!(m.status, mention::MarketStatus::Locked);
     assert_eq!(m.challenge_deadline, 0);
 
-    // Re-propose, then finalize too early must fail.
+    // Re-post fresh evidence, re-propose, then finalize too early must fail.
+    let evidence2 = b"{\"outcome\":\"no\",\"reason\":\"stream clip 2\"}".to_vec();
+    let sha2 = evidence_sha256(&evidence2);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            evidence2,
+            TEST_SPEC,
+        )],
+        &resolver,
+    )
+    .unwrap();
+    let ev2_rent = svm
+        .get_account(&evidence_pda(program_id, market, sha2))
+        .unwrap()
+        .lamports;
     send(
         &mut svm,
         &[propose_ix(
@@ -1064,7 +1163,7 @@ fn test_resolution_state_machine() {
             market,
             "no".into(),
             90,
-            [8u8; 32],
+            sha2,
         )],
         &resolver,
     )
@@ -1072,6 +1171,7 @@ fn test_resolution_state_machine() {
     let m = read_market(&svm, market);
     assert_eq!(m.status, mention::MarketStatus::Resolving);
     assert_eq!(m.winning_outcome, "no");
+    assert_eq!(m.evidence_hash, sha2);
     assert!(
         send(
             &mut svm,
@@ -1096,16 +1196,268 @@ fn test_resolution_state_machine() {
     assert_eq!(m.bond, 0);
     assert!(m.resolved_at > 0);
     // The current (2nd) proposal's bond is refunded; the 1st proposer bond and
-    // challenger bond stay in the vault. Resolver nets exactly one bond out.
+    // challenger bond stay in the vault. Resolver nets exactly one bond out
+    // (plus the rent for the 2nd evidence manifest, which this wallet paid).
     let resolver_after = svm.get_account(&resolver.pubkey()).unwrap().lamports;
     assert!(
-        (resolver_before as i128 - resolver_after as i128 - bond as i128).abs() <= 10_000_000,
+        (resolver_before as i128 - resolver_after as i128 - bond as i128 - ev2_rent as i128)
+            .abs()
+            <= 10_000_000,
         "resolver should pay exactly one forfeited bond"
     );
     let challenger_after = svm.get_account(&challenger.pubkey()).unwrap().lamports;
     assert!(
         challenger_after <= 100 * LAMPORTS - bond,
         "challenger bond must be forfeited"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Evidence binding
+// ---------------------------------------------------------------------------
+
+/// Posting the raw manifest commits its program-computed hash and market to the
+/// PDA-derived account, and the stored bytes round-trip.
+#[test]
+fn test_post_evidence_stores_hash() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        60,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+
+    let bytes = b"{\"outcome\":\"yes\",\"source\":\"demo\"}".to_vec();
+    let sha = evidence_sha256(&bytes);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes.clone(),
+            TEST_SPEC,
+        )],
+        &resolver,
+    )
+    .unwrap();
+
+    let ev = read_evidence(&svm, evidence_pda(program_id, market, sha));
+    assert_eq!(ev.market, market);
+    assert_eq!(ev.spec_sha256, TEST_SPEC);
+    assert_eq!(ev.sha256, sha);
+    assert_eq!(ev.bytes, bytes);
+}
+
+/// Only the configured resolver may post evidence.
+#[test]
+fn test_post_evidence_requires_resolver() {
+    let (mut svm, payer, program_id) = setup();
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        61,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+
+    let bytes = b"{\"outcome\":\"yes\"}".to_vec();
+    let err = send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            payer.pubkey(),
+            market,
+            bytes,
+            TEST_SPEC,
+        )],
+        &payer,
+    )
+    .unwrap_err();
+    assert!(err.contains("Unauthorized"), "unexpected error: {err}");
+}
+
+/// A legacy/demo market (all-zero committed spec) must not be resolvable.
+#[test]
+fn test_propose_rejects_missing_spec() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_with_spec_ix(
+        program_id,
+        payer.pubkey(),
+        62,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+        100_000,
+        [0u8; 32],
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+
+    let bytes = b"{\"outcome\":\"yes\"}".to_vec();
+    let sha = evidence_sha256(&bytes);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes,
+            [0u8; 32],
+        )],
+        &resolver,
+    )
+    .unwrap();
+    let err = send(
+        &mut svm,
+        &[propose_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            "yes".into(),
+            100,
+            sha,
+        )],
+        &resolver,
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("MissingResolutionSpec"),
+        "unexpected error: {err}"
+    );
+}
+
+/// Evidence evaluated against a different spec than the market's committed one
+/// is rejected.
+#[test]
+fn test_propose_rejects_evidence_spec_mismatch() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        63,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+
+    let bytes = b"{\"outcome\":\"yes\"}".to_vec();
+    let sha = evidence_sha256(&bytes);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes,
+            [3u8; 32],
+        )],
+        &resolver,
+    )
+    .unwrap();
+    let err = send(
+        &mut svm,
+        &[propose_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            "yes".into(),
+            100,
+            sha,
+        )],
+        &resolver,
+    )
+    .unwrap_err();
+    assert!(err.contains("EvidenceMismatch"), "unexpected error: {err}");
+}
+
+/// Proposing a hash with no matching posted manifest cannot resolve to an
+/// account, so the proposal is rejected.
+#[test]
+fn test_propose_rejects_unposted_evidence() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        64,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+
+    let sha = evidence_sha256(b"never posted");
+    assert!(
+        send(
+            &mut svm,
+            &[propose_ix(
+                program_id,
+                resolver.pubkey(),
+                market,
+                "yes".into(),
+                100,
+                sha,
+            )],
+            &resolver,
+        )
+        .is_err(),
+        "proposal without posted evidence must fail"
     );
 }
 
@@ -1124,6 +1476,22 @@ fn resolve_market(
     let end = read_market(svm, market).end_time;
     advance(svm, end + 1 - unix_now(svm));
     send(svm, &[lock_market_ix(program_id, payer.pubkey(), market)], payer).unwrap();
+
+    let spec = read_spec(svm, program_id, market);
+    let bytes = format!("{{\"market\":\"{market}\",\"outcome\":\"{outcome}\"}}").into_bytes();
+    let sha = evidence_sha256(&bytes);
+    send(
+        svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes,
+            spec,
+        )],
+        resolver,
+    )
+    .unwrap();
     send(
         svm,
         &[propose_ix(
@@ -1132,7 +1500,7 @@ fn resolve_market(
             market,
             outcome.into(),
             100,
-            [9u8; 32],
+            sha,
         )],
         resolver,
     )
@@ -1502,6 +1870,20 @@ fn test_finalize_refund_goes_to_proposer() {
         &payer,
     )
     .unwrap();
+    let bytes = b"{\"outcome\":\"yes\"}".to_vec();
+    let sha = evidence_sha256(&bytes);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes,
+            TEST_SPEC,
+        )],
+        &resolver,
+    )
+    .unwrap();
     send(
         &mut svm,
         &[propose_ix(
@@ -1510,7 +1892,7 @@ fn test_finalize_refund_goes_to_proposer() {
             market,
             "yes".into(),
             100,
-            [7u8; 32],
+            sha,
         )],
         &resolver,
     )

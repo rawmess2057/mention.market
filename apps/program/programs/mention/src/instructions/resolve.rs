@@ -10,9 +10,12 @@ use anchor_lang::Bumps;
 
 use crate::constants::{bond_units, CHALLENGE_WINDOW_SECS, MAX_OUTCOME_LEN};
 use crate::error::ErrorCode;
-use crate::state::{Config, Market, MarketStatus, MarketType, Vault};
+use crate::state::{
+    Config, EvidenceManifest, Market, MarketStatus, MarketType, ResolutionSpecCommitment, Vault,
+};
 
 #[derive(Accounts)]
+#[instruction(outcome: String, confidence: u8, evidence_sha256: [u8; 32])]
 pub struct ProposeResolution<'info> {
     #[account(mut)]
     pub resolver: Signer<'info>,
@@ -33,6 +36,22 @@ pub struct ProposeResolution<'info> {
         bump = vault.bump
     )]
     pub vault: Box<Account<'info, Vault>>,
+
+    /// Committed resolution rules for this market; a zero hash marks a
+    /// legacy/demo market that must not be resolved by the trusted resolver.
+    #[account(
+        seeds = [b"resolution-spec", market.key().as_ref()],
+        bump = resolution_spec.bump
+    )]
+    pub resolution_spec: Box<Account<'info, ResolutionSpecCommitment>>,
+
+    /// Evidence manifest posted via `post_evidence`; its address commits to the
+    /// exact raw bytes the proposal is based on.
+    #[account(
+        seeds = [b"evidence", market.key().as_ref(), evidence_sha256.as_ref()],
+        bump = evidence.bump
+    )]
+    pub evidence: Box<Account<'info, EvidenceManifest>>,
 
     pub system_program: Program<'info, System>,
 }
@@ -92,14 +111,15 @@ pub struct FinalizeResolution<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Propose `outcome` (with `confidence` and client-side `evidence_hash`); only
-/// the trusted resolver may do so, only while the market is locked and has no
-/// live proposal.
+/// Propose `outcome` (with `confidence`) against a previously posted evidence
+/// manifest; only the trusted resolver may do so, only while the market is
+/// locked and has no live proposal. The proposal binds the market to the
+/// manifest's program-computed hash and to the committed resolution spec.
 pub fn propose(
     ctx: Context<ProposeResolution>,
     outcome: String,
     confidence: u8,
-    evidence_hash: [u8; 32],
+    evidence_sha256: [u8; 32],
 ) -> Result<()> {
     require!(
         ctx.accounts.resolver.key() == ctx.accounts.config.resolver,
@@ -113,6 +133,31 @@ pub fn propose(
         ctx.accounts.market.challenge_deadline == 0,
         ErrorCode::AlreadyResolving
     );
+
+    let market_key = ctx.accounts.market.key();
+    require_keys_eq!(
+        ctx.accounts.resolution_spec.market,
+        market_key,
+        ErrorCode::InvalidResolution
+    );
+    require!(
+        ctx.accounts.resolution_spec.spec_sha256 != [0u8; 32],
+        ErrorCode::MissingResolutionSpec
+    );
+    require_keys_eq!(
+        ctx.accounts.evidence.market,
+        market_key,
+        ErrorCode::EvidenceMismatch
+    );
+    require!(
+        ctx.accounts.evidence.sha256 == evidence_sha256,
+        ErrorCode::EvidenceMismatch
+    );
+    require!(
+        ctx.accounts.evidence.spec_sha256 == ctx.accounts.resolution_spec.spec_sha256,
+        ErrorCode::EvidenceMismatch
+    );
+
     validate_outcome(&ctx.accounts.market, &outcome)?;
     require!(!outcome.is_empty(), ErrorCode::InvalidResolution);
     require!(outcome.len() <= MAX_OUTCOME_LEN, ErrorCode::OutcomeTooLong);
@@ -122,6 +167,7 @@ pub fn propose(
     pay_bond(&ctx, bond)?;
 
     let now = Clock::get()?.unix_timestamp;
+    let evidence_hash = ctx.accounts.evidence.sha256;
     let market = &mut ctx.accounts.market;
     market.status = MarketStatus::Resolving;
     market.winning_outcome = outcome;

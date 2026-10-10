@@ -23,6 +23,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
 libm = "0.2"
+solana-sha256-hasher = "3.1"
 
 [dev-dependencies]
 litesvm = "0.10.0"

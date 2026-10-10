@@ -92,14 +92,27 @@ pub mod mention {
         back_word::handler(ctx, word, amount)
     }
 
-    /// Resolver proposes the winning outcome with a bond and an evidence hash.
+    /// Resolver posts the raw evidence manifest bytes for a market's resolution.
+    /// `sha256` must equal `sha256(bytes)` (recomputed and verified by the
+    /// program); the manifest PDA commits to it.
+    pub fn post_evidence(
+        ctx: Context<PostEvidence>,
+        bytes: Vec<u8>,
+        sha256: [u8; 32],
+        spec_sha256: [u8; 32],
+    ) -> Result<()> {
+        post_evidence::handler(ctx, bytes, sha256, spec_sha256)
+    }
+
+    /// Resolver proposes the winning outcome, bound to a posted evidence
+    /// manifest (`evidence_sha256` is that manifest's hash) and a bond.
     pub fn propose_resolution(
         ctx: Context<ProposeResolution>,
         outcome: String,
         confidence: u8,
-        evidence_hash: [u8; 32],
+        evidence_sha256: [u8; 32],
     ) -> Result<()> {
-        resolve::propose(ctx, outcome, confidence, evidence_hash)
+        resolve::propose(ctx, outcome, confidence, evidence_sha256)
     }
 
     /// Anyone may challenge a live proposal inside the challenge window.

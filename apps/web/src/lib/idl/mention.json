@@ -868,9 +868,133 @@
       "args": []
     },
     {
+      "name": "post_evidence",
+      "docs": [
+        "Resolver posts the raw evidence manifest bytes for a market's resolution.",
+        "`sha256` must equal `sha256(bytes)` (recomputed and verified by the",
+        "program); the manifest PDA commits to it."
+      ],
+      "discriminator": [
+        116,
+        214,
+        24,
+        248,
+        131,
+        85,
+        53,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "evidence",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "arg",
+                "path": "sha256"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bytes",
+          "type": "bytes"
+        },
+        {
+          "name": "sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "spec_sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "propose_resolution",
       "docs": [
-        "Resolver proposes the winning outcome with a bond and an evidence hash."
+        "Resolver proposes the winning outcome, bound to a posted evidence",
+        "manifest (`evidence_sha256` is that manifest's hash) and a bond."
       ],
       "discriminator": [
         19,
@@ -953,6 +1077,73 @@
           }
         },
         {
+          "name": "resolution_spec",
+          "docs": [
+            "Committed resolution rules for this market; a zero hash marks a",
+            "legacy/demo market that must not be resolved by the trusted resolver."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  111,
+                  108,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  115,
+                  112,
+                  101,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "evidence",
+          "docs": [
+            "Evidence manifest posted via `post_evidence`; its address commits to the",
+            "exact raw bytes the proposal is based on."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "arg",
+                "path": "evidence_sha256"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -967,7 +1158,7 @@
           "type": "u8"
         },
         {
-          "name": "evidence_hash",
+          "name": "evidence_sha256",
           "type": {
             "array": [
               "u8",
@@ -1177,6 +1368,19 @@
       ]
     },
     {
+      "name": "EvidenceManifest",
+      "discriminator": [
+        9,
+        190,
+        128,
+        86,
+        64,
+        17,
+        31,
+        5
+      ]
+    },
+    {
       "name": "Market",
       "discriminator": [
         219,
@@ -1230,6 +1434,19 @@
     }
   ],
   "events": [
+    {
+      "name": "EvidencePosted",
+      "discriminator": [
+        45,
+        18,
+        3,
+        140,
+        121,
+        90,
+        47,
+        147
+      ]
+    },
     {
       "name": "MarketCreated",
       "discriminator": [
@@ -1427,11 +1644,31 @@
     },
     {
       "code": 6023,
+      "name": "MissingResolutionSpec",
+      "msg": "Market has no committed resolution spec"
+    },
+    {
+      "code": 6024,
+      "name": "EvidenceMismatch",
+      "msg": "Evidence does not match the committed resolution spec"
+    },
+    {
+      "code": 6025,
+      "name": "EvidenceTooLarge",
+      "msg": "Evidence payload is too large"
+    },
+    {
+      "code": 6026,
+      "name": "EmptyEvidence",
+      "msg": "Evidence payload is empty"
+    },
+    {
+      "code": 6027,
       "name": "SlippageTooHigh",
       "msg": "Exit price moved beyond slippage tolerance"
     },
     {
-      "code": 6024,
+      "code": 6028,
       "name": "MarketClosed",
       "msg": "Trading has ended for this market"
     }
@@ -1464,6 +1701,92 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EvidenceManifest",
+      "docs": [
+        "Raw evidence manifest bytes committed on-chain for a resolution proposal.",
+        "",
+        "The account *address* commits to the payload: its PDA seeds include",
+        "`sha256(bytes)`, and `post_evidence` recomputes and stores that hash. Because",
+        "the resolver cannot alter the bytes without changing the address, an",
+        "approved `propose_resolution` is bound to the exact evidence it cites."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "spec_sha256",
+            "docs": [
+              "Committed resolution spec this evidence was evaluated against."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sha256",
+            "docs": [
+              "`sha256(bytes)`, computed by the program on `post_evidence`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "bytes",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EvidencePosted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "evidence",
+            "type": "pubkey"
+          },
+          {
+            "name": "spec_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

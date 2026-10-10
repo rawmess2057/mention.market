@@ -48,6 +48,14 @@ pub enum ErrorCode {
     WindowNotOpen,
     #[msg("Outcome or evidence is invalid")]
     InvalidResolution,
+    #[msg("Market has no committed resolution spec")]
+    MissingResolutionSpec,
+    #[msg("Evidence does not match the committed resolution spec")]
+    EvidenceMismatch,
+    #[msg("Evidence payload is too large")]
+    EvidenceTooLarge,
+    #[msg("Evidence payload is empty")]
+    EmptyEvidence,
     #[msg("Exit price moved beyond slippage tolerance")]
     SlippageTooHigh,
     #[msg("Trading has ended for this market")]

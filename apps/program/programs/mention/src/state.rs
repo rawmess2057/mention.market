@@ -67,6 +67,25 @@ pub struct ResolutionSpecCommitment {
     pub bump: u8,
 }
 
+/// Raw evidence manifest bytes committed on-chain for a resolution proposal.
+///
+/// The account *address* commits to the payload: its PDA seeds include
+/// `sha256(bytes)`, and `post_evidence` recomputes and stores that hash. Because
+/// the resolver cannot alter the bytes without changing the address, an
+/// approved `propose_resolution` is bound to the exact evidence it cites.
+#[account]
+#[derive(InitSpace)]
+pub struct EvidenceManifest {
+    pub market: Pubkey,
+    /// Committed resolution spec this evidence was evaluated against.
+    pub spec_sha256: [u8; 32],
+    /// `sha256(bytes)`, computed by the program on `post_evidence`.
+    pub sha256: [u8; 32],
+    pub bump: u8,
+    #[max_len(4096)]
+    pub bytes: Vec<u8>,
+}
+
 /// A prediction market. Binary markets price YES/NO with LMSR; majority markets
 /// are pari-mutuel word races.
 #[account]

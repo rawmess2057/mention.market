@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { LeaderBar } from "@/components/viz/leader-bar";
 import { Sparkline } from "@/components/viz/sparkline";
 import { AnimatedNumber } from "@/components/viz/animated-number";
-import { cn, fmtTimeLeft, fmtUsd } from "@/lib/format";
+import { cn, fmtTimeLeft } from "@/lib/format";
 import { sessionChange, toValues, type HistoryInput } from "@/lib/history";
 import { useSim } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
@@ -47,7 +47,7 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
       <div className="mt-3.5 flex items-center gap-3 text-[11px] text-gray-mid">
         <span className="flex items-center gap-1">
           <Volume2 className="h-3 w-3" />
-          {fmtUsd(m.volume, { compact: true })}
+          {fmtMarketAmount(m.volume, true)}
         </span>
         <span className="flex items-center gap-1">
           <Users className="h-3 w-3" />
@@ -97,6 +97,13 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
       {urgent ? `Ending ${fmtTimeLeft(msLeft)}` : fmtTimeLeft(msLeft)}
     </span>
   );
+}
+
+function fmtMarketAmount(amount: number, compact = false) {
+  return `${amount.toLocaleString("en-US", {
+    notation: compact ? "compact" : "standard",
+    maximumFractionDigits: compact ? 2 : 4,
+  })} SOL`;
 }
 
 function ChangePill({ change }: { change: number }) {
@@ -177,15 +184,14 @@ function MajoritySummary({ m }: { m: Market }) {
         );
       })}
       <div className="pt-0.5 text-[11px] text-gray-mid">
-        {words.length} words · {fmtUsd(pot, { compact: true })} in play
+        {words.length} words · {fmtMarketAmount(pot, true)} in play
       </div>
     </div>
   );
 }
 
-export function LiveCarousel() {
-  const markets = useSim((s) => s.markets);
-  const live = Object.values(markets).filter((m) => m.status === "open");
+export function LiveCarousel({ markets }: { markets: Market[] }) {
+  const live = markets.filter((m) => m.status === "open");
   return (
     <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
       {live.map((m) => (
@@ -246,7 +252,7 @@ function LiveCard({ m }: { m: Market }) {
       ) : (
         <div className="flex items-center gap-1.5 text-[11px] text-orange-600">
           <Flame className="h-3 w-3" />
-          {fmtUsd(m.volume, { compact: true })} in the pot
+          {fmtMarketAmount(m.volume, true)} in the pot
         </div>
       )}
     </Link>

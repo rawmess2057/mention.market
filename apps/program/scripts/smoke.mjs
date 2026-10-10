@@ -6,10 +6,7 @@ import {
   vaultPda,
   positionPda,
   CONFIG_PDA,
-  USDC_MINT,
   SYSTEM_PROGRAM,
-  TOKEN_PROGRAM,
-  ATA_PROGRAM,
   sharesForCost,
   enumKey,
   budget,
@@ -35,11 +32,11 @@ if (existing) {
       "devnet e2e",
       { streams: {} },
       { binary: {} },
-      { sol: {} },
       bn(5_000_000_000),
       [],
       bn(now + ENDS_IN_SEC),
-      100
+      100,
+      Array(32).fill(0)
     )
     .accounts({
       creator: kp.publicKey,
@@ -58,7 +55,6 @@ console.log("Decoded market:", JSON.stringify({
   title: m.title,
   vertical: enumKey(m.vertical),
   type: enumKey(m.marketType),
-  asset: enumKey(m.asset),
   status: enumKey(m.status),
   b: m.b.toString(),
   yesShares: m.yesShares.toString(),
@@ -80,11 +76,6 @@ if (shares > 0) {
       market,
       vault: vaultPda(market),
       position: positionPda(market, kp.publicKey),
-      traderAta: null,
-      vaultAta: null,
-      mint: USDC_MINT,
-      tokenProgram: TOKEN_PROGRAM,
-      associatedTokenProgram: ATA_PROGRAM,
       systemProgram: SYSTEM_PROGRAM,
     })
     .preInstructions(budget())
@@ -109,11 +100,6 @@ if (shares > 0) {
         market,
         vault: vaultPda(market),
         position: positionPda(market, kp.publicKey),
-        traderAta: null,
-        vaultAta: null,
-        mint: USDC_MINT,
-        tokenProgram: TOKEN_PROGRAM,
-        associatedTokenProgram: ATA_PROGRAM,
         systemProgram: SYSTEM_PROGRAM,
       })
       .preInstructions(budget())

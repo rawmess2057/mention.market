@@ -138,7 +138,7 @@ field already exists).
 6. Live leaderboard driven by real PnL; streaks/badges.
 
 **Long term**
-7. Anchor program: outcome tokens (1 USDC = YES + NO), redemption to USDC,
+7. Anchor program: outcome tokens (1 SOL = YES + NO), redemption to SOL,
    bond-adjusted optimistic resolution (featured by proposal/dispute in sim
    today). Evaluate Monaco protocol for shared liquidity.
 8. Fixed-payout multi-outcome CPMM word races (JIT arbitrage, Manifold-style)

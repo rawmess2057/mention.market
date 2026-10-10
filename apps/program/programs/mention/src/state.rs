@@ -1,13 +1,5 @@
 use anchor_lang::prelude::*;
 
-/// Currency a market is denominated in. USDC markets settle through an SPL
-/// token vault; SOL markets settle through the `Vault` PDA's lamports.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-pub enum AssetKind {
-    Usdc,
-    Sol,
-}
-
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
 pub enum MarketType {
     Binary,
@@ -52,20 +44,26 @@ pub struct WordBack {
 pub struct Config {
     pub authority: Pubkey,
     pub resolver: Pubkey,
-    pub usdc_mint: Pubkey,
     pub fee_bps: u16,
     pub paused: bool,
     pub bump: u8,
 }
 
-/// Per-market escrow. Holds SOL directly; owns the USDC ATA when `asset` is USDC.
+/// Per-market escrow. Holds SOL directly as its lamport balance.
 #[account]
 #[derive(InitSpace)]
 pub struct Vault {
     pub market: Pubkey,
-    pub asset: AssetKind,
-    /// USDC mint for token markets, or the system program id for SOL markets.
-    pub mint: Pubkey,
+    pub bump: u8,
+}
+
+/// Immutable commitment to the resolution rules agreed at market creation.
+/// An all-zero hash marks legacy/demo markets that are not eligible for backend resolution.
+#[account]
+#[derive(InitSpace)]
+pub struct ResolutionSpecCommitment {
+    pub market: Pubkey,
+    pub spec_sha256: [u8; 32],
     pub bump: u8,
 }
 
@@ -81,7 +79,6 @@ pub struct Market {
     #[max_len(64)]
     pub event: String,
     pub vertical: Vertical,
-    pub asset: AssetKind,
     pub market_type: MarketType,
     pub status: MarketStatus,
     /// LMSR liquidity parameter (binary markets), in base units.
@@ -109,7 +106,7 @@ pub struct Market {
     pub challenge_deadline: i64,
     pub resolved_at: i64,
     /// Resolver pubkey behind the current proposal; the bond refunds here on
-    /// finalize (via their ATA for USDC markets, lamports for SOL markets).
+    /// finalize (lamports to the proposer's system account).
     pub proposer: Pubkey,
     pub bump: u8,
 }

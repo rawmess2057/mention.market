@@ -59,7 +59,7 @@ function majorityMarket(overrides: Partial<Market> = {}): Market {
 }
 
 describe("claimPayout — binary", () => {
-  it("pays 1 USDC per winning share held", () => {
+  it("pays 1 SOL per winning share held", () => {
     const m = binaryMarket({ status: "resolved", winningOutcome: "yes" });
     const pos: Position = { id: "p1", marketId: "bm", yesShares: 60, avgYesPrice: 0.52 };
     const q = claimPayout(m, pos);

@@ -11,18 +11,9 @@ const { AnchorProvider, Program, Wallet, BN } = anchorPkg;
 const require = createRequire(import.meta.url);
 
 export const PROGRAM_ID = new PublicKey(
-  "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV"
-);
-export const USDC_MINT = new PublicKey(
-  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+  "5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8"
 );
 export const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
-export const TOKEN_PROGRAM = new PublicKey(
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-);
-export const ATA_PROGRAM = new PublicKey(
-  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-);
 
 export const RESOLVER_KEY_PATH = path.join(
   path.dirname(new URL(import.meta.url).pathname),

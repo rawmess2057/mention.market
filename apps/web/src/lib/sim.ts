@@ -36,13 +36,13 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 /** Leaderboard points: everyone earns the same amounts, so rank = activity. */
-export const POINTS_PER_USDC = 2; // per USDC/SOL unit spent on a buy or back
+export const POINTS_PER_SOL = 2; // per SOL unit spent on a buy or back
 export const POINTS_HOLD_TO_RESOLVE = 10; // per position still held when its market resolves
 export const POINTS_CLAIM = 25; // one-time bonus when a resolved winner is claimed
 
 /** Points earned by spending `amount` on an open market. */
 export function pointsForTrade(amount: number): number {
-  return Math.max(0, Math.floor(amount)) * POINTS_PER_USDC;
+  return Math.max(0, Math.floor(amount)) * POINTS_PER_SOL;
 }
 
 /** Points earned for still holding (unclaimed) a stake when its market resolves. */
@@ -321,7 +321,7 @@ export const SEED_MARKETS: Market[] = [
       proposedAt: NOW - 19 * HOUR + 4 * MIN,
       proposedBy: "mention-resolver-01",
       evidenceHash: "9f2c…a41d",
-      bondUsd: 50,
+      bondSol: 50,
       challengeWindowMs: 20 * MIN,
       challengeDeadline: NOW - 19 * HOUR + 24 * MIN,
       challenged: false,
@@ -369,7 +369,7 @@ export const SEED_MARKETS: Market[] = [
       proposedAt: NOW - 40 * HOUR + 9 * MIN,
       proposedBy: "mention-resolver-02",
       evidenceHash: "c77e…19b0",
-      bondUsd: 50,
+      bondSol: 50,
       challengeWindowMs: 20 * MIN,
       challengeDeadline: NOW - 40 * HOUR + 29 * MIN,
       challenged: false,
@@ -432,7 +432,6 @@ export const CURRENT_USER: User = {
   points: 0,
   rank: 0,
   balance: 0,
-  balanceKind: "usdc",
 };
 
 /** A few transcript lines already in the buffer for live markets. */
@@ -477,7 +476,6 @@ function freshBook(wallet: string): WalletBook {
       rank: 0,
       balance: 0,
       wallet,
-      balanceKind: "usdc",
     },
     positions: {},
     trades: [],
@@ -513,7 +511,7 @@ interface SimState {
 
   // actions
   setWallet: (wallet: string | null) => void;
-  setBalance: (wallet: string, balance: number, kind: "usdc" | "sol") => void;
+  setBalance: (wallet: string, balance: number) => void;
   buyBinary: (marketId: string, side: "yes" | "no", amount: number, txSig?: string) => void;
   sellBinary: (marketId: string, side: "yes" | "no", shares: number) => void;
   backWord: (marketId: string, word: string, amount: number, txSig?: string) => void;
@@ -621,11 +619,11 @@ export const useSim = create<SimState>()(persist((set, get) => {
         };
       }),
 
-    setBalance: (wallet, balance, kind) =>
+    setBalance: (wallet, balance) =>
       set((s) => {
         const book = s.books[wallet];
         if (!book) return {};
-        const user = { ...book.user, balance, balanceKind: kind };
+        const user = { ...book.user, balance };
         const books = { ...s.books, [wallet]: { ...book, user } };
         const active = s.activeWallet === wallet;
         return { books, ...(active ? { user } : {}) };
@@ -744,7 +742,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         return { markets, positions, user, trades, books: { ...st.books, [wallet]: book } };
       });
 
-      get().showToast(`Sold ${side.toUpperCase()} · +${fmtShares(proceeds)} USDC`);
+      get().showToast(`Sold ${side.toUpperCase()} · +${fmtShares(proceeds)} SOL`);
     },
 
     backWord: (marketId, word, amount, txSig) => {
@@ -796,7 +794,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
       });
 
-      get().showToast(`Backed \u201c${word}\u201d · ${fmtShares(amount)} USDC`);
+      get().showToast(`Backed \u201c${word}\u201d · ${fmtShares(amount)} SOL`);
     },
 
     claim: (marketId) => {
@@ -833,7 +831,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const book = { user, positions, trades };
         return { positions, user, trades, books: { ...st.books, [wallet]: book } };
       });
-      get().showToast(`Claimed ${fmtShares(q.payout)} USDC 🎉`);
+      get().showToast(`Claimed ${fmtShares(q.payout)} SOL 🎉`);
     },
 
     challenge: (marketId) => {
@@ -873,7 +871,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
           endTime: now + minutes * MIN,
           volume: 0,
           traders: 0,
-          asset: "sol",
           yesShares: 0,
           noShares: 0,
           b: CHAIN_CREATE_B_UI,
@@ -885,7 +882,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
           creator: "chain",
           creatorFeeBps: 100,
           source: `chain #${chainId} (devnet)`,
-          sourceUrl: `https://explorer.solana.com/address/E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV?cluster=devnet`,
+          sourceUrl: `https://explorer.solana.com/address/5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8?cluster=devnet`,
         };
         set((s) => ({ markets: { ...s.markets, [id]: market } }));
         get().showToast("Market launched on-chain — trading live!");
@@ -1298,7 +1295,7 @@ function proposeResolution(m: Market, snippets: TranscriptSnippet[]): void {
     proposedAt,
     proposedBy: "mention-resolver-01",
     evidenceHash: evidenceHashFor(outcome, snippets),
-    bondUsd: 50,
+    bondSol: 50,
     challengeWindowMs: SIM_CHALLENGE_WINDOW_MS,
     challengeDeadline: proposedAt + SIM_CHALLENGE_WINDOW_MS,
     challenged: false,
@@ -1310,7 +1307,7 @@ function proposeResolution(m: Market, snippets: TranscriptSnippet[]): void {
   };
 }
 
-/** Shares received for spending `cost` USDC on `side` in an LMSR market. */
+/** Shares received for spending `cost` SOL on `side` in an LMSR market. */
 export function lmsrSharesForCost(m: Market, side: "yes" | "no", cost: number): number {
   // Solve for shares: C(q + shares) - C(q) = cost. LMSR is monotonic; binary
   // search is robust and cheap at UI precision.
@@ -1329,7 +1326,7 @@ function lmsrCostDelta(m: Market, side: "yes" | "no", shares: number): number {
   return lmsrBuyCost(m.yesShares, m.noShares, m.b, side, shares);
 }
 
-/** USDC received for selling `shares` back into the LMSR pool. */
+/** SOL received for selling `shares` back into the LMSR pool. */
 export function lmsrSellValue(m: Market, side: "yes" | "no", shares: number): number {
   return lmsrSellReturn(m.yesShares, m.noShares, m.b, side, shares);
 }

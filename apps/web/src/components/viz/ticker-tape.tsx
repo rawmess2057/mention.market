@@ -6,6 +6,7 @@ import { AnimatedNumber } from "./animated-number";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { toValues } from "@/lib/history";
 import { useSim } from "@/lib/sim";
+import { isChainId, isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META } from "@/lib/types";
 import Link from "next/link";
 
@@ -16,7 +17,7 @@ export function TickerTape() {
   const items = useMemo(
     () =>
       Object.values(markets)
-        .filter((m) => m.status === "open")
+        .filter((m) => isChainId(m.id) && !isStaleChainMarket(m) && m.status === "open")
         .map((m) => {
           const h = toValues(history[m.id]);
           const cur = h.length > 0 ? h[h.length - 1] : 0.5;

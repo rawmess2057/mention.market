@@ -7,18 +7,17 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import { lmsrProbYes, lmsrBuyCost } from "@/lib/lmsr";
-import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
-const QUICK = [10, 25, 50, 100];
+const QUICK = [0.01, 0.025, 0.05, 0.1];
 
-function fmtBalance(amount: number, kind: "usdc" | "sol" | undefined) {
-  return kind === "sol" ? `◎ ${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : fmtUsd(amount);
+function fmtBalance(amount: number) {
+  return `◎ ${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 export function OrderBook({ market }: { market: Market }) {
@@ -31,18 +30,16 @@ export function OrderBook({ market }: { market: Market }) {
   const activity = useSim((s) => s.activity);
   const chainActivity = useSim((s) => s.chainActivity[m.id]);
   const showToast = useSim((s) => s.showToast);
-  const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
   const chain = useChain();
   const chainMarket = isChainId(m.id);
 
   const [side, setSide] = useState<"yes" | "no">("yes");
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState("0.05");
   const [submitting, setSubmitting] = useState(false);
 
   const amt = Math.max(0, parseFloat(amount) || 0);
   const price = lmsrProbYes(m.yesShares, m.noShares, m.b);
   const balance = user.balance;
-  const balanceKind = user.balanceKind;
   const disabled = !connected || m.status !== "open" || amt <= 0 || amt > balance;
 
   const recentTrades = useMemo(
@@ -72,7 +69,7 @@ export function OrderBook({ market }: { market: Market }) {
           <span className="font-medium">Balance</span>
         </div>
         <div className="mt-1 font-mono text-xl font-bold text-navy">
-          {fmtBalance(balance, balanceKind)}
+          {fmtBalance(balance)}
         </div>
       </div>
 
@@ -105,7 +102,7 @@ export function OrderBook({ market }: { market: Market }) {
             <div className="flex justify-between border-t border-blue/10 pt-1 text-xs">
               <span className="text-gray-mid">P&L</span>
               <span className={cn("font-mono font-bold", positionSummary.pnl >= 0 ? "text-green" : "text-red-brand")}>
-                {positionSummary.pnl >= 0 ? "+" : ""}{fmtUsd(positionSummary.pnl)}
+                {positionSummary.pnl >= 0 ? "+" : ""}{fmtSol(positionSummary.pnl)}
               </span>
             </div>
           </div>
@@ -147,7 +144,7 @@ export function OrderBook({ market }: { market: Market }) {
         {/* Amount */}
         <div className="mt-3">
           <div className="mb-1 text-[11px] text-gray-mid">
-            Amount ({balanceKind === "sol" ? "SOL" : "USDC"})
+            Amount (SOL)
           </div>
           <Input
             type="number"
@@ -164,7 +161,7 @@ export function OrderBook({ market }: { market: Market }) {
                 onClick={() => setAmount(String(q))}
                 className="rounded-md bg-cream-dark py-1 text-[11px] font-medium text-navy transition-colors hover:bg-gray-warm"
               >
-                ${q}
+                {q} SOL
               </button>
             ))}
           </div>
@@ -175,7 +172,7 @@ export function OrderBook({ market }: { market: Market }) {
             variant={side === "yes" ? "yes" : "no"}
             size="default"
             className="w-full"
-            disabled={disabled || submitting || usdcBusy}
+            disabled={disabled || submitting}
             onClick={async () => {
               if (!connected) {
                 setVisible(true);
@@ -185,9 +182,9 @@ export function OrderBook({ market }: { market: Market }) {
               try {
                 const sig = chainMarket
                   ? await chain.buy(m, side, amt)
-                  : await walletBuy(amt);
+                  : null;
                 buyBinary(m.id, side, amt, sig ?? undefined);
-                if (sig) showToast(`Bought ${side.toUpperCase()} · ${fmtUsd(amt)} · tx ${shortAddr(sig)}`);
+                if (sig) showToast(`Bought ${side.toUpperCase()} · ${fmtSol(amt)} · tx ${shortAddr(sig)}`);
               } catch (err) {
                 showToast(`Buy failed: ${fmtErr(err)}`);
               } finally {
@@ -196,13 +193,13 @@ export function OrderBook({ market }: { market: Market }) {
             }}
           >
             <Zap className="h-3.5 w-3.5" />
-            {submitting || usdcBusy
+            {submitting
               ? "Confirming…"
               : !connected
                 ? "Connect wallet"
                 : disabled
                   ? "Enter amount"
-                  : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`}
+                  : `Buy ${side.toUpperCase()} · ${fmtSol(amt)}`}
           </Button>
         </motion.div>
       </div>
@@ -235,7 +232,7 @@ export function OrderBook({ market }: { market: Market }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-semibold text-navy">
-                    {t.amount > 0 ? fmtBalance(t.amount, m.asset) : ""}
+                    {t.amount > 0 ? fmtBalance(t.amount) : ""}
                   </span>
                   <Clock className="h-2.5 w-2.5 text-gray-mid" />
                 </div>

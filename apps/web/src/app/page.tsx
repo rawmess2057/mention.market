@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, TrendingUp } from "lucide-react";
 import { MarketCard, LiveCarousel } from "@/components/market-card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
-import { isStaleChainMarket } from "@/lib/chain";
+import { isChainId, isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META, type Vertical } from "@/lib/types";
 
 const FILTERS: Array<{ key: Vertical | "all"; label: string }> = [
@@ -32,10 +33,16 @@ export default function Home() {
   const [filter, setFilter] = useState<Vertical | "all">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("trending");
+  const [showDemoMarkets, setShowDemoMarkets] = useState(false);
 
   const all = useMemo(
-    () => Object.values(markets).filter((m) => !isStaleChainMarket(m)),
-    [markets]
+    () =>
+      Object.values(markets).filter(
+        (m) =>
+          !isStaleChainMarket(m) &&
+          (showDemoMarkets ? !isChainId(m.id) : isChainId(m.id))
+      ),
+    [markets, showDemoMarkets]
   );
   const live = all.filter((m) => m.status === "open");
   const listed = useMemo(() => {
@@ -83,14 +90,14 @@ export default function Home() {
         <div className="relative">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue/20 bg-blue-light px-3 py-1 text-[11px] font-medium text-blue">
             <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-blue" />
-            Live on Solana · settled in USDC
+            On-chain markets · Solana devnet · SOL
           </div>
           <h1 className="font-serif max-w-xl text-3xl font-extrabold leading-tight tracking-tight text-navy md:text-4xl">
             Trade on what gets <span className="text-gradient">said</span>.
           </h1>
           <p className="mt-2 max-w-md text-sm text-text-secondary md:text-[15px]">
-            Prediction markets on specific words spoken during live streams, sports, earnings calls
-            and debates. Verified by transcript evidence.
+            Trade markets deployed to Solana devnet. Trades, positions, and claims use the Anchor
+            program; outcomes are submitted by the configured resolver.
           </p>
         </div>
       </section>
@@ -101,12 +108,12 @@ export default function Home() {
           <SectionTitle icon={<span className="h-2 w-2 animate-pulse-live rounded-full bg-red-brand" />}>
             Live now
           </SectionTitle>
-          <LiveCarousel />
+          <LiveCarousel markets={all} />
         </section>
       )}
 
       {/* Trending words */}
-      <section>
+      {trending.length > 0 && <section>
         <SectionTitle icon={<TrendingUp className="h-4 w-4 text-orange-500" />}>
           Trending words right now
         </SectionTitle>
@@ -120,10 +127,29 @@ export default function Home() {
             </span>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* Filters + search + sort */}
       <div className="flex flex-col gap-2">
+        <div className="flex w-fit gap-1 rounded-lg border border-gray-warm bg-white p-1">
+          {[
+            { demo: false, label: "On-chain" },
+            { demo: true, label: "Demo markets" },
+          ].map((mode) => (
+            <button
+              key={mode.label}
+              onClick={() => setShowDemoMarkets(mode.demo)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                showDemoMarkets === mode.demo
+                  ? "bg-blue-light text-blue"
+                  : "text-gray-mid hover:bg-cream-dark hover:text-navy"
+              )}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-mid" />
@@ -171,13 +197,17 @@ export default function Home() {
 
       {/* Market list */}
       {all.length === 0 ? (
-        <section className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="shimmer h-[148px] rounded-2xl border border-gray-warm bg-white"
-            />
-          ))}
+        <section className="rounded-xl border border-dashed border-gray-warm py-12 text-center">
+          <p className="text-sm text-gray-mid">
+            {showDemoMarkets
+              ? "No demo markets are available."
+              : "No on-chain markets found on Solana devnet."}
+          </p>
+          {!showDemoMarkets && (
+            <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">
+              Create an on-chain market
+            </Link>
+          )}
         </section>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2">

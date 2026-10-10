@@ -21,48 +21,36 @@ export function fmtErr(err: unknown): string {
   return first.length > 140 ? `${first.slice(0, 139)}…` : first;
 }
 
-export function fmtUsd(n: number, opts?: { compact?: boolean; decimals?: number }) {
+export function fmtSol(n: number, opts?: { compact?: boolean; decimals?: number }) {
   const d = opts?.decimals ?? 2;
   if (opts?.compact) {
     const abs = Math.abs(n);
     if (abs >= 1_000_000_000) {
-      return `$${(n / 1_000_000_000).toFixed(1)}b`;
+      return `◎ ${(n / 1_000_000_000).toFixed(1)}b`;
     }
     if (abs >= 1_000_000) {
-      return `$${(n / 1_000_000).toFixed(1)}m`;
+      return `◎ ${(n / 1_000_000).toFixed(1)}m`;
     }
     if (abs >= 1_000) {
-      return `$${(n / 1_000).toFixed(1)}k`;
+      return `◎ ${(n / 1_000).toFixed(1)}k`;
     }
   }
-  return `$${n.toLocaleString("en-US", {
+  return `◎ ${n.toLocaleString("en-US", {
     minimumFractionDigits: d,
     maximumFractionDigits: d,
   })}`;
 }
 
 /**
- * Format an amount in the unit its account is actually denominated in:
- * `◎ SOL` for on-chain markets, `$ USDC` for the simulated demo book.
- * Falling back to `$` keeps guests (no chain markets) on the implied-USD demo.
+ * Format an amount of SOL. Everything in this app is SOL-denominated — both
+ * on-chain markets (lamports / 1e9) and the simulated demo book — so there is
+ * no per-asset branch here: it is always the `◎` unit.
  */
-export function fmtBalance(
-  n: number,
-  kind: "usdc" | "sol" | undefined,
-  opts?: { compact?: boolean; decimals?: number }
-) {
-  if (kind === "sol") {
-    const useCompact = (opts?.compact ?? false) && Math.abs(n) >= 1_000;
-    const num = n
-      .toLocaleString("en-US", {
-        maximumFractionDigits: opts?.decimals ?? (opts?.compact ? 1 : 4),
-        minimumFractionDigits: opts?.decimals ?? 0,
-        notation: useCompact ? "compact" : "standard",
-      })
-      .replace("K", "k");
-    return `◎ ${num}`;
-  }
-  return fmtUsd(n, { compact: opts?.compact, decimals: opts?.decimals });
+export function fmtBalance(n: number, opts?: { compact?: boolean; decimals?: number }) {
+  return fmtSol(n, {
+    compact: opts?.compact,
+    decimals: opts?.decimals ?? (opts?.compact ? 1 : 4),
+  });
 }
 
 export function fmtPct(n: number, decimals = 0) {

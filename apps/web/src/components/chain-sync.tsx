@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { fetchChainMarketsAll, fetchChainPosition, isStaleChainMarket, scaleForMarket } from "@/lib/chain";
+import { fetchChainMarketsAll, fetchChainPosition, isStaleChainMarket } from "@/lib/chain";
 import { useSim } from "@/lib/sim";
 
 const POLL_MS = 15_000;
@@ -37,12 +37,9 @@ export function ChainSync() {
         useSim.getState().ingestChainMarkets(markets);
 
         if (connected && publicKey) {
-          // Reuse the scale already read above rather than re-fetching each
-          // market just to learn its asset.
-          const scaleById = new Map(markets.map((m) => [m.id, scaleForMarket(m)]));
           const positions = (
             await Promise.all(
-              markets.map((m) => fetchChainPosition(Number(m.slug.slice(1)), publicKey, scaleById.get(m.id)))
+              markets.map((m) => fetchChainPosition(Number(m.slug.slice(1)), publicKey))
             )
           ).filter((p): p is NonNullable<typeof p> => !!p);
           if (!alive) return;

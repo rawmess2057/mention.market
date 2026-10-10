@@ -4,7 +4,7 @@ use crate::constants::{MAX_FEE_BPS, MAX_TITLE_LEN, MAX_WORDS, MAX_WORD_LEN};
 use crate::error::ErrorCode;
 use crate::math::reserve_ante;
 use crate::state::{
-    AssetKind, Config, Market, MarketStatus, MarketType, Vertical, Vault, WordPool,
+    Config, Market, MarketStatus, MarketType, ResolutionSpecCommitment, Vertical, Vault, WordPool,
 };
 
 #[derive(Accounts)]
@@ -34,6 +34,15 @@ pub struct CreateMarket<'info> {
     )]
     pub vault: Account<'info, Vault>,
 
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + ResolutionSpecCommitment::INIT_SPACE,
+        seeds = [b"resolution-spec", market.key().as_ref()],
+        bump
+    )]
+    pub resolution_spec: Account<'info, ResolutionSpecCommitment>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -45,17 +54,13 @@ pub fn handler(
     event: String,
     vertical: Vertical,
     market_type: MarketType,
-    asset: AssetKind,
     b: u64,
     words: Vec<String>,
     end_time: i64,
     creator_fee_bps: u16,
+    resolution_spec_sha256: [u8; 32],
 ) -> Result<()> {
     require!(ctx.accounts.config.paused == false, ErrorCode::Paused);
-    // The USDC vault path is not wired end to end yet (no ATA plumbing in the
-    // clients). Rejecting here keeps every market on the SOL vault, which is
-    // the only path with tests and a funded reserve ante.
-    require!(asset == AssetKind::Sol, ErrorCode::AssetNotSupported);
     require!(title.len() <= MAX_TITLE_LEN, ErrorCode::TitleTooLong);
     require!(event.len() <= MAX_TITLE_LEN, ErrorCode::TitleTooLong);
     require!(b > 0, ErrorCode::InvalidMarket);
@@ -101,7 +106,6 @@ pub fn handler(
     market.title = title;
     market.event = event;
     market.vertical = vertical;
-    market.asset = asset;
     market.market_type = market_type;
     market.status = MarketStatus::Open;
     market.b = b;
@@ -127,17 +131,18 @@ pub fn handler(
 
     let vault = &mut ctx.accounts.vault;
     vault.market = market_key;
-    vault.asset = asset;
-    vault.mint = match asset {
-        AssetKind::Usdc => ctx.accounts.config.usdc_mint,
-        AssetKind::Sol => anchor_lang::system_program::ID,
-    };
     vault.bump = ctx.bumps.vault;
+
+    let resolution_spec = &mut ctx.accounts.resolution_spec;
+    resolution_spec.market = market_key;
+    resolution_spec.spec_sha256 = resolution_spec_sha256;
+    resolution_spec.bump = ctx.bumps.resolution_spec;
 
     emit!(MarketCreated {
         market: market_key,
         creator: creator_key,
         id,
+        resolution_spec_sha256,
     });
     Ok(())
 }
@@ -147,4 +152,5 @@ pub struct MarketCreated {
     pub market: Pubkey,
     pub creator: Pubkey,
     pub id: u64,
+    pub resolution_spec_sha256: [u8; 32],
 }

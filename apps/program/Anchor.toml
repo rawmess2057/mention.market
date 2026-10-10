@@ -7,10 +7,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-mention = "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV"
+mention = "5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8"
 
 [programs.devnet]
-mention = "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV"
+mention = "5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8"
 
 [provider]
 cluster = "devnet"

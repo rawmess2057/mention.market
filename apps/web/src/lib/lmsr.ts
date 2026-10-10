@@ -95,7 +95,7 @@ export function lmsrSharesForCost(
 export interface BuyQuote {
   /** Shares granted for the fixed amount. */
   shares: number;
-  /** Effective entry price: amount / shares (USDC per $1-outcome share). */
+  /** Effective entry price: amount / shares (SOL per $1-outcome share). */
   avgPrice: number;
   /** The side's implied price before the buy. */
   before: number;

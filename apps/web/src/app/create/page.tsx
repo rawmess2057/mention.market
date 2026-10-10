@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Check, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ const WORD_LIMIT = 12;
 export default function CreateMarketPage() {
   const router = useRouter();
   const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const createMarket = useSim((s) => s.createMarket);
   const showToast = useSim((s) => s.showToast);
   const chain = useChain();
@@ -25,17 +27,19 @@ export default function CreateMarketPage() {
   const [step, setStep] = useState(0);
   const [vertical, setVertical] = useState<Vertical>("streams");
   const [event, setEvent] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [type, setType] = useState<Market["type"]>("binary");
   const [question, setQuestion] = useState("");
+  const [binaryPhrase, setBinaryPhrase] = useState("");
   const [words, setWords] = useState<string[]>([]);
   const [wordInput, setWordInput] = useState("");
   const [minutes, setMinutes] = useState("60");
   const [rules, setRules] = useState("");
 
   const canNext =
-    (step === 0 && event.trim().length > 2) ||
+    (step === 0 && event.trim().length > 2 && isHttpUrl(sourceUrl)) ||
     step === 1 ||
-    (step === 2 && (type === "binary" ? question.trim().length > 5 : words.length >= 2)) ||
+    (step === 2 && (type === "binary" ? question.trim().length > 5 && binaryPhrase.trim().length > 0 : words.length >= 2)) ||
     step === 3;
 
   const submit = async (local = false) => {
@@ -46,10 +50,11 @@ export default function CreateMarketPage() {
           ? question.trim()
           : `Word race: ${event.trim()}`,
       event: event.trim(),
+      sourceUrl: sourceUrl.trim(),
       vertical,
       type,
-      words:
-        type === "binary" ? [question.trim()] : words,
+      words,
+      binaryPhrase: binaryPhrase.trim(),
       minutes: Math.max(5, parseInt(minutes) || 60),
       rules:
         rules.trim() ||
@@ -57,15 +62,19 @@ export default function CreateMarketPage() {
           ? `Resolves YES if the exact phrase from the title is spoken during the event (case-insensitive). Transcript: Deepgram primary feed.`
           : `First phrase from the board spoken during the event wins. Case-insensitive. 1% rake.`),
     };
-    if (!local && connected) {
+    if (!local && !connected) {
+      setSubmitting(false);
+      setVisible(true);
+      return;
+    }
+    if (!local) {
       try {
         const chainId = await chain.create(params);
-        if (chainId != null) {
-          const id = createMarket({ ...params, chainId });
-          const created = useSim.getState().markets[id];
-          router.push(`/market/${created.slug}`);
-          return;
-        }
+        if (chainId == null) throw new Error("Wallet is not ready to create an on-chain market.");
+        const id = createMarket({ ...params, chainId });
+        const created = useSim.getState().markets[id];
+        router.push(`/market/${created.slug}`);
+        return;
       } catch (err) {
         // Never fake the on-chain moment: surface the failure and let the
         // presenter retry or explicitly pick the offline mode below.
@@ -84,7 +93,7 @@ export default function CreateMarketPage() {
       <div>
         <h1 className="font-serif text-xl font-bold tracking-tight text-navy">Create a market</h1>
         <p className="text-sm text-gray-mid">
-          Pick an event, define the words, set the clock. Trading goes live instantly.
+          Pick an event, define the words, and launch a market on Solana.
         </p>
       </div>
 
@@ -134,6 +143,13 @@ export default function CreateMarketPage() {
             value={event}
             onChange={(e) => setEvent(e.target.value)}
           />
+          <Label>Primary source URL</Label>
+          <Input
+            type="url"
+            placeholder="https://example.com/live-event"
+            value={sourceUrl}
+            onChange={(e) => setSourceUrl(e.target.value)}
+          />
         </div>
       )}
 
@@ -179,6 +195,12 @@ export default function CreateMarketPage() {
                 placeholder={"Will they say \u201cAI\u201d?"}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
+              />
+              <Label>Exact phrase to detect</Label>
+              <Input
+                placeholder="AI"
+                value={binaryPhrase}
+                onChange={(e) => setBinaryPhrase(e.target.value)}
               />
               <p className="text-xs text-gray-mid">
                 Keep it simple: &ldquo;Will they say &lsquo;X&rsquo;?&rdquo; works best.
@@ -298,13 +320,13 @@ export default function CreateMarketPage() {
               size="lg"
               className="w-full"
               disabled={submitting}
-              onClick={() => submit(false)}
+              onClick={() => connected ? submit(false) : setVisible(true)}
             >
               {submitting
                 ? "Launching…"
                 : connected
-                  ? "Launch on-chain 🚀"
-                  : "Launch market 🚀"}
+                  ? "Launch on-chain"
+                  : "Connect wallet to launch"}
             </Button>
             {connected && (
               <button
@@ -313,7 +335,7 @@ export default function CreateMarketPage() {
                 onClick={() => submit(true)}
                 className="text-[11px] text-gray-mid underline-offset-2 hover:text-navy hover:underline"
               >
-                or create a simulated (offline) market instead
+                Create a demo market instead
               </button>
             )}
           </div>
@@ -325,4 +347,13 @@ export default function CreateMarketPage() {
 
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-xs font-semibold uppercase tracking-wider text-gray-mid">{children}</div>;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

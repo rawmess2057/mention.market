@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Medal } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { cn, fmtBalance, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtBalance, fmtSol, shortAddr } from "@/lib/format";
 import { LEADERBOARD, useSim } from "@/lib/sim";
 
 const MEDALS = ["text-amber-600", "text-gray-cool", "text-orange-600"];
@@ -13,7 +13,6 @@ export default function LeaderboardPage() {
   const user = useSim((s) => s.user);
   const trades = useSim((s) => s.trades);
   const leaderboard = LEADERBOARD;
-  const kind = user.balanceKind;
 
   const me = useMemo(() => {
     if (!connected || !publicKey) return null;
@@ -92,8 +91,8 @@ export default function LeaderboardPage() {
                 )}
               >
                 {me && row.handle === me.handle
-                  ? `${row.profit >= 0 ? "+" : ""}${fmtBalance(row.profit, kind, { compact: true })}`
-                  : `${row.profit >= 0 ? "+" : ""}${fmtUsd(row.profit, { compact: true })}`}
+                  ? `${row.profit >= 0 ? "+" : ""}${fmtBalance(row.profit, { compact: true })}`
+                  : `${row.profit >= 0 ? "+" : ""}${fmtSol(row.profit, { compact: true })}`}
               </div>
             </div>
           </div>
@@ -105,7 +104,7 @@ export default function LeaderboardPage() {
           How points work
         </div>
         <ul className="space-y-1 text-sm text-gray-mid">
-          <li>+2 pts per USDC / SOL traded</li>
+          <li>+2 pts per SOL traded</li>
           <li>+25 pts per winning claim</li>
           <li>+10 pts for holding through resolution</li>
         </ul>

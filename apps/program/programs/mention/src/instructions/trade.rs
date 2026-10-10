@@ -2,15 +2,14 @@
 //!
 //! Buy moves `cost` base units into the vault and mints `shares` via the LMSR
 //! pricing function; sell burns `shares` and pays `sell_return` out of the
-//! vault. Both paths support USDC markets (vault ATA) and SOL markets (vault
-//! lamports). Slippage is bounded by `min_shares` / `min_proceeds`.
+//! vault. All markets are SOL-denominated (vault lamports). Slippage is
+//! bounded by `min_shares` / `min_proceeds`.
 
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 use crate::error::ErrorCode;
 use crate::math::lmsr::{cost_units, sell_return, shares_for_cost};
-use crate::state::{AssetKind, Market, MarketStatus, MarketType, Position, Vault};
+use crate::state::{Market, MarketStatus, MarketType, Position, Vault};
 
 const SIDE_YES: u8 = 0;
 
@@ -45,21 +44,6 @@ pub struct BuyBinary<'info> {
     )]
     pub position: Box<Account<'info, Position>>,
 
-    /// CHECK: Trader's USDC ATA (source of buy funds); presence checked per
-    /// asset type and validated by the transfer CPI.
-    #[account(mut)]
-    pub trader_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the
-    /// transfer CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -92,20 +76,6 @@ pub struct SellBinary<'info> {
     )]
     pub position: Box<Account<'info, Position>>,
 
-    /// CHECK: Trader's USDC ATA (destination of sell proceeds); presence checked
-    /// per asset type and validated by the transfer CPI.
-    #[account(mut)]
-    pub trader_ata: Option<UncheckedAccount<'info>>,
-    /// Vault USDC ATA. USDC markets only.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -133,45 +103,12 @@ pub fn buy(
     require!(cost > 0, ErrorCode::InvalidMarket);
 
     // Move funds in before any state change.
-    match market.asset {
-        AssetKind::Usdc => {
-            let trader_ata = ctx.accounts.trader_ata.as_ref().ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx
-                .accounts
-                .vault_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                trader_ata,
-                ctx.accounts.trader.key(),
-                ctx.accounts.mint.key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &ctx.accounts.trader.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.mint.to_account_info(),
-                vault_ata,
-                &ctx.accounts.associated_token_program.to_account_info(),
-                &ctx.accounts.token_program.to_account_info(),
-                &ctx.accounts.system_program.to_account_info(),
-            )?;
-            crate::instructions::token_util::deposit_usdc(
-                &ctx.accounts.token_program.to_account_info(),
-                trader_ata,
-                vault_ata,
-                &ctx.accounts.trader.to_account_info(),
-                cost,
-            )?;
-        }
-        AssetKind::Sol => {
-            crate::instructions::token_util::deposit_sol(
-                &ctx.accounts.system_program.to_account_info(),
-                &ctx.accounts.trader.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                cost,
-            )?;
-        }
-    }
+    crate::instructions::token_util::deposit_sol(
+        &ctx.accounts.system_program.to_account_info(),
+        &ctx.accounts.trader.to_account_info(),
+        &ctx.accounts.vault.to_account_info(),
+        cost,
+    )?;
 
     let q_y = market.yes_shares as f64;
     let q_n = market.no_shares as f64;
@@ -213,8 +150,6 @@ pub fn sell(
     min_proceeds: u64,
 ) -> Result<()> {
     require!(!ctx.accounts.config.paused, ErrorCode::Paused);
-    let market_key = ctx.accounts.market.key();
-    let vault_bump = ctx.accounts.vault.bump;
     let market = &mut ctx.accounts.market;
     require!(market.status == MarketStatus::Open, ErrorCode::MarketNotOpen);
     require!(
@@ -240,49 +175,11 @@ pub fn sell(
     require!(proceeds > 0, ErrorCode::InsufficientAmount);
 
     // Move funds out first so the vault stays the only shortfall risk.
-    match market.asset {
-        AssetKind::Usdc => {
-            let trader_ata = ctx.accounts.trader_ata.as_ref().ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx
-                .accounts
-                .vault_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                trader_ata,
-                ctx.accounts.trader.key(),
-                ctx.accounts.mint.key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &ctx.accounts.trader.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.mint.to_account_info(),
-                vault_ata,
-                &ctx.accounts.associated_token_program.to_account_info(),
-                &ctx.accounts.token_program.to_account_info(),
-                &ctx.accounts.system_program.to_account_info(),
-            )?;
-            crate::instructions::token_util::withdraw_usdc(
-                &ctx.accounts.token_program.to_account_info(),
-                vault_ata,
-                trader_ata,
-                &ctx.accounts.vault.to_account_info(),
-                &market_key,
-                vault_bump,
-                proceeds,
-            )?;
-        }
-        AssetKind::Sol => {
-            crate::instructions::token_util::withdraw_sol(
-                &ctx.accounts.system_program.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.trader.to_account_info(),
-                &market_key,
-                vault_bump,
-                proceeds,
-            )?;
-        }
-    }
+    crate::instructions::token_util::withdraw_sol(
+        &ctx.accounts.vault.to_account_info(),
+        &ctx.accounts.trader.to_account_info(),
+        proceeds,
+    )?;
 
     if side == SIDE_YES {
         market.yes_shares -= shares;

@@ -15,13 +15,13 @@ pub use instructions::*;
 pub use math::*;
 pub use state::*;
 
-declare_id!("E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV");
+declare_id!("5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8");
 
 #[program]
 pub mod mention {
     use super::*;
 
-    /// One-time program setup: authority, trusted resolver, USDC mint, fee.
+    /// One-time program setup: authority, trusted resolver, fee.
     pub fn initialize_config(ctx: Context<InitializeConfig>, fee_bps: u16) -> Result<()> {
         initialize_config::handler(ctx, fee_bps)
     }
@@ -35,11 +35,11 @@ pub mod mention {
         event: String,
         vertical: Vertical,
         market_type: MarketType,
-        asset: AssetKind,
         b: u64,
         words: Vec<String>,
         end_time: i64,
         creator_fee_bps: u16,
+        resolution_spec_sha256: [u8; 32],
     ) -> Result<()> {
         create_market::handler(
             ctx,
@@ -48,11 +48,11 @@ pub mod mention {
             event,
             vertical,
             market_type,
-            asset,
             b,
             words,
             end_time,
             creator_fee_bps,
+            resolution_spec_sha256,
         )
     }
 

@@ -2,19 +2,18 @@
 
 import { useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
+import { useSolBalance } from "@/hooks/useSolBalance";
 import { useSim } from "@/lib/sim";
-import { knownChainIds } from "@/lib/chain";
 
 /**
  * Bridges the connected wallet into the per-wallet sim book:
- *  - connect/switch/disconnect  -> sim.setWallet(...)
- *  - devnet USDC (or SOL fallback) -> sim.setBalance(...)
+ *  - connect/switch/disconnect -> sim.setWallet(...)
+ *  - devnet SOL balance        -> sim.setBalance(...)
  * Renders nothing.
  */
 export function WalletSync() {
   const { connected, publicKey } = useWallet();
-  const { usdcBalance, solBalance } = useDevnetUsdc();
+  const { solBalance } = useSolBalance();
   const setWallet = useSim((s) => s.setWallet);
   const setBalance = useSim((s) => s.setBalance);
 
@@ -23,19 +22,13 @@ export function WalletSync() {
   }, [connected, publicKey, setWallet]);
 
   useEffect(() => {
-    if (!connected || !publicKey) return;
-    const chainActive = knownChainIds().length > 0;
-    const usdcOk = !chainActive && usdcBalance !== null && usdcBalance > 0;
-    const solOk = solBalance !== null;
-    if (!usdcOk && !solOk) return; // balance pin still resolving (or connection failed)
-    const kind: "usdc" | "sol" = usdcOk ? "usdc" : "sol";
-    const amount = kind === "usdc" ? (usdcBalance ?? 0) : (solBalance ?? 0);
+    if (!connected || !publicKey || solBalance === null) return;
     const wallet = publicKey.toBase58();
     const cur = useSim.getState().books[wallet]?.user;
-    if (!cur || cur.balance !== amount || cur.balanceKind !== kind) {
-      setBalance(wallet, amount, kind);
+    if (!cur || cur.balance !== solBalance) {
+      setBalance(wallet, solBalance);
     }
-  }, [connected, publicKey, usdcBalance, solBalance, setBalance]);
+  }, [connected, publicKey, solBalance, setBalance]);
 
   return null;
 }

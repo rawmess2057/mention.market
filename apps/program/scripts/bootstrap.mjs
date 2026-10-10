@@ -1,4 +1,4 @@
-import { programFor, deployKeypair, ensureResolverKeypair, fetchOrNull, CONFIG_PDA, USDC_MINT, SYSTEM_PROGRAM } from "./lib.mjs";
+import { programFor, deployKeypair, ensureResolverKeypair, fetchOrNull, CONFIG_PDA, SYSTEM_PROGRAM } from "./lib.mjs";
 
 const kp = deployKeypair();
 const program = programFor(kp);
@@ -9,7 +9,6 @@ if (existing) {
   console.log("Config already initialized:");
   console.log("  authority =", existing.authority.toBase58());
   console.log("  resolver  =", existing.resolver.toBase58());
-  console.log("  usdc_mint =", existing.usdcMint.toBase58());
   console.log("  fee_bps   =", existing.feeBps);
   console.log("  paused    =", existing.paused);
   process.exit(0);
@@ -22,7 +21,6 @@ const tx = await program.methods
   .accounts({
     authority: kp.publicKey,
     config: CONFIG_PDA,
-    usdcMint: USDC_MINT,
     resolver: resolver.publicKey,
     systemProgram: SYSTEM_PROGRAM,
   })

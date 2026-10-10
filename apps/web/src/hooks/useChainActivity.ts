@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { fetchChainActivity, isChainId, scaleForAsset } from "@/lib/chain";
+import { fetchChainActivity, isChainId, SOL_DECIMALS } from "@/lib/chain";
 import { useSim } from "@/lib/sim";
 import type { Market } from "@/lib/types";
 
@@ -17,20 +17,19 @@ const POLL_MS = 15_000;
 export function useChainActivity(market: Market | undefined): void {
   const ingest = useSim((s) => s.ingestChainActivity);
   const marketId = market?.id;
-  const asset = market?.asset;
   const volume = useSim((s) => (marketId ? (s.markets[marketId]?.volume ?? 0) : 0));
   const nonce = useSim((s) =>
     marketId ? (s.chainActivityNonce[marketId] ?? 0) : 0
   );
 
   useEffect(() => {
-    if (!marketId || !asset || !isChainId(marketId)) return;
+    if (!marketId || !isChainId(marketId)) return;
     const numericId = Number(marketId.slice(1));
     if (!Number.isFinite(numericId)) return;
 
     let cancelled = false;
     const load = async () => {
-      const items = await fetchChainActivity(numericId, scaleForAsset(asset));
+      const items = await fetchChainActivity(numericId, SOL_DECIMALS);
       if (!cancelled) ingest(marketId, items);
     };
 
@@ -40,5 +39,5 @@ export function useChainActivity(market: Market | undefined): void {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [marketId, asset, volume, nonce, ingest]);
+  }, [marketId, volume, nonce, ingest]);
 }

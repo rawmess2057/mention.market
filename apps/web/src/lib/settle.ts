@@ -13,7 +13,7 @@ import type { Market, Position } from "./types";
 export interface ClaimQuote {
   /** Winning side: "yes" | "no" for binary, the word for majority races. */
   side: string;
-  /** USDC this wallet can claim. */
+  /** SOL this wallet can claim. */
   payout: number;
   /** Cost basis of everything the wallet staked in this market. */
   cost: number;
@@ -44,7 +44,7 @@ export function claimPayout(m: Market, pos: Position): ClaimQuote | null {
   };
 }
 
-/** Map of marketId -> claimable USDC for the wallet's winning, unclaimed positions. */
+/** Map of marketId -> claimable SOL for the wallet's winning, unclaimed positions. */
 export function claimableAmounts(
   positions: Record<string, Position>,
   markets: Record<string, Market>

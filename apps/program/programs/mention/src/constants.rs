@@ -12,8 +12,6 @@ pub const MAX_OUTCOME_LEN: usize = 32;
 pub const MIN_CHALLENGE_WINDOW: i64 = 60;
 /// Lamports-per-UI-unit scale for a SOL-denominated market.
 pub const SOL_DECIMALS: u64 = 1_000_000_000;
-/// Base units per UI unit for the devnet USDC mint.
-pub const USDC_DECIMALS: u64 = 1_000_000;
 /// Challenge window (seconds) for an optimistic resolution proposal.
 pub const CHALLENGE_WINDOW_SECS: i64 = 120;
 /// Resolution proposal/challenge bond, expressed as UI units of the market
@@ -21,11 +19,7 @@ pub const CHALLENGE_WINDOW_SECS: i64 = 120;
 /// Demo value: 1 SOL on SOL markets (production would use a larger bond).
 pub const BOND_UI: u64 = 1;
 
-/// Bond in base units for a market's asset: `BOND_UI` UI units of the
-/// currency the market is denominated in, scaled by that asset's decimals.
-pub fn bond_units(asset: crate::state::AssetKind) -> u64 {
-    match asset {
-        crate::state::AssetKind::Usdc => BOND_UI * USDC_DECIMALS,
-        crate::state::AssetKind::Sol => BOND_UI * SOL_DECIMALS,
-    }
+/// Bond in base units: `BOND_UI` UI units scaled by SOL decimals.
+pub fn bond_units() -> u64 {
+    BOND_UI * SOL_DECIMALS
 }

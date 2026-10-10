@@ -7,11 +7,10 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::Bumps;
-use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 use crate::constants::{bond_units, CHALLENGE_WINDOW_SECS, MAX_OUTCOME_LEN};
 use crate::error::ErrorCode;
-use crate::state::{AssetKind, Config, Market, MarketStatus, MarketType, Vault};
+use crate::state::{Config, Market, MarketStatus, MarketType, Vault};
 
 #[derive(Accounts)]
 pub struct ProposeResolution<'info> {
@@ -35,21 +34,6 @@ pub struct ProposeResolution<'info> {
     )]
     pub vault: Box<Account<'info, Vault>>,
 
-    /// CHECK: Resolver's USDC ATA (bond source); presence checked per asset type
-    /// and validated by the transfer CPI.
-    #[account(mut)]
-    pub resolver_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the transfer
-    /// CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -75,27 +59,12 @@ pub struct ChallengeResolution<'info> {
     )]
     pub vault: Box<Account<'info, Vault>>,
 
-    /// CHECK: Challenger's USDC ATA (bond source); presence checked per asset
-    /// type and validated by the transfer CPI.
-    #[account(mut)]
-    pub challenger_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the transfer
-    /// CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct FinalizeResolution<'info> {
-    /// Permissionless; pays rent if a refund ATA must be created.
+    /// Permissionless; pays nothing beyond tx fees.
     #[account(mut)]
     pub finalizer: Signer<'info>,
 
@@ -116,24 +85,10 @@ pub struct FinalizeResolution<'info> {
     )]
     pub vault: Box<Account<'info, Vault>>,
 
-    /// CHECK: Proposer's USDC ATA (bond refund destination); presence checked per
-    /// asset type and validated by the transfer CPI.
-    #[account(mut)]
-    pub proposer_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Proposer's system account (bond refund destination on SOL markets).
+    /// CHECK: Proposer's system account (bond refund destination).
     #[account(mut)]
     pub proposer_account: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the transfer
-    /// CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -163,7 +118,7 @@ pub fn propose(
     require!(outcome.len() <= MAX_OUTCOME_LEN, ErrorCode::OutcomeTooLong);
     require!(confidence <= 100, ErrorCode::InvalidResolution);
 
-    let bond = bond_units(ctx.accounts.market.asset);
+    let bond = bond_units();
     pay_bond(&ctx, bond)?;
 
     let now = Clock::get()?.unix_timestamp;
@@ -204,7 +159,7 @@ pub fn challenge(ctx: Context<ChallengeResolution>) -> Result<()> {
         ErrorCode::WindowNotOpen
     );
 
-    let bond = bond_units(ctx.accounts.market.asset);
+    let bond = bond_units();
     pay_bond(&ctx, bond)?;
 
     let market = &mut ctx.accounts.market;
@@ -267,74 +222,32 @@ fn validate_outcome(market: &Market, outcome: &str) -> Result<()> {
 }
 
 trait BondAccounts<'info> {
-    fn market_asset(&self) -> AssetKind;
     fn bond_payer(&self) -> AccountInfo<'info>;
-    fn bond_payer_ata(&self) -> Option<AccountInfo<'info>>;
     fn vault(&self) -> AccountInfo<'info>;
-    fn vault_ata(&self) -> Option<AccountInfo<'info>>;
-    fn v_token_program(&self) -> AccountInfo<'info>;
-    fn v_associated_token_program(&self) -> AccountInfo<'info>;
     fn v_system_program(&self) -> AccountInfo<'info>;
-    fn mint(&self) -> AccountInfo<'info>;
 }
 
 impl<'info> BondAccounts<'info> for ProposeResolution<'info> {
-    fn market_asset(&self) -> AssetKind {
-        self.market.asset
-    }
     fn bond_payer(&self) -> AccountInfo<'info> {
         self.resolver.to_account_info()
-    }
-    fn bond_payer_ata(&self) -> Option<AccountInfo<'info>> {
-        self.resolver_ata.as_ref().map(|a| a.to_account_info())
     }
     fn vault(&self) -> AccountInfo<'info> {
         self.vault.to_account_info()
     }
-    fn vault_ata(&self) -> Option<AccountInfo<'info>> {
-        self.vault_ata.as_ref().map(|a| a.to_account_info())
-    }
-    fn v_token_program(&self) -> AccountInfo<'info> {
-        self.token_program.to_account_info()
-    }
-    fn v_associated_token_program(&self) -> AccountInfo<'info> {
-        self.associated_token_program.to_account_info()
-    }
     fn v_system_program(&self) -> AccountInfo<'info> {
         self.system_program.to_account_info()
-    }
-    fn mint(&self) -> AccountInfo<'info> {
-        self.mint.to_account_info()
     }
 }
 
 impl<'info> BondAccounts<'info> for ChallengeResolution<'info> {
-    fn market_asset(&self) -> AssetKind {
-        self.market.asset
-    }
     fn bond_payer(&self) -> AccountInfo<'info> {
         self.challenger.to_account_info()
-    }
-    fn bond_payer_ata(&self) -> Option<AccountInfo<'info>> {
-        self.challenger_ata.as_ref().map(|a| a.to_account_info())
     }
     fn vault(&self) -> AccountInfo<'info> {
         self.vault.to_account_info()
     }
-    fn vault_ata(&self) -> Option<AccountInfo<'info>> {
-        self.vault_ata.as_ref().map(|a| a.to_account_info())
-    }
-    fn v_token_program(&self) -> AccountInfo<'info> {
-        self.token_program.to_account_info()
-    }
-    fn v_associated_token_program(&self) -> AccountInfo<'info> {
-        self.associated_token_program.to_account_info()
-    }
     fn v_system_program(&self) -> AccountInfo<'info> {
         self.system_program.to_account_info()
-    }
-    fn mint(&self) -> AccountInfo<'info> {
-        self.mint.to_account_info()
     }
 }
 
@@ -345,105 +258,31 @@ fn pay_bond<'info, A: BondAccounts<'info> + Bumps>(
 ) -> Result<()> {
     require!(bond > 0, ErrorCode::InsufficientAmount);
     let vault = ctx.accounts.vault();
-    match ctx.accounts.market_asset() {
-        AssetKind::Usdc => {
-            let payer = ctx.accounts.bond_payer();
-            let payer_ata = ctx.accounts.bond_payer_ata().ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx.accounts.vault_ata().ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                &payer_ata,
-                payer.key(),
-                ctx.accounts.mint().key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &payer,
-                &vault,
-                &ctx.accounts.mint(),
-                &vault_ata,
-                &ctx.accounts.v_associated_token_program(),
-                &ctx.accounts.v_token_program(),
-                &ctx.accounts.v_system_program(),
-            )?;
-            crate::instructions::token_util::deposit_usdc(
-                &ctx.accounts.v_token_program(),
-                &payer_ata,
-                &vault_ata,
-                &payer,
-                bond,
-            )
-        }
-        AssetKind::Sol => crate::instructions::token_util::deposit_sol(
-            &ctx.accounts.v_system_program(),
-            &ctx.accounts.bond_payer(),
-            &vault,
-            bond,
-        ),
-    }
+    crate::instructions::token_util::deposit_sol(
+        &ctx.accounts.v_system_program(),
+        &ctx.accounts.bond_payer(),
+        &vault,
+        bond,
+    )
 }
 
 /// Refund `bond` from the vault to the proposing resolver.
 ///
-/// `finalize` is permissionless, so neither refund destination may be chosen
+/// `finalize` is permissionless, so the refund destination may not be chosen
 /// by the caller: the bond goes back to whoever posted it (`market.proposer`).
 fn refund_bond(ctx: &Context<FinalizeResolution>, bond: u64) -> Result<()> {
     let vault = ctx.accounts.vault.to_account_info();
-    match ctx.accounts.market.asset {
-        AssetKind::Usdc => {
-            let proposer_ata = ctx
-                .accounts
-                .proposer_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx
-                .accounts
-                .vault_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                proposer_ata,
-                ctx.accounts.market.proposer,
-                ctx.accounts.mint.key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &ctx.accounts.finalizer.to_account_info(),
-                &vault,
-                &ctx.accounts.mint.to_account_info(),
-                vault_ata,
-                &ctx.accounts.associated_token_program.to_account_info(),
-                &ctx.accounts.token_program.to_account_info(),
-                &ctx.accounts.system_program.to_account_info(),
-            )?;
-            crate::instructions::token_util::withdraw_usdc(
-                &ctx.accounts.token_program.to_account_info(),
-                vault_ata,
-                proposer_ata,
-                &vault,
-                &ctx.accounts.market.key(),
-                ctx.accounts.vault.bump,
-                bond,
-            )
-        }
-        AssetKind::Sol => {
-            let proposer_account = ctx
-                .accounts
-                .proposer_account
-                .as_ref()
-                .ok_or(ErrorCode::InvalidTokenAccount)?;
-            require_keys_eq!(
-                proposer_account.key(),
-                ctx.accounts.market.proposer,
-                ErrorCode::Unauthorized
-            );
-            crate::instructions::token_util::withdraw_sol(
-                &ctx.accounts.system_program.to_account_info(),
-                &vault,
-                proposer_account,
-                &ctx.accounts.market.key(),
-                ctx.accounts.vault.bump,
-                bond,
-            )
-        }
-    }
+    let proposer_account = ctx
+        .accounts
+        .proposer_account
+        .as_ref()
+        .ok_or(ErrorCode::InsufficientAmount)?;
+    require_keys_eq!(
+        proposer_account.key(),
+        ctx.accounts.market.proposer,
+        ErrorCode::Unauthorized
+    );
+    crate::instructions::token_util::withdraw_sol(&vault, proposer_account, bond)
 }
 
 #[event]

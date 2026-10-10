@@ -8,18 +8,17 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, shortAddr } from "@/lib/format";
 import { lmsrBuyQuote, lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
-import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
-const QUICK = [10, 25, 50, 100];
+const QUICK_SOL = [0.01, 0.025, 0.05, 0.1];
 
-function fmtBalance(amount: number, kind: "usdc" | "sol" | undefined) {
-  return kind === "sol" ? `◎ ${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : fmtUsd(amount);
+function fmtAsset(amount: number) {
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 4 })} SOL`;
 }
 
 export function TradePanel({ market }: { market: Market }) {
@@ -31,17 +30,16 @@ export function TradePanel({ market }: { market: Market }) {
   const setPendingTrade = useSim((s) => s.setPendingTrade);
   const pendingTrade = useSim((s) => s.pendingTrade);
   const showToast = useSim((s) => s.showToast);
-  const { walletBuy, busy: usdcBusy } = useDevnetUsdc();
   const chain = useChain();
   const chainMarket = isChainId(m.id);
+  const quickAmounts = QUICK_SOL;
 
   const [side, setSide] = useState<"yes" | "no">("yes");
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState("0.05");
   const [submitting, setSubmitting] = useState(false);
 
   const amt = Math.max(0, parseFloat(amount) || 0);
   const balance = user.balance;
-  const balanceKind = user.balanceKind;
 
   const quote = useMemo(() => {
     if (amt <= 0) return null;
@@ -59,7 +57,7 @@ export function TradePanel({ market }: { market: Market }) {
       ? "Market closed"
       : amt > balance
         ? "Insufficient balance"
-        : `Buy ${side.toUpperCase()} · ${fmtUsd(amt)}`;
+        : `Buy ${side.toUpperCase()} · ${fmtAsset(amt)}`;
 
   return (
     <>
@@ -99,9 +97,9 @@ export function TradePanel({ market }: { market: Market }) {
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-gray-mid">Amount ({balanceKind === "sol" ? "SOL" : "USDC"})</span>
+            <span className="text-gray-mid">Amount (SOL)</span>
             <span className="text-gray-mid">
-              Balance: <span className="font-mono text-green">{fmtBalance(balance, balanceKind)}</span>
+              Balance: <span className="font-mono text-green">{fmtAsset(balance)}</span>
             </span>
           </div>
           <Input
@@ -113,9 +111,9 @@ export function TradePanel({ market }: { market: Market }) {
             className="h-12 text-lg font-semibold"
           />
           <div className="mt-2 grid grid-cols-4 gap-1.5">
-            {QUICK.map((q) => (
+            {quickAmounts.map((q) => (
               <Button key={q} variant="secondary" size="sm" onClick={() => setAmount(String(q))}>
-                ${q}
+                {fmtAsset(q)}
               </Button>
             ))}
           </div>
@@ -124,7 +122,7 @@ export function TradePanel({ market }: { market: Market }) {
         {quote && (
           <div className="mt-4 space-y-1 rounded-lg bg-cream-dark p-3 text-xs">
             <Row label="You receive" value={`${quote.shares.toFixed(1)} shares`} />
-            <Row label="Avg price / share" value={`~${fmtUsd(quote.avgPrice)}`} />
+            <Row label="Avg price / share" value={`~${fmtAsset(quote.avgPrice)}`} />
             <Row
               label="Price impact"
               value={`${quote.impactPct >= 0 ? "+" : ""}${quote.impactPct.toFixed(1)}%`}
@@ -136,7 +134,7 @@ export function TradePanel({ market }: { market: Market }) {
             />
             <Row
               label="Payout if you win"
-              value={fmtUsd(quote.shares)}
+              value={fmtAsset(quote.shares)}
               className="text-green"
             />
             {chainMarket && (
@@ -167,7 +165,9 @@ export function TradePanel({ market }: { market: Market }) {
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           {connected ? (
             <span>
-              Demo mode: trades execute instantly against a simulated LMSR using your {balanceKind === "sol" ? "devnet SOL balance" : "devnet USDC balance"}.
+              {chainMarket
+                ? `Real devnet trade; this market is denominated in SOL.`
+                : `Demo mode: trades execute against a simulated LMSR using your devnet SOL balance.`}
             </span>
           ) : (
             <span>
@@ -189,12 +189,12 @@ export function TradePanel({ market }: { market: Market }) {
           {pendingTrade && quote && (
             <div className="space-y-2 rounded-lg bg-cream-dark p-3 text-sm">
               <Row label="Side" value={side.toUpperCase()} />
-              <Row label="Cost" value={fmtUsd(pendingTrade.amount)} />
+              <Row label="Cost" value={fmtAsset(pendingTrade.amount)} />
               <Row label="Shares" value={quote.shares.toFixed(1)} />
-              <Row label="Avg price / share" value={`~${fmtUsd(quote.avgPrice)}`} />
+              <Row label="Avg price / share" value={`~${fmtAsset(quote.avgPrice)}`} />
               <Row
                 label="Potential payout"
-                value={fmtUsd(quote.shares)}
+                value={fmtAsset(quote.shares)}
                 className="text-green"
               />
             </div>
@@ -202,19 +202,19 @@ export function TradePanel({ market }: { market: Market }) {
           <Button
             size="lg"
             className="w-full"
-            disabled={submitting || usdcBusy}
+            disabled={submitting}
             onClick={async () => {
               if (!pendingTrade) return;
               setSubmitting(true);
               try {
                 const sig = chainMarket
                   ? await chain.buy(m, pendingTrade.side as "yes" | "no", pendingTrade.amount)
-                  : await walletBuy(pendingTrade.amount);
+                  : null;
                 buyBinary(m.id, pendingTrade.side as "yes" | "no", pendingTrade.amount, sig ?? undefined);
                 setPendingTrade(null);
                 if (sig) {
                   showToast(
-                    `Bought ${pendingTrade.side.toUpperCase()} · ${fmtUsd(pendingTrade.amount)} · tx ${shortAddr(sig)}`
+                    `Bought ${pendingTrade.side.toUpperCase()} · ${fmtAsset(pendingTrade.amount)} · tx ${shortAddr(sig)}`
                   );
                 }
               } catch (err) {
@@ -224,16 +224,16 @@ export function TradePanel({ market }: { market: Market }) {
               }
             }}
           >
-            {submitting || usdcBusy
+            {submitting
               ? "Confirming…"
               : chainMarket
                 ? "Confirm & sign on-chain"
-                : "Confirm · Sign & buy (demo)"}
+                : "Confirm · buy (demo)"}
           </Button>
           <p className="text-center text-[10px] text-gray-mid">
             {chainMarket
-              ? "Confirming sends one real devnet SOL buy to the program (vault escrow) and your position is mirrored on-chain."
-              : "Confirming signs a devnet USDC transfer to the demo vault, then the simulated fill executes against your book."}
+              ? `Confirming sends one real devnet SOL buy to the program (vault escrow) and your position is mirrored on-chain.`
+              : "Confirming executes the simulated fill against your book."}
           </p>
         </DialogContent>
       </Dialog>

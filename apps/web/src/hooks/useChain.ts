@@ -20,7 +20,7 @@ import type { Market } from "@/lib/types";
  * Chain-aware trade helpers. For chain (`c…`) markets these send real
  * devnet SOL transactions through the connected wallet and refresh the
  * wallet's SOL balance in the sim book; for simulated markets they return
- * null so callers fall back to the existing USDC demo-vault flow.
+ * null so callers fall back to the existing SOL demo-vault flow.
  */
 export function useChain() {
   const { connected, publicKey, sendTransaction } = useWallet();
@@ -29,7 +29,7 @@ export function useChain() {
 
   const refreshBalance = useCallback(
     async (wallet: string, result: ChainTradeResult) => {
-      setBalance(wallet, result.solBalance, "sol");
+      setBalance(wallet, result.solBalance);
     },
     [setBalance]
   );

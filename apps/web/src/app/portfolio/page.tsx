@@ -191,7 +191,6 @@ function OverviewTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
-  const kind = user.balanceKind;
   const trades = useSim((s) => s.trades);
   const claimable = useMemo(
     () => claimableAmounts(positions, markets),
@@ -220,31 +219,31 @@ function OverviewTab({ className }: { className?: string }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <PnlCard
           label="Net P&L"
-          value={fmtSigned(overview.netPnl, kind)}
+          value={fmtSigned(overview.netPnl)}
           tone={toneOf(overview.netPnl)}
           icon={overview.netPnl >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Realized"
-          value={fmtSigned(overview.realizedPnl, kind)}
+          value={fmtSigned(overview.realizedPnl)}
           tone={toneOf(overview.realizedPnl)}
           icon={<Activity className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Unrealized"
-          value={fmtSigned(overview.unrealizedPnl, kind)}
+          value={fmtSigned(overview.unrealizedPnl)}
           tone={toneOf(overview.unrealizedPnl)}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Claimable"
-          value={fmtBalance(overview.claimableTotal, kind)}
+          value={fmtBalance(overview.claimableTotal)}
           tone="pos"
           icon={<Trophy className="h-3.5 w-3.5" />}
         />
         <PnlCard
           label="Net Worth"
-          value={fmtBalance(overview.netWorth, kind)}
+          value={fmtBalance(overview.netWorth)}
           tone="neutral"
           icon={<Wallet className="h-3.5 w-3.5" />}
         />
@@ -275,7 +274,7 @@ function OverviewTab({ className }: { className?: string }) {
                   {best.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(best.side)} · {fmtWhen(best.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-green">+{fmtBalance(best.pnl, kind)}</span>
+              <span className="font-mono text-sm font-bold text-green">+{fmtBalance(best.pnl)}</span>
             </div>
           )}
           {worst && (
@@ -287,7 +286,7 @@ function OverviewTab({ className }: { className?: string }) {
                   {worst.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(worst.side)} · {fmtWhen(worst.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-red-brand">−{fmtBalance(Math.abs(worst.pnl), kind)}</span>
+              <span className="font-mono text-sm font-bold text-red-brand">−{fmtBalance(Math.abs(worst.pnl))}</span>
             </div>
           )}
         </div>
@@ -302,7 +301,7 @@ function OverviewTab({ className }: { className?: string }) {
             </h2>
             <span className="text-xs text-gray-mid">
               cumulative <span className={cn("font-mono font-semibold", overview.realizedPnl >= 0 ? "text-green" : "text-red-brand")}>
-                {fmtSigned(overview.realizedPnl, kind)}
+                {fmtSigned(overview.realizedPnl)}
               </span>
             </span>
           </div>
@@ -326,12 +325,12 @@ function OverviewTab({ className }: { className?: string }) {
                       )}
                     >
                       {b.realizedPnl >= 0 ? "+" : ""}
-                      {fmtBalance(b.realizedPnl, kind, { compact: true })}
+                      {fmtBalance(b.realizedPnl, { compact: true })}
                     </span>
                     <div
                       className={cn("w-full rounded-t", b.realizedPnl >= 0 ? "bg-green/80" : "bg-red-brand/80")}
                       style={{ height: `${Math.max(3, h)}%` }}
-                      title={`${b.label}: ${fmtSigned(b.realizedPnl, kind)}`}
+                      title={`${b.label}: ${fmtSigned(b.realizedPnl)}`}
                     />
                     <span className="text-[9px] text-gray-mid">{b.label}</span>
                   </div>
@@ -363,7 +362,7 @@ function OverviewTab({ className }: { className?: string }) {
                         )}
                       >
                         {v.realizedPnl >= 0 ? "+" : ""}
-                        {fmtBalance(v.realizedPnl, kind, { compact: true })}
+                        {fmtBalance(v.realizedPnl, { compact: true })}
                       </span>
                     </span>
                   </div>
@@ -415,9 +414,9 @@ function PnlCard({
   );
 }
 
-function fmtSigned(n: number, kind: "usdc" | "sol" | undefined): string {
+function fmtSigned(n: number): string {
   const sign = n >= 0 ? "+" : "−";
-  return `${sign}${fmtBalance(Math.abs(n), kind)}`;
+  return `${sign}${fmtBalance(Math.abs(n))}`;
 }
 
 function toneOf(n: number): "pos" | "neg" | "neutral" {
@@ -436,7 +435,6 @@ function PositionsTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
   const positions = useSim((s) => s.positions);
   const user = useSim((s) => s.user);
-  const kind = user.balanceKind;
   const sellBinary = useSim((s) => s.sellBinary);
   const claim = useSim((s) => s.claim);
   const chain = useChain();
@@ -493,12 +491,12 @@ function PositionsTab({ className }: { className?: string }) {
         />
         <SummaryCard
           label="Market Value"
-          value={fmtBalance(totals.value, kind)}
+          value={fmtBalance(totals.value)}
           icon={<Wallet className="h-3.5 w-3.5" />}
         />
         <SummaryCard
           label="Cost Basis"
-          value={fmtBalance(totals.cost, kind)}
+          value={fmtBalance(totals.cost)}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <SummaryCard
@@ -506,7 +504,7 @@ function PositionsTab({ className }: { className?: string }) {
           value={
             <span className={cn(totals.pnl >= 0 ? "text-green" : "text-red-brand")}>
               {totals.pnl >= 0 ? "+" : ""}
-              {fmtBalance(totals.pnl, kind)}
+              {fmtBalance(totals.pnl)}
             </span>
           }
           sub={
@@ -531,8 +529,8 @@ function PositionsTab({ className }: { className?: string }) {
           }
         />
         <SummaryCard
-          label={kind === "sol" ? "Account Balance" : "Free-play Balance"}
-          value={fmtBalance(user.balance, kind)}
+          label="Account Balance"
+          value={fmtBalance(user.balance)}
           accent="text-green"
           icon={<Trophy className="h-3.5 w-3.5" />}
         />
@@ -613,7 +611,7 @@ function PositionsTab({ className }: { className?: string }) {
                       {m.event} · winner: {m.winningOutcome?.toUpperCase()}
                     </div>
                   </div>
-                  <span className="font-mono text-lg font-bold text-green">{fmtBalance(amt, kind)}</span>
+                  <span className="font-mono text-lg font-bold text-green">{fmtBalance(amt)}</span>
                   <Button
                     variant="yes"
                     size="sm"
@@ -679,7 +677,6 @@ type HistFilter = "all" | "buy" | "sell" | "back" | "claim";
 function HistoryTab({ className }: { className?: string }) {
   const trades = useSim((s) => s.trades);
   const markets = useSim((s) => s.markets);
-  const kind = useSim((s) => s.user.balanceKind);
   const [filter, setFilter] = useState<HistFilter>("all");
 
   const filtered = useMemo(() => {
@@ -763,9 +760,9 @@ function HistoryTab({ className }: { className?: string }) {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
-                    <span className="text-red-brand">−{fmtBalance(footer.inflow, kind)}</span>
+                    <span className="text-red-brand">−{fmtBalance(footer.inflow)}</span>
                     <span className="text-gray-mid"> / </span>
-                    <span className="text-green">+{fmtBalance(footer.outflow, kind)}</span>
+                    <span className="text-green">+{fmtBalance(footer.outflow)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <span
@@ -774,12 +771,12 @@ function HistoryTab({ className }: { className?: string }) {
                         footer.net >= 0 ? "text-green" : "text-red-brand"
                       )}
                     >
-                      {fmtSigned(footer.net, kind)}
+                      {fmtSigned(footer.net)}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     <span className={cn("font-bold", footer.realized >= 0 ? "text-green" : "text-red-brand")}>
-                      {fmtSigned(footer.realized, kind)}
+                      {fmtSigned(footer.realized)}
                     </span>
                   </td>
                 </tr>
@@ -793,7 +790,6 @@ function HistoryTab({ className }: { className?: string }) {
 }
 
 function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
-  const kind = useSim((s) => s.user.balanceKind);
   const isOut = t.kind === "buy" || t.kind === "back";
   const kindLabel = t.kind === "buy" ? "Buy" : t.kind === "sell" ? "Sell" : t.kind === "back" ? "Back" : "Claim";
   const kindColor =
@@ -868,18 +864,18 @@ function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
         </div>
         <div className={cn("font-mono text-[11px]", isOut ? "text-red-brand" : "text-green")}>
           {isOut ? "−" : "+"}
-          {fmtBalance(t.amount, kind)}
+          {fmtBalance(t.amount)}
         </div>
         {t.kind === "back" && t.price > 0 && (
           <div className="mt-0.5 font-mono text-[11px] font-semibold text-navy">
-            → ≈ {fmtBalance(t.amount / t.price, kind, { compact: true })} if it lands
+            → ≈ {fmtBalance(t.amount / t.price, { compact: true })} if it lands
           </div>
         )}
       </td>
       <td className="px-4 py-3">
         {t.pnl !== 0 ? (
           <span className={cn("font-mono text-xs font-bold", t.pnl > 0 ? "text-green" : "text-red-brand")}>
-            {fmtSigned(t.pnl, kind)}
+            {fmtSigned(t.pnl)}
           </span>
         ) : (
           <span className="font-mono text-xs text-gray-mid">—</span>
@@ -959,7 +955,6 @@ function PositionRowCard({
 }) {
   const m = row.market;
   const status = STATUS_META[m.status];
-  const kind = useSim((s) => s.user.balanceKind);
 
   return (
     <Link
@@ -1020,7 +1015,7 @@ function PositionRowCard({
               ? row.shares.toFixed(1)
               : row.wordBacks
                   ? Object.entries(row.wordBacks)
-                      .map(([w, v]) => `${w} ${fmtBalance(v, kind, { compact: true })}`)
+                      .map(([w, v]) => `${w} ${fmtBalance(v, { compact: true })}`)
                       .join(" · ")
                   : "—"}
           </div>
@@ -1059,7 +1054,7 @@ function PositionRowCard({
                   row.pnl >= 0 ? "text-green" : "text-red-brand"
                 )}
               >
-                {fmtSigned(row.pnl, kind)}
+                {fmtSigned(row.pnl)}
               </span>
               <span
                 className={cn(
@@ -1082,12 +1077,12 @@ function PositionRowCard({
         <div className="flex items-baseline gap-3">
           <div>
             <span className="text-[10px] uppercase tracking-wider text-gray-mid">Value</span>{" "}
-            <span className="font-mono text-sm font-bold text-navy">{fmtBalance(row.marketValue, kind)}</span>
+            <span className="font-mono text-sm font-bold text-navy">{fmtBalance(row.marketValue)}</span>
           </div>
           {m.type === "binary" && (
             <div>
               <span className="text-[10px] uppercase tracking-wider text-gray-mid">Cost</span>{" "}
-              <span className="font-mono text-sm text-gray-mid">{fmtBalance(row.costBasis, kind)}</span>
+              <span className="font-mono text-sm text-gray-mid">{fmtBalance(row.costBasis)}</span>
             </div>
           )}
         </div>

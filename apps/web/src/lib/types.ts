@@ -8,9 +8,6 @@ export type MarketType = "binary" | "majority";
 
 export type MarketStatus = "open" | "locked" | "resolving" | "resolved";
 
-/** Currency a market is denominated in; decides its base-unit scale. */
-export type MarketAsset = "sol" | "usdc";
-
 export interface WordPool {
   word: string;
   pool: number;
@@ -26,8 +23,6 @@ export interface Market {
   vertical: Vertical;
   type: MarketType;
   status: MarketStatus;
-  /** On-chain markets only; omitted for simulated markets (implied USD demo). */
-  asset?: MarketAsset;
   createdAt: number;
   startsAt?: number;
   endTime: number;
@@ -62,7 +57,7 @@ export interface Evidence {
   proposedAt: number;
   proposedBy: string;
   evidenceHash: string;
-  bondUsd: number;
+  bondSol: number;
   challengeWindowMs: number;
   challengeDeadline: number;
   challenged: boolean;
@@ -102,18 +97,18 @@ export interface TradeRecord {
   kind: TradeKind;
   /** "yes" | "no" for binary; the word for majority backs; winning outcome for claims. */
   side: string;
-  /** USDC out (buy/back) or in (sell/claim). */
+  /** SOL out (buy/back) or in (sell/claim). */
   amount: number;
   /** Binary shares granted/returned; 0 for back/claim. */
   shares: number;
-  /** Share entry/exit price in USDC (binary); implied pot-share (0..1) at back time for majority; 0 otherwise. */
+  /** Share entry/exit price in SOL (binary); implied pot-share (0..1) at back time for majority; 0 otherwise. */
   price: number;
-  /** Average entry price in USDC of the closes position (sells); the entry price (buys); undefined otherwise. */
+  /** Average entry price in SOL of the closes position (sells); the entry price (buys); undefined otherwise. */
   avgEntry?: number;
   /** Realized P&L of this leg (sell/claim); 0 on buys. */
   pnl: number;
   at: number;
-  /** Devnet signature when the trade moved real USDC. */
+  /** Devnet signature when the trade moved real SOL. */
   txSig?: string;
 }
 
@@ -145,8 +140,6 @@ export interface User {
   balance: number;
   /** Connected wallet address this book belongs to ("" = guest). */
   wallet?: string;
-  /** Unit the balance is denominated in. */
-  balanceKind?: "usdc" | "sol";
 }
 
 export const VERTICAL_META: Record<

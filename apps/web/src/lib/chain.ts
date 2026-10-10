@@ -3,12 +3,9 @@
  *
  * Chain markets are stored in the sim store under ids like `c1`, `c9002`
  * (the leading `c` marks a market backed by a real program account). Their
- * numerical values are UI-scaled: raw base units are divided by the market's
- * own asset scale — `SOL_DECIMALS` (1e9) for SOL, `USDC_DECIMALS` (1e6) for
- * USDC — so the existing LMSR/display math keeps working; amounts are
- * converted back to base units only at the instruction boundary.
- * Use {@link scaleForAsset} rather than a shared constant: mixing them up
- * misprices a market by three orders of magnitude.
+ * numerical values are UI-scaled: raw lamports are divided by `SOL_DECIMALS`
+ * (1e9) so the existing LMSR/display math keeps working; amounts are converted
+ * back to base units only at the instruction boundary.
  */
 
 import { Connection, PublicKey, Keypair, ComputeBudgetProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
@@ -17,20 +14,16 @@ import { Connection, PublicKey, Keypair, ComputeBudgetProgram, Transaction, Tran
 // (This is the same build shape the anchor CLI scripts use.)
 import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js";
 import mentionIdl from "@/lib/idl/mention.json";
-import { DEVNET_USDC_MINT } from "@/lib/usdc";
+import { canonicalJson } from "@mention/resolution/canonical-json";
 import { lmsrBuyCost, lmsrSellReturn } from "@/lib/lmsr";
 import { shortAddr } from "@/lib/format";
 import type { ActivityItem, Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
 
-export const PROGRAM_ID = new PublicKey("E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV");
+export const PROGRAM_ID = new PublicKey("5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8");
 export const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
-export const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-export const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /** Raw base units per UI unit for SOL markets. */
 export const SOL_DECIMALS = 1_000_000_000;
-/** Raw base units per UI unit for USDC markets (devnet mint is 6dp). */
-export const USDC_DECIMALS = 1_000_000;
 
 /** On-chain challenge window (seconds) used to derive evidence metadata. */
 export const CHALLENGE_WINDOW_SECS = 120;
@@ -104,6 +97,13 @@ export function vaultPda(market: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("vault"), market.toBuffer()], PROGRAM_ID)[0];
 }
 
+export function resolutionSpecPda(market: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("resolution-spec"), market.toBuffer()],
+    PROGRAM_ID
+  )[0];
+}
+
 export function positionPda(market: PublicKey, owner: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("position"), market.toBuffer(), owner.toBuffer()],
@@ -129,24 +129,6 @@ export function isChainId(marketId: string): boolean {
   return /^c\d+$/.test(marketId);
 }
 
-/**
- * Raw base units per UI unit for a market's `asset` enum.
- *
- * A USDC market is 1e6 and a SOL market is 1e9, so using one scale for both
- * would misprice by 1000x. Unknown variants throw rather than silently fall
- * back to SOL — a new asset kind must be added here before it can be listed.
- */
-export function scaleForAsset(asset: unknown): number {
-  switch (enumKey(asset)) {
-    case "sol":
-      return SOL_DECIMALS;
-    case "usdc":
-      return USDC_DECIMALS;
-    default:
-      throw new Error(`unknown market asset: ${JSON.stringify(asset)}`);
-  }
-}
-
 export function isChainMarket(m: Market): boolean {
   return isChainId(m.id);
 }
@@ -167,18 +149,6 @@ export function isStaleChainMarket(m: Market, now = Date.now()): boolean {
   if (m.status === "resolved" && (m.traders ?? 0) === 0) return true;
   if (m.status === "resolved" && m.resolvedAt !== undefined && m.resolvedAt <= now - 60 * 60_000) return true;
   return false;
-}
-
-/**
- * Scale for a store-level `Market`. Simulated markets have no `asset` (their
- * numbers are already UI units) and are not scaled here, so this only ever
- * sees chain markets — but a missing `asset` is a bug, not a default.
- */
-export function scaleForMarket(m: Market): number {
-  if (m.asset === undefined) {
-    throw new Error(`market ${m.id} has no asset; expected "sol" or "usdc"`);
-  }
-  return scaleForAsset({ [m.asset]: {} });
 }
 
 /** Encode `[u8;32]` hashes as hex for display. */
@@ -232,7 +202,6 @@ export interface ChainMarketAccount {
   title: string;
   event: string;
   vertical: object;
-  asset: object;
   marketType: object;
   status: object;
   b: { toNumber(): number };
@@ -265,7 +234,7 @@ export function mapMarketToStore(account: ChainMarketAccount): Market {
   const id = account.id.toNumber();
   const status = enumKey(account.status) as MarketStatus;
   const marketType = enumKey(account.marketType) as MarketType;
-  const scale = scaleForAsset(account.asset);
+  const scale = SOL_DECIMALS;
   const endTimeSec = account.endTime.toNumber();
   const resolving = status === "resolving" || status === "resolved";
   const explorer = `https://explorer.solana.com/address/${marketPda(id).toBase58()}?cluster=devnet`;
@@ -277,7 +246,6 @@ export function mapMarketToStore(account: ChainMarketAccount): Market {
     event: account.event,
     vertical: enumKey(account.vertical) as Vertical,
     type: marketType,
-    asset: enumKey(account.asset) as Market["asset"],
     status,
     createdAt: endTimeSec * 1000 - 30 * mins,
     endTime: endTimeSec * 1000,
@@ -296,9 +264,7 @@ export function mapMarketToStore(account: ChainMarketAccount): Market {
             lastBetAt: endTimeSec * 1000,
           }))
         : undefined,
-    rules: `Chain-resolved market: resolution is posted on-chain by the oracle, opening a 120s challenge window. All value is real devnet ${
-      enumKey(account.asset) === "usdc" ? "USDC" : "SOL"
-    } escrowed in the program vault.`,
+    rules: `Chain-resolved market: resolution is posted on-chain by the oracle, opening a 120s challenge window. All value is real devnet SOL escrowed in the program vault.`,
     winningOutcome: resolving ? account.winningOutcome : undefined,
     confidence: resolving ? account.confidence : undefined,
     evidence: resolving
@@ -308,7 +274,7 @@ export function mapMarketToStore(account: ChainMarketAccount): Market {
           proposedAt: account.proposedAt.toNumber() * 1000,
           proposedBy: account.proposer.toBase58(),
           evidenceHash: bytesToHex(account.evidenceHash),
-          bondUsd: account.bond.toNumber() / scale,
+          bondSol: account.bond.toNumber() / scale,
           challengeWindowMs: CHALLENGE_WINDOW_SECS * 1000,
           challengeDeadline:
             (account.challengeDeadline.toNumber() > 0
@@ -329,15 +295,14 @@ export function mapMarketToStore(account: ChainMarketAccount): Market {
 /**
  * Convert a raw Position account into the store's `Position` view.
  *
- * A Position doesn't carry its market's `asset`, so the scale must be passed
- * in by a caller that has the market. It defaults to SOL only as a
- * convenience for callers that have just read a SOL market.
+ * Positions are SOL-denominated like every market, so the scale is the shared
+ * {@link SOL_DECIMALS}.
  */
 export function mapPositionToStore(
   marketId: string,
-  account: PositionAccountLike,
-  scale: number = SOL_DECIMALS
+  account: PositionAccountLike
 ): Position {
+  const scale = SOL_DECIMALS;
   const yes = account.yesShares.toNumber() / scale;
   const no = account.noShares.toNumber() / scale;
   const backs: Record<string, number> = {};
@@ -398,36 +363,21 @@ export async function fetchChainMarketsAll(): Promise<Market[]> {
     .map(({ account }) => mapMarketToStore(account as unknown as ChainMarketAccount));
 }
 
-/**
- * Base units per UI unit for `marketId`'s asset. Callers that already hold a
- * `Market` should pass `scaleForAsset` straight through instead of paying for
- * this extra RPC.
- */
-export async function fetchScaleForMarket(marketId: number): Promise<number> {
-  const account = (await program.account.market.fetch(marketPda(marketId))) as unknown as ChainMarketAccount;
-  return scaleForAsset(account.asset);
-}
-
 export async function fetchChainPosition(
   marketId: number,
-  owner: PublicKey,
-  scale?: number
+  owner: PublicKey
 ): Promise<Position | null> {
   try {
     const account = (await program.account.position.fetch(
       positionPda(marketPda(marketId), owner)
     )) as unknown as PositionAccountLike;
-    return mapPositionToStore(
-      `c${marketId}`,
-      account,
-      scale ?? (await fetchScaleForMarket(marketId))
-    );
+    return mapPositionToStore(`c${marketId}`, account);
   } catch {
     return null;
   }
 }
 
-/** Wallet SOL balance in UI units — always lamports, never a market asset. */
+/** Wallet SOL balance in UI units (raw lamports / 1e9). */
 export async function solBalanceUi(owner: PublicKey): Promise<number> {
   try {
     return (await connection().getBalance(owner)) / SOL_DECIMALS;
@@ -603,16 +553,13 @@ export async function sendAll(
   return sig;
 }
 
-/** Accounts shared by every value-moving instruction (SOL market: ATAs null). */
+/** Accounts shared by every value-moving instruction (SOL: no token plumbing). */
 function tradeAccounts(market: PublicKey, trader: PublicKey): Record<string, unknown> {
   return {
     config: CONFIG_PDA,
     market,
     vault: vaultPda(market),
     position: positionPda(market, trader),
-    mint: DEVNET_USDC_MINT,
-    tokenProgram: TOKEN_PROGRAM,
-    associatedTokenProgram: ATA_PROGRAM,
     systemProgram: SYSTEM_PROGRAM,
   };
 }
@@ -630,7 +577,7 @@ export async function chainBuyBinary(
 ): Promise<ChainTradeResult> {
   const market = marketPda(marketId);
   const current = (await program.account.market.fetch(market)) as unknown as ChainMarketAccount;
-  const scale = scaleForAsset(current.asset);
+  const scale = SOL_DECIMALS;
   const cost = Math.round(amountUi * scale);
   const expectedUi = sharesForCostUi(current, side, amountUi, scale);
   if (expectedUi <= 0) throw new Error("No shares for that cost");
@@ -640,8 +587,6 @@ export async function chainBuyBinary(
     .accounts({
       trader: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
-      traderAta: null,
-      vaultAta: null,
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -656,7 +601,7 @@ export async function chainSellBinary(
 ): Promise<ChainTradeResult> {
   const market = marketPda(marketId);
   const current = (await program.account.market.fetch(market)) as unknown as ChainMarketAccount;
-  const scale = scaleForAsset(current.asset);
+  const scale = SOL_DECIMALS;
   const shares = Math.round(sharesUi * scale);
   const proceedsUi = proceedsForSellUi(current, side, sharesUi, scale);
   if (proceedsUi <= 0) throw new Error("No proceeds for that sell");
@@ -666,8 +611,6 @@ export async function chainSellBinary(
     .accounts({
       trader: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
-      traderAta: null,
-      vaultAta: null,
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -681,15 +624,13 @@ export async function chainBackWord(
   amountUi: number
 ): Promise<ChainTradeResult> {
   const market = marketPda(marketId);
-  const scale = await fetchScaleForMarket(marketId);
+  const scale = SOL_DECIMALS;
   const amount = Math.round(amountUi * scale);
   const ix = await program.methods
     .backWord(word, new BN(amount))
     .accounts({
       backer: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
-      backerAta: null,
-      vaultAta: null,
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -706,8 +647,6 @@ export async function chainClaim(
     .accounts({
       claimant: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
-      claimantAta: null,
-      vaultAta: null,
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -724,8 +663,6 @@ export async function chainChallenge(
     .accounts({
       challenger: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
-      challengerAta: null,
-      vaultAta: null,
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -739,6 +676,8 @@ export interface ChainCreateParams {
   type: MarketType;
   words: string[];
   minutes: number;
+  sourceUrl: string;
+  binaryPhrase: string;
 }
 
 /**
@@ -764,9 +703,36 @@ export async function chainCreateMarket(
   const market = marketPda(id);
   const bUi = CHAIN_CREATE_B_UI;
   const nowSec = Math.floor(Date.now() / 1000);
-  // Every market this UI creates is SOL-denominated; keep the scale in lockstep.
-  const asset = enumArg("sol");
-  const scale = scaleForAsset(asset);
+  const endTimeSec = nowSec + params.minutes * 60;
+  const outcomes = params.type === "binary" ? ["yes", "no"] : params.words;
+  const terms = params.type === "binary"
+    ? [{ phrase: params.binaryPhrase, outcome: "yes" }]
+    : params.words.map((phrase) => ({ phrase, outcome: phrase }));
+  const resolutionSpec = {
+    schemaVersion: 1,
+    marketAddress: market.toBase58(),
+    marketType: params.type,
+    outcomeOptions: outcomes,
+    terms,
+    source: {
+      provider: "operator-upload",
+      sourceId: params.sourceUrl,
+      url: params.sourceUrl,
+    },
+    window: {
+      startsAtMs: nowSec * 1000,
+      endsAtMs: endTimeSec * 1000,
+    },
+    matching: {
+      mode: "exact_phrase",
+      caseSensitive: false,
+      punctuationSensitive: false,
+      speaker: null,
+    },
+  };
+  const specBytes = new TextEncoder().encode(canonicalJson(resolutionSpec));
+  const specHash = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", specBytes));
+  const scale = SOL_DECIMALS;
   const ix = await program.methods
     .createMarket(
       new BN(id),
@@ -774,17 +740,18 @@ export async function chainCreateMarket(
       params.event,
       enumArg(params.vertical),
       enumArg(params.type),
-      asset,
       new BN(Math.round(bUi * scale)),
       params.words,
-      new BN(nowSec + params.minutes * 60),
-      100
+      new BN(endTimeSec),
+      100,
+      Array.from(specHash)
     )
     .accounts({
       creator: signer.publicKey,
       config: CONFIG_PDA,
       market,
       vault: vaultPda(market),
+      resolutionSpec: resolutionSpecPda(market),
       systemProgram: SYSTEM_PROGRAM,
     } as never)
     .instruction();

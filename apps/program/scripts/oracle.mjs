@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { programFor, ensureResolverKeypair, marketPda, vaultPda, CONFIG_PDA, SYSTEM_PROGRAM, TOKEN_PROGRAM, ATA_PROGRAM, USDC_MINT, sha256Hex, hexToBytes, fetchOrNull , budget } from "./lib.mjs";
+import { programFor, ensureResolverKeypair, marketPda, vaultPda, CONFIG_PDA, SYSTEM_PROGRAM, sha256Hex, hexToBytes, fetchOrNull , budget } from "./lib.mjs";
 import { SEEDS, demoBatch } from "./seed-config.mjs";
 
 // Scripted outcomes cover the canonical batch and (if seeding re-ran with
@@ -67,11 +67,6 @@ async function proposeResolution(market, pk, outcome) {
       config: CONFIG_PDA,
       market,
       vault: vaultPda(market),
-      resolverAta: null,
-      vaultAta: null,
-      mint: USDC_MINT,
-      tokenProgram: TOKEN_PROGRAM,
-      associatedTokenProgram: ATA_PROGRAM,
       systemProgram: SYSTEM_PROGRAM,
     })
     .preInstructions(budget())
@@ -88,11 +83,6 @@ async function finalizeResolution(market, pk, proposer) {
       market,
       vault: vaultPda(market),
       proposerAccount: proposer,
-      proposerAta: null,
-      vaultAta: null,
-      mint: USDC_MINT,
-      tokenProgram: TOKEN_PROGRAM,
-      associatedTokenProgram: ATA_PROGRAM,
       systemProgram: SYSTEM_PROGRAM,
     })
     .preInstructions(budget())

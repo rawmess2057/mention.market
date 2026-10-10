@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   POINTS_CLAIM,
   POINTS_HOLD_TO_RESOLVE,
-  POINTS_PER_USDC,
+  POINTS_PER_SOL,
   holdToResolvePoints,
   pointsForTrade,
 } from "../sim";
 import type { Position } from "../types";
 
 describe("points rules", () => {
-  it("awards 2 points per whole USDC spent", () => {
+  it("awards 2 points per whole SOL spent", () => {
     expect(pointsForTrade(0)).toBe(0);
     expect(pointsForTrade(25)).toBe(50);
     expect(pointsForTrade(25.9)).toBe(50); // floor
@@ -33,6 +33,6 @@ describe("points rules", () => {
 
   it("exposes the claim bonus as a constant", () => {
     expect(POINTS_CLAIM).toBe(25);
-    expect(POINTS_PER_USDC).toBe(2);
+    expect(POINTS_PER_SOL).toBe(2);
   });
 });

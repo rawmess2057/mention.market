@@ -17,7 +17,7 @@ import { ResolutionGrammar } from "@/components/resolution-grammar";
 import { ActivityFeed } from "@/components/activity-feed";
 import { ClaimCard } from "@/components/claim-card";
 import { TheWhisper } from "@/components/the-whisper";
-import { fmtTimeLeft, fmtUsd } from "@/lib/format";
+import { fmtTimeLeft, fmtSol } from "@/lib/format";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
 import { useChainActivity } from "@/hooks/useChainActivity";
@@ -91,7 +91,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
             <span className="flex items-center gap-1.5 rounded-full border border-gray-warm bg-white px-2.5 py-1 text-gray-mid">
               <Volume2 className="h-3 w-3" /> Vol
               <span className="font-mono font-semibold text-navy">
-                {fmtUsd(m.volume, { compact: true })}
+                {fmtSol(m.volume, { compact: true })}
               </span>
             </span>
             <span className="flex items-center gap-1.5 rounded-full border border-gray-warm bg-white px-2.5 py-1 text-gray-mid">

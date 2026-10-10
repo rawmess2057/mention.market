@@ -1,6 +1,6 @@
 /// LMSR pricing (port of `apps/web/src/lib/lmsr.ts`) for on-chain use.
 ///
-/// State is `(q_yes, q_no, b)` in base units (lamports or USDC 1e-6 units) for
+/// State is `(q_yes, q_no, b)` in base units (lamports) for
 /// q/b, and the same units for the resulting costs/shares. All math runs in
 /// f64 via `libm` so the program compiles to BPF; the SBF host and the TS
 /// preview implement the same IEEE-754 operations, so quotes match to

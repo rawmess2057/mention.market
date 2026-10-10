@@ -31,11 +31,11 @@ for (const s of targets) {
       s.event,
       { [((V[s.vertical] ?? "Streams").toLowerCase())]: {} },
       { [s.type === "majority" ? "majority" : "binary"]: {} },
-      { sol: {} },
       bn(s.b),
       s.words,
       bn(endTime),
-      100
+      100,
+      Array(32).fill(0)
     )
     .accounts({
       creator: kp.publicKey,
@@ -54,6 +54,6 @@ for (const s of targets) {
   const m = await program.account.market.fetch(marketPda(s.id)).catch(() => null);
   if (!m) continue;
   console.log(
-    `  m${s.id} ${enumKey(m.status)} ${enumKey(m.asset)} ${enumKey(m.marketType)} volume=${m.volume} words=${m.words.length}`
+    `  m${s.id} ${enumKey(m.status)} ${enumKey(m.marketType)} volume=${m.volume} words=${m.words.length}`
   );
 }

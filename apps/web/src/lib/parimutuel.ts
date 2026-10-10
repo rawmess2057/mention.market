@@ -1,7 +1,7 @@
 /**
  * Pari-mutuel pool math for Majority ("race") markets.
  *
- * Everyone who backs a word puts USDC into that word's pool. When the event
+ * Everyone who backs a word puts SOL into that word's pool. When the event
  * ends, the winning word's backers split the entire pot (all pools minus fees)
  * pro-rata to their contribution.
  */
@@ -11,7 +11,7 @@ import type { WordPool } from "./types";
 export interface BackQuote {
   /** Total pool after backing. */
   poolAfter: number;
-  /** Your share of the winning pot, in USDC, if this word wins. */
+  /** Your share of the winning pot, in SOL, if this word wins. */
   payoutIfWin: number;
   /** Total pot across all words after your backing. */
   potAfter: number;
@@ -19,13 +19,13 @@ export interface BackQuote {
   potShare: number;
   /**
    * Worst-case payout if the pot triples before the event ends, assuming
-   * (conservatively) every new USDC lands on your own word. Real payouts are
+   * (conservatively) every new SOL lands on your own word. Real payouts are
    * never lower than this unless the pool grows on other words.
    */
   minPayoutIfTripled: number;
 }
 
-/** Quote for backing `word` with `amount` USDC. */
+/** Quote for backing `word` with `amount` SOL. */
 export function quoteBack(
   words: WordPool[],
   word: string,

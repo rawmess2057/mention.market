@@ -4,10 +4,6 @@ use {
         solana_program::instruction::Instruction,
         AccountDeserialize, InstructionData, ToAccountMetas,
     },
-    anchor_spl::{
-        associated_token::ID as ASSOCIATED_TOKEN_PROGRAM_ID,
-        token::ID as TOKEN_PROGRAM_ID,
-    },
     litesvm::LiteSVM,
     solana_clock::Clock,
     solana_keypair::Keypair,
@@ -60,7 +56,6 @@ fn config_pda(program_id: Pubkey) -> Pubkey {
 fn init_config_ix(
     program_id: Pubkey,
     authority: Pubkey,
-    usdc_mint: Pubkey,
     resolver: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
@@ -69,7 +64,6 @@ fn init_config_ix(
         mention::accounts::InitializeConfig {
             authority,
             config: config_pda(program_id),
-            usdc_mint,
             resolver,
             system_program: anchor_lang::system_program::ID,
         }
@@ -82,11 +76,10 @@ fn create_market_ix(
     creator: Pubkey,
     id: u64,
     market_type: mention::MarketType,
-    asset: mention::AssetKind,
     words: Vec<String>,
     end_time: i64,
 ) -> (Instruction, Pubkey) {
-    create_market_with_b_ix(program_id, creator, id, market_type, asset, words, end_time, 100_000)
+    create_market_with_b_ix(program_id, creator, id, market_type, words, end_time, 100_000)
 }
 
 fn create_market_with_b_ix(
@@ -94,15 +87,41 @@ fn create_market_with_b_ix(
     creator: Pubkey,
     id: u64,
     market_type: mention::MarketType,
-    asset: mention::AssetKind,
     words: Vec<String>,
     end_time: i64,
     b: u64,
+) -> (Instruction, Pubkey) {
+    create_market_with_spec_ix(
+        program_id,
+        creator,
+        id,
+        market_type,
+        words,
+        end_time,
+        b,
+        [0; 32],
+    )
+}
+
+fn create_market_with_spec_ix(
+    program_id: Pubkey,
+    creator: Pubkey,
+    id: u64,
+    market_type: mention::MarketType,
+    words: Vec<String>,
+    end_time: i64,
+    b: u64,
+    resolution_spec_sha256: [u8; 32],
 ) -> (Instruction, Pubkey) {
     let id_bytes = id.to_le_bytes();
     let market =
         Pubkey::find_program_address(&[b"market", &id_bytes], &program_id).0;
     let vault = Pubkey::find_program_address(&[b"vault", market.as_ref()], &program_id).0;
+    let resolution_spec = Pubkey::find_program_address(
+        &[b"resolution-spec", market.as_ref()],
+        &program_id,
+    )
+    .0;
     let ix = Instruction::new_with_bytes(
         program_id,
         &mention::instruction::CreateMarket {
@@ -111,11 +130,11 @@ fn create_market_with_b_ix(
             event: "devnet test event".to_string(),
             vertical: mention::Vertical::Streams,
             market_type,
-            asset,
             b,
             words,
             end_time,
             creator_fee_bps: 100,
+            resolution_spec_sha256,
         }
         .data(),
         mention::accounts::CreateMarket {
@@ -123,6 +142,7 @@ fn create_market_with_b_ix(
             config: config_pda(program_id),
             market,
             vault,
+            resolution_spec,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -156,27 +176,25 @@ fn read_market(svm: &LiteSVM, market: Pubkey) -> mention::Market {
     mention::Market::try_deserialize(&mut data).expect("deserialize market")
 }
 
-fn bootstrap(svm: &mut LiteSVM, payer: &Keypair, program_id: Pubkey) -> (Pubkey, Keypair) {
-    let usdc_mint = Keypair::new().pubkey();
+fn bootstrap(svm: &mut LiteSVM, payer: &Keypair, program_id: Pubkey) -> Keypair {
     let resolver = Keypair::new();
     svm.airdrop(&resolver.pubkey(), 100 * LAMPORTS).unwrap();
     send(
         svm,
-        &[init_config_ix(program_id, payer.pubkey(), usdc_mint, resolver.pubkey())],
+        &[init_config_ix(program_id, payer.pubkey(), resolver.pubkey())],
         payer,
     )
     .unwrap();
-    (usdc_mint, resolver)
+    resolver
 }
 
 #[test]
 fn test_initialize_config() {
     let (mut svm, payer, program_id) = setup();
-    let usdc_mint = Keypair::new().pubkey();
     let resolver = Keypair::new().pubkey();
     send(
         &mut svm,
-        &[init_config_ix(program_id, payer.pubkey(), usdc_mint, resolver)],
+        &[init_config_ix(program_id, payer.pubkey(), resolver)],
         &payer,
     )
     .unwrap();
@@ -186,7 +204,6 @@ fn test_initialize_config() {
     let config = mention::Config::try_deserialize(&mut data).unwrap();
     assert_eq!(config.authority, payer.pubkey());
     assert_eq!(config.resolver, resolver);
-    assert_eq!(config.usdc_mint, usdc_mint);
     assert_eq!(config.fee_bps, 100);
     assert!(!config.paused);
 }
@@ -202,7 +219,6 @@ fn test_create_market_binary() {
         payer.pubkey(),
         1,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end_time,
     );
@@ -213,7 +229,6 @@ fn test_create_market_binary() {
     assert_eq!(market.creator, payer.pubkey());
     assert_eq!(market.status, mention::MarketStatus::Open);
     assert_eq!(market.market_type, mention::MarketType::Binary);
-    assert_eq!(market.asset, mention::AssetKind::Sol);
     assert_eq!(market.b, 100_000);
     assert_eq!(market.end_time, end_time);
     assert_eq!(market.creator_fee_bps, 100);
@@ -221,6 +236,37 @@ fn test_create_market_binary() {
     assert_eq!(market.no_shares, 0);
     assert!(market.winning_outcome.is_empty());
     assert!(market.words.is_empty());
+}
+
+#[test]
+fn test_create_market_commits_resolution_spec_hash() {
+    let (mut svm, payer, program_id) = setup();
+    bootstrap(&mut svm, &payer, program_id);
+
+    let expected_hash = [7; 32];
+    let (ix, market) = create_market_with_spec_ix(
+        program_id,
+        payer.pubkey(),
+        17,
+        mention::MarketType::Binary,
+        vec![],
+        unix_now(&svm) + 3_600,
+        100_000,
+        expected_hash,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let spec_pda = Pubkey::find_program_address(
+        &[b"resolution-spec", market.as_ref()],
+        &program_id,
+    )
+    .0;
+    let account = svm.get_account(&spec_pda).expect("resolution spec account");
+    let mut data = account.data.as_slice();
+    let commitment = mention::ResolutionSpecCommitment::try_deserialize(&mut data).unwrap();
+
+    assert_eq!(commitment.market, market);
+    assert_eq!(commitment.spec_sha256, expected_hash);
 }
 
 #[test]
@@ -233,7 +279,6 @@ fn test_create_market_majority_words() {
         payer.pubkey(),
         2,
         mention::MarketType::Majority,
-        mention::AssetKind::Sol,
         vec!["AI".into(), "agents".into(), "Solana".into()],
         unix_now(&svm) + 3_600,
     );
@@ -257,7 +302,6 @@ fn test_create_market_rejects_past_end_time() {
         payer.pubkey(),
         3,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         unix_now(&svm) - 10,
     );
@@ -279,7 +323,6 @@ fn test_duplicate_market_id_fails() {
         payer.pubkey(),
         4,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -298,7 +341,6 @@ fn test_lock_market_only_after_end() {
         payer.pubkey(),
         5,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end_time,
     );
@@ -358,7 +400,6 @@ fn buy_binary_ix(
     side: u8,
     cost: u64,
     min_shares: u64,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -374,11 +415,6 @@ fn buy_binary_ix(
             market,
             vault: vault_pda(program_id, market),
             position: position_pda(program_id, market, trader),
-            trader_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -392,7 +428,6 @@ fn sell_binary_ix(
     side: u8,
     shares: u64,
     min_proceeds: u64,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -408,11 +443,6 @@ fn sell_binary_ix(
             market,
             vault: vault_pda(program_id, market),
             position: position_pda(program_id, market, trader),
-            trader_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -425,7 +455,6 @@ fn back_word_ix(
     market: Pubkey,
     word: String,
     amount: u64,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -436,11 +465,6 @@ fn back_word_ix(
             market,
             vault: vault_pda(program_id, market),
             position: position_pda(program_id, market, backer),
-            backer_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -454,7 +478,6 @@ fn propose_ix(
     outcome: String,
     confidence: u8,
     evidence_hash: [u8; 32],
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -469,11 +492,6 @@ fn propose_ix(
             config: config_pda(program_id),
             market,
             vault: vault_pda(program_id, market),
-            resolver_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -484,7 +502,6 @@ fn challenge_ix(
     program_id: Pubkey,
     challenger: Pubkey,
     market: Pubkey,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -494,11 +511,6 @@ fn challenge_ix(
             config: config_pda(program_id),
             market,
             vault: vault_pda(program_id, market),
-            challenger_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -510,7 +522,6 @@ fn finalize_ix(
     finalizer: Pubkey,
     market: Pubkey,
     proposer: Pubkey,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -520,12 +531,7 @@ fn finalize_ix(
             config: config_pda(program_id),
             market,
             vault: vault_pda(program_id, market),
-            proposer_ata: None,
             proposer_account: Some(proposer),
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -536,7 +542,6 @@ fn claim_ix(
     program_id: Pubkey,
     claimant: Pubkey,
     market: Pubkey,
-    usdc_mint: Pubkey,
 ) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
@@ -547,11 +552,6 @@ fn claim_ix(
             market,
             vault: vault_pda(program_id, market),
             position: position_pda(program_id, market, claimant),
-            claimant_ata: None,
-            vault_ata: None,
-            mint: usdc_mint,
-            token_program: TOKEN_PROGRAM_ID,
-            associated_token_program: ASSOCIATED_TOKEN_PROGRAM_ID,
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -565,7 +565,7 @@ fn claim_ix(
 #[test]
 fn test_buy_binary_mints_shares() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -573,7 +573,6 @@ fn test_buy_binary_mints_shares() {
         payer.pubkey(),
         20,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -594,7 +593,6 @@ fn test_buy_binary_mints_shares() {
             0,
             1_000_000_000,
             0,
-            usdc_mint,
         )],
         &trader,
     )
@@ -620,7 +618,7 @@ fn test_buy_binary_mints_shares() {
 #[test]
 fn test_buy_sell_round_trip() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -628,7 +626,6 @@ fn test_buy_sell_round_trip() {
         payer.pubkey(),
         21,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -649,7 +646,6 @@ fn test_buy_sell_round_trip() {
             0,
             2_000_000_000,
             0,
-            usdc_mint,
         )],
         &trader,
     )
@@ -666,7 +662,6 @@ fn test_buy_sell_round_trip() {
             0,
             held,
             0,
-            usdc_mint,
         )],
         &trader,
     )
@@ -693,7 +688,7 @@ fn test_buy_sell_round_trip() {
 #[test]
 fn test_sell_without_holdings_rejected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -701,7 +696,6 @@ fn test_sell_without_holdings_rejected() {
         payer.pubkey(),
         22,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -720,7 +714,6 @@ fn test_sell_without_holdings_rejected() {
                 0,
                 100,
                 0,
-                usdc_mint,
             )],
             &trader,
         )
@@ -731,7 +724,7 @@ fn test_sell_without_holdings_rejected() {
 #[test]
 fn test_buy_slippage_detected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -739,7 +732,6 @@ fn test_buy_slippage_detected() {
         payer.pubkey(),
         23,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -758,7 +750,6 @@ fn test_buy_slippage_detected() {
                 0,
                 1_000_000_000,
                 u64::MAX,
-                usdc_mint,
             )],
             &trader,
         )
@@ -769,7 +760,7 @@ fn test_buy_slippage_detected() {
 #[test]
 fn test_buy_after_lock_rejected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 5;
     let (ix, market) = create_market_ix(
@@ -777,7 +768,6 @@ fn test_buy_after_lock_rejected() {
         payer.pubkey(),
         24,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -797,7 +787,6 @@ fn test_buy_after_lock_rejected() {
                 0,
                 1_000_000_000,
                 0,
-                usdc_mint,
             )],
             &trader,
         )
@@ -813,7 +802,7 @@ fn test_buy_after_lock_rejected() {
 #[test]
 fn test_back_word_pools_grow() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -821,7 +810,6 @@ fn test_back_word_pools_grow() {
         payer.pubkey(),
         30,
         mention::MarketType::Majority,
-        mention::AssetKind::Sol,
         vec!["AI".into(), "Solana".into()],
         end,
     );
@@ -841,7 +829,6 @@ fn test_back_word_pools_grow() {
             market,
             "AI".into(),
             3_000_000_000,
-            usdc_mint,
         )],
         &a,
     )
@@ -854,7 +841,6 @@ fn test_back_word_pools_grow() {
             market,
             "AI".into(),
             1_000_000_000,
-            usdc_mint,
         )],
         &b,
     )
@@ -867,7 +853,6 @@ fn test_back_word_pools_grow() {
             market,
             "Solana".into(),
             6_000_000_000,
-            usdc_mint,
         )],
         &c,
     )
@@ -892,7 +877,7 @@ fn test_back_word_pools_grow() {
 #[test]
 fn test_back_unknown_word_rejected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -900,7 +885,6 @@ fn test_back_unknown_word_rejected() {
         payer.pubkey(),
         31,
         mention::MarketType::Majority,
-        mention::AssetKind::Sol,
         vec!["AI".into(), "Solana".into()],
         end,
     );
@@ -917,7 +901,6 @@ fn test_back_unknown_word_rejected() {
                 market,
                 "nope".into(),
                 1_000_000_000,
-                usdc_mint,
             )],
             &backer,
         )
@@ -928,7 +911,7 @@ fn test_back_unknown_word_rejected() {
 #[test]
 fn test_wrong_market_type_rejected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix_bin, market_bin) = create_market_ix(
@@ -936,7 +919,6 @@ fn test_wrong_market_type_rejected() {
         payer.pubkey(),
         32,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -945,7 +927,6 @@ fn test_wrong_market_type_rejected() {
         payer.pubkey(),
         33,
         mention::MarketType::Majority,
-        mention::AssetKind::Sol,
         vec!["AI".into(), "Solana".into()],
         end,
     );
@@ -964,7 +945,6 @@ fn test_wrong_market_type_rejected() {
                 0,
                 1_000_000_000,
                 0,
-                usdc_mint,
             )],
             &trader,
         )
@@ -980,7 +960,6 @@ fn test_wrong_market_type_rejected() {
                 market_bin,
                 "AI".into(),
                 1_000_000_000,
-                usdc_mint,
             )],
             &trader,
         )
@@ -995,7 +974,7 @@ fn test_wrong_market_type_rejected() {
 #[test]
 fn test_resolution_state_machine() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, resolver) = bootstrap(&mut svm, &payer, program_id);
+    let resolver = bootstrap(&mut svm, &payer, program_id);
     // Two bonds (propose -> challenge -> re-propose) come out of this wallet.
     svm.airdrop(&resolver.pubkey(), 300 * LAMPORTS).unwrap();
     let challenger = Keypair::new();
@@ -1007,7 +986,6 @@ fn test_resolution_state_machine() {
         payer.pubkey(),
         40,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1028,7 +1006,6 @@ fn test_resolution_state_machine() {
                 "yes".into(),
                 100,
                 [7u8; 32],
-                usdc_mint,
             )],
             &attacker,
         )
@@ -1036,7 +1013,7 @@ fn test_resolution_state_machine() {
         "non-resolver must not be able to propose"
     );
 
-    let bond = mention::constants::bond_units(mention::AssetKind::Sol);
+    let bond = mention::constants::bond_units();
     let resolver_before = svm.get_account(&resolver.pubkey()).unwrap().lamports;
     let now = unix_now(&svm);
     send(
@@ -1048,7 +1025,6 @@ fn test_resolution_state_machine() {
             "yes".into(),
             100,
             [7u8; 32],
-            usdc_mint,
         )],
         &resolver,
     )
@@ -1071,7 +1047,7 @@ fn test_resolution_state_machine() {
     // Challenge resets to Locked.
     send(
         &mut svm,
-        &[challenge_ix(program_id, challenger.pubkey(), market, usdc_mint)],
+        &[challenge_ix(program_id, challenger.pubkey(), market)],
         &challenger,
     )
     .unwrap();
@@ -1089,7 +1065,6 @@ fn test_resolution_state_machine() {
             "no".into(),
             90,
             [8u8; 32],
-            usdc_mint,
         )],
         &resolver,
     )
@@ -1100,7 +1075,7 @@ fn test_resolution_state_machine() {
     assert!(
         send(
             &mut svm,
-            &[finalize_ix(program_id, payer.pubkey(), market, resolver.pubkey(), usdc_mint)],
+            &[finalize_ix(program_id, payer.pubkey(), market, resolver.pubkey())],
             &payer,
         )
         .is_err(),
@@ -1111,7 +1086,7 @@ fn test_resolution_state_machine() {
     advance(&mut svm, 121);
     send(
         &mut svm,
-        &[finalize_ix(program_id, payer.pubkey(), market, resolver.pubkey(), usdc_mint)],
+        &[finalize_ix(program_id, payer.pubkey(), market, resolver.pubkey())],
         &payer,
     )
     .unwrap();
@@ -1145,7 +1120,6 @@ fn resolve_market(
     resolver: &Keypair,
     outcome: &str,
     payer: &Keypair,
-    usdc_mint: Pubkey,
 ) {
     let end = read_market(svm, market).end_time;
     advance(svm, end + 1 - unix_now(svm));
@@ -1159,7 +1133,6 @@ fn resolve_market(
             outcome.into(),
             100,
             [9u8; 32],
-            usdc_mint,
         )],
         resolver,
     )
@@ -1172,7 +1145,6 @@ fn resolve_market(
             payer.pubkey(),
             market,
             resolver.pubkey(),
-            usdc_mint,
         )],
         payer,
     )
@@ -1182,7 +1154,7 @@ fn resolve_market(
 #[test]
 fn test_binary_claim_payout() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, resolver) = bootstrap(&mut svm, &payer, program_id);
+    let resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 5;
     let (ix, market) = create_market_ix(
@@ -1190,7 +1162,6 @@ fn test_binary_claim_payout() {
         payer.pubkey(),
         50,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1209,7 +1180,6 @@ fn test_binary_claim_payout() {
             0,
             1_000_000_000,
             0,
-            usdc_mint,
         )],
         &yes_trader,
     )
@@ -1223,7 +1193,6 @@ fn test_binary_claim_payout() {
             1,
             900_000_000,
             0,
-            usdc_mint,
         )],
         &no_trader,
     )
@@ -1231,13 +1200,13 @@ fn test_binary_claim_payout() {
     let yes_shares = read_market(&svm, market).yes_shares;
     assert!(yes_shares > 0);
 
-    resolve_market(&mut svm, program_id, market, &resolver, "yes", &payer, usdc_mint);
+    resolve_market(&mut svm, program_id, market, &resolver, "yes", &payer);
 
     // YES trader redeems winning shares 1:1.
     let yes_before = svm.get_account(&yes_trader.pubkey()).unwrap().lamports;
     send(
         &mut svm,
-        &[claim_ix(program_id, yes_trader.pubkey(), market, usdc_mint)],
+        &[claim_ix(program_id, yes_trader.pubkey(), market)],
         &yes_trader,
     )
     .unwrap();
@@ -1255,7 +1224,7 @@ fn test_binary_claim_payout() {
     assert!(
         send(
             &mut svm,
-            &[claim_ix(program_id, yes_trader.pubkey(), market, usdc_mint)],
+            &[claim_ix(program_id, yes_trader.pubkey(), market)],
             &yes_trader,
         )
         .is_err(),
@@ -1266,7 +1235,7 @@ fn test_binary_claim_payout() {
     assert!(
         send(
             &mut svm,
-            &[claim_ix(program_id, no_trader.pubkey(), market, usdc_mint)],
+            &[claim_ix(program_id, no_trader.pubkey(), market)],
             &no_trader,
         )
         .is_err(),
@@ -1277,7 +1246,7 @@ fn test_binary_claim_payout() {
 #[test]
 fn test_majority_claim_pro_rata() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, resolver) = bootstrap(&mut svm, &payer, program_id);
+    let resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 5;
     let (ix, market) = create_market_ix(
@@ -1285,7 +1254,6 @@ fn test_majority_claim_pro_rata() {
         payer.pubkey(),
         51,
         mention::MarketType::Majority,
-        mention::AssetKind::Sol,
         vec!["AI".into(), "Solana".into()],
         end,
     );
@@ -1305,7 +1273,6 @@ fn test_majority_claim_pro_rata() {
             market,
             "AI".into(),
             3_000_000_000,
-            usdc_mint,
         )],
         &a,
     )
@@ -1318,7 +1285,6 @@ fn test_majority_claim_pro_rata() {
             market,
             "AI".into(),
             1_000_000_000,
-            usdc_mint,
         )],
         &b,
     )
@@ -1331,13 +1297,12 @@ fn test_majority_claim_pro_rata() {
             market,
             "Solana".into(),
             6_000_000_000,
-            usdc_mint,
         )],
         &c,
     )
     .unwrap();
 
-    resolve_market(&mut svm, program_id, market, &resolver, "AI", &payer, usdc_mint);
+    resolve_market(&mut svm, program_id, market, &resolver, "AI", &payer);
 
     // total_pool = 10e9, win_pool(AI) = 4e9, fee = 100 bps.
     // net_pot = 10e9 * 0.99 = 9.9e9 (floored stays integral).
@@ -1345,7 +1310,7 @@ fn test_majority_claim_pro_rata() {
     let a_before = svm.get_account(&a.pubkey()).unwrap().lamports;
     send(
         &mut svm,
-        &[claim_ix(program_id, a.pubkey(), market, usdc_mint)],
+        &[claim_ix(program_id, a.pubkey(), market)],
         &a,
     )
     .unwrap();
@@ -1359,7 +1324,7 @@ fn test_majority_claim_pro_rata() {
     let b_before = svm.get_account(&b.pubkey()).unwrap().lamports;
     send(
         &mut svm,
-        &[claim_ix(program_id, b.pubkey(), market, usdc_mint)],
+        &[claim_ix(program_id, b.pubkey(), market)],
         &b,
     )
     .unwrap();
@@ -1374,7 +1339,7 @@ fn test_majority_claim_pro_rata() {
     assert!(
         send(
             &mut svm,
-            &[claim_ix(program_id, c.pubkey(), market, usdc_mint)],
+            &[claim_ix(program_id, c.pubkey(), market)],
             &c,
         )
         .is_err()
@@ -1396,7 +1361,7 @@ fn test_majority_claim_pro_rata() {
 #[test]
 fn test_claim_before_resolved_rejected() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (ix, market) = create_market_ix(
@@ -1404,7 +1369,6 @@ fn test_claim_before_resolved_rejected() {
         payer.pubkey(),
         52,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1421,7 +1385,6 @@ fn test_claim_before_resolved_rejected() {
             0,
             1_000_000_000,
             0,
-            usdc_mint,
         )],
         &trader,
     )
@@ -1430,34 +1393,12 @@ fn test_claim_before_resolved_rejected() {
     assert!(
         send(
             &mut svm,
-            &[claim_ix(program_id, trader.pubkey(), market, usdc_mint)],
+            &[claim_ix(program_id, trader.pubkey(), market)],
             &trader,
         )
         .is_err(),
         "claiming an unresolved market must fail"
     );
-}
-
-/// The USDC vault path is not wired end to end yet, so no USDC market may be
-/// created. This is also what keeps the `trader_ata`/`vault_ata` handling
-/// unreachable until it is properly constrained and tested.
-#[test]
-fn test_create_market_rejects_usdc() {
-    let (mut svm, payer, program_id) = setup();
-    bootstrap(&mut svm, &payer, program_id);
-
-    let end = unix_now(&svm) + 3_600;
-    let (ix, _market) = create_market_ix(
-        program_id,
-        payer.pubkey(),
-        53,
-        mention::MarketType::Binary,
-        mention::AssetKind::Usdc,
-        vec![],
-        end,
-    );
-    let err = send(&mut svm, &[ix], &payer).unwrap_err();
-    assert!(err.contains("AssetNotSupported"), "unexpected error: {err}");
 }
 
 /// The vault must start with the LMSR reserve ante, `ceil(b * ln 2)` — the
@@ -1478,7 +1419,6 @@ fn test_create_market_funds_reserve_ante() {
         payer.pubkey(),
         54,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
         b,
@@ -1499,7 +1439,7 @@ fn test_create_market_funds_reserve_ante() {
 #[test]
 fn test_trade_rejected_after_end_time() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 5;
     let (ix, market) = create_market_ix(
@@ -1507,7 +1447,6 @@ fn test_trade_rejected_after_end_time() {
         payer.pubkey(),
         55,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1523,7 +1462,6 @@ fn test_trade_rejected_after_end_time() {
             0,
             1_000_000_000,
             0,
-            usdc_mint,
         )
     };
 
@@ -1544,7 +1482,7 @@ fn test_trade_rejected_after_end_time() {
 #[test]
 fn test_finalize_refund_goes_to_proposer() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, resolver) = bootstrap(&mut svm, &payer, program_id);
+    let resolver = bootstrap(&mut svm, &payer, program_id);
     svm.airdrop(&resolver.pubkey(), 300 * LAMPORTS).unwrap();
 
     let end = unix_now(&svm) + 5;
@@ -1553,7 +1491,6 @@ fn test_finalize_refund_goes_to_proposer() {
         payer.pubkey(),
         56,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1574,14 +1511,13 @@ fn test_finalize_refund_goes_to_proposer() {
             "yes".into(),
             100,
             [7u8; 32],
-            usdc_mint,
         )],
         &resolver,
     )
     .unwrap();
     advance(&mut svm, 121);
 
-    let bond = mention::constants::bond_units(mention::AssetKind::Sol);
+    let bond = mention::constants::bond_units();
     let attacker = Keypair::new();
     svm.airdrop(&attacker.pubkey(), 100 * LAMPORTS).unwrap();
     let attacker_before = svm.get_account(&attacker.pubkey()).unwrap().lamports;
@@ -1595,7 +1531,6 @@ fn test_finalize_refund_goes_to_proposer() {
             attacker.pubkey(),
             market,
             attacker.pubkey(),
-            usdc_mint,
         )],
         &attacker,
     )
@@ -1610,7 +1545,6 @@ fn test_finalize_refund_goes_to_proposer() {
             payer.pubkey(),
             market,
             resolver.pubkey(),
-            usdc_mint,
         )],
         &payer,
     )
@@ -1633,7 +1567,7 @@ fn test_finalize_refund_goes_to_proposer() {
 #[test]
 fn test_set_paused_blocks_trading() {
     let (mut svm, payer, program_id) = setup();
-    let (usdc_mint, _resolver) = bootstrap(&mut svm, &payer, program_id);
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
 
     let end = unix_now(&svm) + 3_600;
     let (create_ix, market) = create_market_ix(
@@ -1641,7 +1575,6 @@ fn test_set_paused_blocks_trading() {
         payer.pubkey(),
         57,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );
@@ -1657,7 +1590,6 @@ fn test_set_paused_blocks_trading() {
             0,
             1_000_000_000,
             0,
-            usdc_mint,
         )
     };
     send(&mut svm, &[buy()], &trader).unwrap();
@@ -1691,7 +1623,6 @@ fn test_set_paused_blocks_trading() {
         payer.pubkey(),
         58,
         mention::MarketType::Binary,
-        mention::AssetKind::Sol,
         vec![],
         end,
     );

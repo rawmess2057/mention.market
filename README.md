@@ -36,8 +36,8 @@ pipeline (lock → evidence → challenge window → resolved → claim).
 - **Zustand** simulation store (`src/lib/sim.ts`)
 - **Pricing**: LMSR (`src/lib/lmsr.ts`) for binary, pari-mutuel (`src/lib/parimutuel.ts`) for word races
 - **Wallet**: `@solana/wallet-adapter` (Phantom/Solflare) on devnet. Connected
-  wallets trade simulated markets through a demo USDC vault, and trade real
-  devnet SOL through the program for on-chain markets.
+  wallets trade both simulated and on-chain markets in real devnet SOL — the
+  program escrows SOL in its vault and settles through the resolution pipeline.
 
 ## Run it
 
@@ -97,7 +97,8 @@ SEED_BLOCK=1 SEED_KEYPAIR_PATH=$PWD/scripts/keys/resolver.json node scripts/seed
 #    markets when they end, proposes a resolution, waits out the 120s
 #    challenge window, then finalizes — so audiences see live resolution.
 #    Use the same SEED_BLOCK so the oracle resolves the batch you just seeded.
-node scripts/oracle.mjs --watch
+#    For a shifted batch, prefix this command with e.g. SEED_BLOCK=1.
+node scripts/oracle.mjs --watch --all
 ```
 
 Notes:

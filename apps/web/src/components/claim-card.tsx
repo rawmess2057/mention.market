@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/viz/confetti";
-import { cn, fmtErr, fmtUsd } from "@/lib/format";
+import { cn, fmtErr, fmtSol } from "@/lib/format";
 import { settleMajority } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
@@ -59,13 +59,13 @@ export function ClaimCard({ market }: { market: Market }) {
 
       <div className="mt-3 flex items-center justify-between text-sm">
         <span className="text-gray-mid">Your payout</span>
-        <span className="font-mono text-lg font-bold text-navy">{fmtUsd(payout)}</span>
+        <span className="font-mono text-lg font-bold text-navy">{fmtSol(payout)}</span>
       </div>
       <div className="mt-1 flex items-center justify-between text-xs">
         <span className="text-gray-mid">P&L</span>
         <span className={cn("font-mono font-bold", profit >= 0 ? "text-green" : "text-red-brand")}>
           {profit >= 0 ? "+" : ""}
-          {fmtUsd(profit)}
+          {fmtSol(profit)}
         </span>
       </div>
 
@@ -90,7 +90,7 @@ export function ClaimCard({ market }: { market: Market }) {
           }
         }}
       >
-        {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtUsd(payout)}`}
+        {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtSol(payout)}`}
       </Button>
       <Confetti fire={confetti} />
     </div>

@@ -24,8 +24,6 @@ pub enum ErrorCode {
     TitleTooLong,
     #[msg("Outcome label is too long")]
     OutcomeTooLong,
-    #[msg("Token account data is invalid")]
-    InvalidTokenAccount,
     #[msg("Insufficient funds for this action")]
     InsufficientAmount,
     #[msg("Market is not a binary (LMSR) market")]
@@ -52,8 +50,6 @@ pub enum ErrorCode {
     InvalidResolution,
     #[msg("Exit price moved beyond slippage tolerance")]
     SlippageTooHigh,
-    #[msg("This asset kind is not supported yet")]
-    AssetNotSupported,
     #[msg("Trading has ended for this market")]
     MarketClosed,
 }

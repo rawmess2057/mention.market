@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/mention.json`.
  */
 export type Mention = {
-  "address": "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV",
+  "address": "5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8",
   "metadata": {
     "name": "mention",
     "version": "0.1.0",
@@ -126,36 +126,6 @@ export type Mention = {
               }
             ]
           }
-        },
-        {
-          "name": "backerAta",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "transfer CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -289,36 +259,6 @@ export type Mention = {
           }
         },
         {
-          "name": "traderAta",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "transfer CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -422,36 +362,6 @@ export type Mention = {
               }
             ]
           }
-        },
-        {
-          "name": "challengerAta",
-          "docs": [
-            "type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -575,36 +485,6 @@ export type Mention = {
           }
         },
         {
-          "name": "claimantAta",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -696,6 +576,38 @@ export type Mention = {
           }
         },
         {
+          "name": "resolutionSpec",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  111,
+                  108,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  115,
+                  112,
+                  101,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -730,14 +642,6 @@ export type Mention = {
           }
         },
         {
-          "name": "asset",
-          "type": {
-            "defined": {
-              "name": "assetKind"
-            }
-          }
-        },
-        {
           "name": "b",
           "type": "u64"
         },
@@ -754,6 +658,15 @@ export type Mention = {
         {
           "name": "creatorFeeBps",
           "type": "u16"
+        },
+        {
+          "name": "resolutionSpecSha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -776,7 +689,7 @@ export type Mention = {
         {
           "name": "finalizer",
           "docs": [
-            "Permissionless; pays rent if a refund ATA must be created."
+            "Permissionless; pays nothing beyond tx fees."
           ],
           "writable": true,
           "signer": true
@@ -846,39 +759,9 @@ export type Mention = {
           }
         },
         {
-          "name": "proposerAta",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
           "name": "proposerAccount",
           "writable": true,
           "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -890,7 +773,7 @@ export type Mention = {
     {
       "name": "initializeConfig",
       "docs": [
-        "One-time program setup: authority, trusted resolver, USDC mint, fee."
+        "One-time program setup: authority, trusted resolver, fee."
       ],
       "discriminator": [
         208,
@@ -926,9 +809,6 @@ export type Mention = {
               }
             ]
           }
-        },
-        {
-          "name": "usdcMint"
         },
         {
           "name": "resolver"
@@ -992,56 +872,6 @@ export type Mention = {
         }
       ],
       "args": []
-    },
-    {
-      "name": "setPaused",
-      "docs": [
-        "Flip the global kill switch. Only the config authority may call it."
-      ],
-      "discriminator": [
-        91,
-        60,
-        125,
-        192,
-        176,
-        225,
-        166,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "signer": true,
-          "relations": [
-            "config"
-          ]
-        },
-        {
-          "name": "config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "paused",
-          "type": "bool"
-        }
-      ]
     },
     {
       "name": "proposeResolution",
@@ -1127,36 +957,6 @@ export type Mention = {
               }
             ]
           }
-        },
-        {
-          "name": "resolverAta",
-          "docs": [
-            "and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -1298,36 +1098,6 @@ export type Mention = {
           }
         },
         {
-          "name": "traderAta",
-          "docs": [
-            "per asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vaultAta",
-          "docs": [
-            "Vault USDC ATA. USDC markets only."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -1344,6 +1114,56 @@ export type Mention = {
         {
           "name": "minProceeds",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setPaused",
+      "docs": [
+        "Flip the global kill switch. Only the config authority may call it."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
         }
       ]
     }
@@ -1389,6 +1209,19 @@ export type Mention = {
       ]
     },
     {
+      "name": "resolutionSpecCommitment",
+      "discriminator": [
+        251,
+        14,
+        107,
+        114,
+        139,
+        186,
+        225,
+        111
+      ]
+    },
+    {
       "name": "vault",
       "discriminator": [
         211,
@@ -1427,6 +1260,19 @@ export type Mention = {
         106,
         199,
         202
+      ]
+    },
+    {
+      "name": "pausedChanged",
+      "discriminator": [
+        12,
+        10,
+        153,
+        247,
+        60,
+        115,
+        137,
+        69
       ]
     },
     {
@@ -1527,104 +1373,76 @@ export type Mention = {
     },
     {
       "code": 6011,
-      "name": "invalidTokenAccount",
-      "msg": "Token account data is invalid"
-    },
-    {
-      "code": 6012,
       "name": "insufficientAmount",
       "msg": "Insufficient funds for this action"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "notBinary",
       "msg": "Market is not a binary (LMSR) market"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "notMajority",
       "msg": "Market is not a majority (pari-mutuel) market"
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "unknownWord",
       "msg": "Word is not a valid outcome in this market"
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "claimed",
       "msg": "Position must be zero to claim"
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "noWinningShares",
       "msg": "No winning shares held"
     },
     {
-      "code": 6018,
+      "code": 6017,
       "name": "notResolved",
       "msg": "Market has not resolved yet"
     },
     {
-      "code": 6019,
+      "code": 6018,
       "name": "marketNotLocked",
       "msg": "Market must be locked before a proposal"
     },
     {
-      "code": 6020,
+      "code": 6019,
       "name": "alreadyResolving",
       "msg": "Market is already resolving"
     },
     {
-      "code": 6021,
+      "code": 6020,
       "name": "noPendingProposal",
       "msg": "No pending resolution proposal"
     },
     {
-      "code": 6022,
+      "code": 6021,
       "name": "windowNotOpen",
       "msg": "Challenge window is not open"
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "invalidResolution",
       "msg": "Outcome or evidence is invalid"
     },
     {
-      "code": 6024,
+      "code": 6023,
       "name": "slippageTooHigh",
       "msg": "Exit price moved beyond slippage tolerance"
     },
     {
-      "code": 6025,
-      "name": "assetNotSupported",
-      "msg": "This asset kind is not supported yet"
-    },
-    {
-      "code": 6026,
+      "code": 6024,
       "name": "marketClosed",
       "msg": "Trading has ended for this market"
     }
   ],
   "types": [
-    {
-      "name": "assetKind",
-      "docs": [
-        "Currency a market is denominated in. USDC markets settle through an SPL",
-        "token vault; SOL markets settle through the `Vault` PDA's lamports."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "usdc"
-          },
-          {
-            "name": "sol"
-          }
-        ]
-      }
-    },
     {
       "name": "config",
       "docs": [
@@ -1639,10 +1457,6 @@ export type Mention = {
           },
           {
             "name": "resolver",
-            "type": "pubkey"
-          },
-          {
-            "name": "usdcMint",
             "type": "pubkey"
           },
           {
@@ -1690,14 +1504,6 @@ export type Mention = {
             "type": {
               "defined": {
                 "name": "vertical"
-              }
-            }
-          },
-          {
-            "name": "asset",
-            "type": {
-              "defined": {
-                "name": "assetKind"
               }
             }
           },
@@ -1816,7 +1622,7 @@ export type Mention = {
             "name": "proposer",
             "docs": [
               "Resolver pubkey behind the current proposal; the bond refunds here on",
-              "finalize (via their ATA for USDC markets, lamports for SOL markets)."
+              "finalize (lamports to the proposer's system account)."
             ],
             "type": "pubkey"
           },
@@ -1843,6 +1649,15 @@ export type Mention = {
           {
             "name": "id",
             "type": "u64"
+          },
+          {
+            "name": "resolutionSpecSha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -1897,6 +1712,22 @@ export type Mention = {
           },
           {
             "name": "majority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pausedChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
           }
         ]
       }
@@ -2019,9 +1850,10 @@ export type Mention = {
       }
     },
     {
-      "name": "vault",
+      "name": "resolutionSpecCommitment",
       "docs": [
-        "Per-market escrow. Holds SOL directly; owns the USDC ATA when `asset` is USDC."
+        "Immutable commitment to the resolution rules agreed at market creation.",
+        "An all-zero hash marks legacy/demo markets that are not eligible for backend resolution."
       ],
       "type": {
         "kind": "struct",
@@ -2031,18 +1863,31 @@ export type Mention = {
             "type": "pubkey"
           },
           {
-            "name": "asset",
+            "name": "specSha256",
             "type": {
-              "defined": {
-                "name": "assetKind"
-              }
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
-            "name": "mint",
-            "docs": [
-              "USDC mint for token markets, or the system program id for SOL markets."
-            ],
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vault",
+      "docs": [
+        "Per-market escrow. Holds SOL directly as its lamport balance."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
             "type": "pubkey"
           },
           {

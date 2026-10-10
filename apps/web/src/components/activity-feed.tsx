@@ -4,10 +4,8 @@ import { useSim } from "@/lib/sim";
 import { cn, fmtBalance } from "@/lib/format";
 
 export function ActivityFeed({ marketId, limit = 12 }: { marketId: string; limit?: number }) {
-  const market = useSim((s) => s.markets[marketId]);
   const chainActivity = useSim((s) => s.chainActivity[marketId]);
   const simActivity = useSim((s) => s.activity);
-  const assetKind = market?.asset;
 
   const items = [
     ...(chainActivity ?? []),
@@ -48,7 +46,7 @@ export function ActivityFeed({ marketId, limit = 12 }: { marketId: string; limit
           </span>
           <span className="font-medium text-navy">{a.user}</span>
           <span className="ml-auto font-mono text-navy">
-            {a.amount > 0 ? fmtBalance(a.amount, assetKind) : ""}
+            {a.amount > 0 ? fmtBalance(a.amount) : ""}
           </span>
           <span className="w-10 text-right text-gray-mid">
             {new Date(a.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}

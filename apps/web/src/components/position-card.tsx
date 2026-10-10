@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, fmtErr, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
 import { lmsrPositionValue } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
@@ -82,7 +82,7 @@ export function PositionCard({ market }: { market: Market }) {
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-mid">Cost / Value</span>
             <span className="font-mono font-semibold text-navy">
-              {fmtUsd(summary.cost)} → {fmtUsd(summary.value)}
+              {fmtSol(summary.cost)} → {fmtSol(summary.value)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
@@ -94,7 +94,7 @@ export function PositionCard({ market }: { market: Market }) {
               )}
             >
               {summary.pnl >= 0 ? "+" : ""}
-              {fmtUsd(summary.pnl)}
+              {fmtSol(summary.pnl)}
             </span>
           </div>
           {m.status === "open" && (
@@ -130,13 +130,13 @@ export function PositionCard({ market }: { market: Market }) {
             ([word, amt]) => (
               <div key={word} className="flex items-center justify-between text-sm">
                 <span className="truncate font-medium text-navy">{word}</span>
-                <span className="font-mono font-semibold text-navy">{fmtUsd(amt)}</span>
+                <span className="font-mono font-semibold text-navy">{fmtSol(amt)}</span>
               </div>
             )
           )}
           <div className="flex items-center justify-between border-t border-gray-warm pt-1.5 text-xs text-gray-mid">
             <span>Total backed</span>
-            <span className="font-mono">{fmtUsd(summary.total)}</span>
+            <span className="font-mono">{fmtSol(summary.total)}</span>
           </div>
         </div>
       )}

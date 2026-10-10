@@ -7,10 +7,9 @@
 //! the vault. Claims are one-shot (`position.claimed`).
 
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 use crate::error::ErrorCode;
-use crate::state::{AssetKind, Market, MarketStatus, MarketType, Position, Vault};
+use crate::state::{Market, MarketStatus, MarketType, Position, Vault};
 
 #[derive(Accounts)]
 pub struct Claim<'info> {
@@ -41,28 +40,12 @@ pub struct Claim<'info> {
     )]
     pub position: Account<'info, Position>,
 
-    /// CHECK: Claimant's USDC ATA (payout destination); presence checked per
-    /// asset type and validated by the transfer CPI.
-    #[account(mut)]
-    pub claimant_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the transfer
-    /// CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
 /// Claim the payout of `position` in a resolved `market`.
 pub fn handler(ctx: Context<Claim>) -> Result<()> {
     let market_key = ctx.accounts.market.key();
-    let vault_bump = ctx.accounts.vault.bump;
     let market = &mut ctx.accounts.market;
     require!(market.status == MarketStatus::Resolved, ErrorCode::NotResolved);
     require!(ctx.accounts.position.claimed == false, ErrorCode::Claimed);
@@ -72,53 +55,11 @@ pub fn handler(ctx: Context<Claim>) -> Result<()> {
     let payout = payout_for(market, &ctx.accounts.position, &outcome)?;
     require!(payout > 0, ErrorCode::NoWinningShares);
 
-    match market.asset {
-        AssetKind::Usdc => {
-            let claimant_ata = ctx
-                .accounts
-                .claimant_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx
-                .accounts
-                .vault_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                claimant_ata,
-                ctx.accounts.claimant.key(),
-                ctx.accounts.mint.key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &ctx.accounts.claimant.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.mint.to_account_info(),
-                vault_ata,
-                &ctx.accounts.associated_token_program.to_account_info(),
-                &ctx.accounts.token_program.to_account_info(),
-                &ctx.accounts.system_program.to_account_info(),
-            )?;
-            crate::instructions::token_util::withdraw_usdc(
-                &ctx.accounts.token_program.to_account_info(),
-                vault_ata,
-                claimant_ata,
-                &ctx.accounts.vault.to_account_info(),
-                &market_key,
-                vault_bump,
-                payout,
-            )?;
-        }
-        AssetKind::Sol => {
-            crate::instructions::token_util::withdraw_sol(
-                &ctx.accounts.system_program.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.claimant.to_account_info(),
-                &market_key,
-                vault_bump,
-                payout,
-            )?;
-        }
-    }
+    crate::instructions::token_util::withdraw_sol(
+        &ctx.accounts.vault.to_account_info(),
+        &ctx.accounts.claimant.to_account_info(),
+        payout,
+    )?;
 
     // Clear the position's cost basis and lock it from double-claiming.
     let pos = &mut ctx.accounts.position;
@@ -187,7 +128,7 @@ pub struct PayoutClaimed {
 mod tests {
     use super::*;
     use crate::constants::bond_units;
-    use crate::state::{AssetKind, Market, MarketStatus, MarketType, Position, Vertical, WordBack, WordPool};
+    use crate::state::{Market, MarketStatus, MarketType, Position, Vertical, WordBack, WordPool};
 
     fn market(market_type: MarketType) -> Market {
         Market {
@@ -196,7 +137,6 @@ mod tests {
             title: "t".into(),
             event: "e".into(),
             vertical: Vertical::Streams,
-            asset: AssetKind::Sol,
             market_type,
             status: MarketStatus::Resolved,
             b: 100_000,
@@ -285,7 +225,7 @@ mod tests {
         let mut m = market(MarketType::Majority);
         m.words = vec![WordPool { word: "AI".into(), pool: 1_000, bettors: 1 }];
         m.total_pool = 1_000;
-        m.bond = bond_units(m.asset);
+        m.bond = bond_units();
         let mut p = position();
         p.word_backs = vec![WordBack { word: "AI".into(), amount: 1_000 }];
         assert_eq!(payout_for(&m, &p, "AI").unwrap(), 990);

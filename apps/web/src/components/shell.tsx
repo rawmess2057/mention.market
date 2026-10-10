@@ -22,10 +22,9 @@ import {
   Radio,
   ShieldAlert,
 } from "lucide-react";
-import { cn, fmtAgo, fmtUsd, shortAddr } from "@/lib/format";
+import { cn, fmtAgo, fmtSol, shortAddr } from "@/lib/format";
 import { useSim } from "@/lib/sim";
 import type { NotificationItem } from "@/lib/types";
-import { useDevnetUsdc } from "@/hooks/useDevnetUsdc";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -44,7 +43,6 @@ export function TopBar() {
   const user = useSim((s) => s.user);
   const toast = useSim((s) => s.toast);
   const showToast = useSim((s) => s.showToast);
-  const { usdcBalance } = useDevnetUsdc();
   const pathname = usePathname();
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -71,27 +69,11 @@ export function TopBar() {
           <div className="flex items-center gap-3">
             {connected && (
               <div className="hidden items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-3 py-1.5 text-xs sm:flex">
-                <span className="text-gray-mid">
-                  {user.balanceKind === "sol" ? "Balance" : "Balance"}
-                </span>
+                <span className="text-gray-mid">Balance</span>
                 <span className="font-mono font-semibold text-green">
-                  {user.balanceKind === "sol"
-                    ? `◎ ${user.balance.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-                    : fmtUsd(user.balance)}
+                  {fmtSol(user.balance)}
                 </span>
               </div>
-            )}
-            {connected && usdcBalance !== null && (
-              <a
-                href="https://faucet.circle.com/"
-                target="_blank"
-                rel="noreferrer"
-                title="Devnet USDC — top up at faucet.circle.com"
-                className="flex items-center gap-1.5 rounded-full border border-blue/20 bg-blue-light px-3 py-1.5 text-xs transition-colors hover:border-blue/40"
-              >
-                <span className="text-gray-mid">USDC</span>
-                <span className="font-mono font-semibold text-blue">{fmtUsd(usdcBalance)}</span>
-              </a>
             )}
             <NotifBell />
             <div className="flex items-center gap-1.5">

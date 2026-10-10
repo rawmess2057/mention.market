@@ -14,7 +14,7 @@
 import type { Market, Position, TradeRecord, Vertical } from "./types";
 import { lmsrPositionValue } from "./lmsr";
 
-/** USDC cost basis embedded in a binary position (both sides). */
+/** SOL cost basis embedded in a binary position (both sides). */
 export function binaryCostBasis(pos: Position): number {
   return (
     (pos.avgYesPrice ?? 0) * (pos.yesShares ?? 0) +
@@ -43,7 +43,7 @@ export function openPositionValue(m: Market, pos: Position): number {
   return majorityBacked(pos);
 }
 
-/** USDC backed across all words in a majority market. */
+/** SOL backed across all words in a majority market. */
 export function majorityBacked(pos: Position): number {
   return Object.values(pos.wordBacks ?? {}).reduce((s, v) => s + v, 0);
 }
@@ -74,7 +74,7 @@ export interface PnlOverview {
 
 /**
  * Aggregate the whole book from the trade ledger + positions + claimable.
- * `balance` is the free-play USDC balance (net worth = balance + book value).
+ * `balance` is the free-play SOL balance (net worth = balance + book value).
  */
 export function summarizePnl(
   trades: TradeRecord[],

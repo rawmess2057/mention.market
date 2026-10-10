@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   SOL_DECIMALS,
-  USDC_DECIMALS,
   isStaleChainMarket,
   mapMarketToStore,
   mapPositionToStore,
   proceedsForSellUi,
-  scaleForAsset,
-  scaleForMarket,
   sharesForCostUi,
 } from "../chain";
 import { lmsrBuyCost, lmsrSellReturn } from "../lmsr";
@@ -17,14 +14,13 @@ function bn(value: number) {
   return { toNumber: () => value };
 }
 
-/** Minimal raw Market account; only `asset` varies across tests. */
-function chainMarketAccount(asset: "sol" | "usdc", overrides: Record<string, unknown> = {}) {
+/** Minimal raw Market account. */
+function chainMarketAccount(overrides: Record<string, unknown> = {}) {
   return {
     id: bn(1),
     title: "Will the host say 'mango'?",
     event: "Streams",
     vertical: { streams: {} },
-    asset: { [asset]: {} },
     marketType: { binary: {} },
     status: { open: {} },
     b: bn(1_500_000_000),
@@ -52,37 +48,6 @@ function chainMarketAccount(asset: "sol" | "usdc", overrides: Record<string, unk
   } as never;
 }
 
-describe("scaleForAsset", () => {
-  it("reads SOL at 9 decimals", () => {
-    expect(scaleForAsset({ sol: {} })).toBe(SOL_DECIMALS);
-    expect(SOL_DECIMALS).toBe(1_000_000_000);
-  });
-
-  it("reads USDC at 6 decimals", () => {
-    expect(scaleForAsset({ usdc: {} })).toBe(USDC_DECIMALS);
-    expect(USDC_DECIMALS).toBe(1_000_000);
-  });
-
-  it("throws on an unknown asset rather than defaulting to SOL", () => {
-    // Defaulting to SOL here would misprice a USDC market by 1000x.
-    expect(() => scaleForAsset({ btc: {} })).toThrow(/unknown market asset/);
-    expect(() => scaleForAsset(undefined)).toThrow(/unknown market asset/);
-    expect(() => scaleForAsset("")).toThrow(/unknown market asset/);
-  });
-});
-
-describe("scaleForMarket", () => {
-  it("returns the scale for a chain market", () => {
-    const market = mapMarketToStore(chainMarketAccount("sol"));
-    expect(scaleForMarket(market)).toBe(SOL_DECIMALS);
-  });
-
-  it("throws when the market has no asset", () => {
-    const market = { id: "c1" } as Market;
-    expect(() => scaleForMarket(market)).toThrow(/no asset/);
-  });
-});
-
 describe("isStaleChainMarket", () => {
   const now = 1_800_000_000_000;
   const base: Market = {
@@ -92,7 +57,6 @@ describe("isStaleChainMarket", () => {
     event: "e",
     vertical: "streams",
     type: "binary",
-    asset: "sol",
     status: "open",
     createdAt: now - 60_000,
     endTime: now + 600_000,
@@ -152,22 +116,11 @@ describe("isStaleChainMarket", () => {
 
 describe("mapMarketToStore", () => {
   it("scales a SOL market by 1e9", () => {
-    const m = mapMarketToStore(chainMarketAccount("sol"));
-    expect(m.asset).toBe("sol");
+    const m = mapMarketToStore(chainMarketAccount());
     expect(m.volume).toBe(10);
     expect(m.b).toBe(1.5);
     expect(m.yesShares).toBe(600);
     expect(m.noShares).toBe(400);
-  });
-
-  it("scales a USDC market by 1e6, not 1e9", () => {
-    const m = mapMarketToStore(chainMarketAccount("usdc"));
-    expect(m.asset).toBe("usdc");
-    // Same raw figure must not be divided by 1e9 — that would render 1000x small.
-    expect(m.volume).toBe(10_000);
-    expect(m.b).toBe(1_500);
-    expect(m.yesShares).toBe(600_000);
-    expect(m.noShares).toBe(400_000);
   });
 
   it("keeps bond, pools and avg prices on the same scale as shares", () => {
@@ -181,18 +134,13 @@ describe("mapMarketToStore", () => {
       marketType: { majority: {} },
     };
 
-    const sol = mapMarketToStore(chainMarketAccount("sol", resolving));
-    expect(sol.evidence?.bondUsd).toBe(1);
+    const sol = mapMarketToStore(chainMarketAccount(resolving));
+    expect(sol.evidence?.bondSol).toBe(1);
     expect(sol.words?.[0].pool).toBe(500);
-
-    const usdc = mapMarketToStore(chainMarketAccount("usdc", resolving));
-    expect(usdc.evidence?.bondUsd).toBe(1_000);
-    expect(usdc.words?.[0].pool).toBe(500_000);
   });
 
-  it("labels escrow with the market's own asset", () => {
-    expect(mapMarketToStore(chainMarketAccount("sol")).rules).toMatch(/devnet SOL/);
-    expect(mapMarketToStore(chainMarketAccount("usdc")).rules).toMatch(/devnet USDC/);
+  it("labels escrow as devnet SOL", () => {
+    expect(mapMarketToStore(chainMarketAccount()).rules).toMatch(/devnet SOL/);
   });
 });
 
@@ -206,18 +154,10 @@ describe("mapPositionToStore", () => {
     claimed: false,
   };
 
-  it("defaults to the SOL scale", () => {
+  it("scales by SOL decimals", () => {
     const p = mapPositionToStore("c1", position);
     expect(p.yesShares).toBe(600);
     expect(p.wordBacks?.mango).toBe(2);
-    expect(p.avgYesPrice).toBeCloseTo(500 / 600);
-  });
-
-  it("honours a USDC scale passed in by the caller", () => {
-    const p = mapPositionToStore("c1", position, USDC_DECIMALS);
-    expect(p.yesShares).toBe(600_000);
-    expect(p.noShares).toBe(400_000);
-    expect(p.wordBacks?.mango).toBe(2_000);
     expect(p.avgYesPrice).toBeCloseTo(500 / 600);
   });
 });
@@ -244,7 +184,7 @@ describe("sharesForCostUi", () => {
   it.each(programVectors)(
     "matches shares_for_cost(%f, %f, %f, %s, %f)",
     (qy, qn, b, side, cost, expected) => {
-      const m = chainMarketAccount("sol", {
+      const m = chainMarketAccount({
         b: bn(b),
         yesShares: bn(qy),
         noShares: bn(qn),
@@ -255,7 +195,7 @@ describe("sharesForCostUi", () => {
 
   it("returns UI units, not base units", () => {
     // The shape chainCreateMarket produces: b = 120 SOL on an empty book.
-    const raw = chainMarketAccount("sol", {
+    const raw = chainMarketAccount({
       b: bn(120 * SOL_DECIMALS),
       yesShares: bn(0),
       noShares: bn(0),
@@ -269,7 +209,7 @@ describe("sharesForCostUi", () => {
 
   it("produces a min_shares floor the program will accept", () => {
     const b = 120 * SOL_DECIMALS;
-    const raw = chainMarketAccount("sol", {
+    const raw = chainMarketAccount({
       b: bn(b),
       yesShares: bn(0),
       noShares: bn(0),
@@ -298,7 +238,7 @@ describe("sharesForCostUi", () => {
   });
 
   it("returns 0 for a non-positive cost instead of bracketing forever", () => {
-    const m = chainMarketAccount("sol");
+    const m = chainMarketAccount();
     expect(sharesForCostUi(m, "yes", 0, SOL_DECIMALS)).toBe(0);
     expect(sharesForCostUi(m, "yes", -1, SOL_DECIMALS)).toBe(0);
     expect(sharesForCostUi(m, "no", Number.NaN, SOL_DECIMALS)).toBe(0);
@@ -316,7 +256,7 @@ describe("proceedsForSellUi", () => {
   it.each(programVectors)(
     "matches sell_return(%f, %f, %f, %s, %f)",
     (qy, qn, b, side, shares, expected) => {
-      const m = chainMarketAccount("sol", {
+      const m = chainMarketAccount({
         b: bn(b),
         yesShares: bn(qy),
         noShares: bn(qn),
@@ -327,7 +267,7 @@ describe("proceedsForSellUi", () => {
 
   it("returns UI units so min_proceeds is not inflated by 1e9", () => {
     const b = 120 * SOL_DECIMALS;
-    const raw = chainMarketAccount("sol", {
+    const raw = chainMarketAccount({
       b: bn(b),
       yesShares: bn(0),
       noShares: bn(0),
@@ -347,7 +287,7 @@ describe("proceedsForSellUi", () => {
   });
 
   it("returns 0 for a non-positive share count", () => {
-    const m = chainMarketAccount("sol");
+    const m = chainMarketAccount();
     expect(proceedsForSellUi(m, "yes", 0, SOL_DECIMALS)).toBe(0);
     expect(proceedsForSellUi(m, "no", -5, SOL_DECIMALS)).toBe(0);
   });

@@ -135,7 +135,7 @@ function EvidenceModal({
             <div className="rounded-lg bg-cream-dark p-3 text-xs text-gray-mid">
               Proposed {fmtAgo(ev.proposedAt)} by{" "}
               <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
-              <span className="font-mono text-navy">{fmtBond(ev, m)}</span> · hash{" "}
+              <span className="font-mono text-navy">{fmtBond(ev)}</span> · hash{" "}
               <span className="font-mono text-navy">{ev.evidenceHash}</span>
               {chainMarket && m.sourceUrl && (
                 <a
@@ -191,7 +191,7 @@ function EvidenceModal({
                   }
                 }}
               >
-                Challenge (bond {fmtBond(ev, m)})
+                Challenge (bond {fmtBond(ev)})
               </Button>
             )}
           </div>
@@ -201,16 +201,7 @@ function EvidenceModal({
   );
 }
 
-function fmtUsd2(n: number) {
-  return `$${n.toLocaleString()}`;
-}
-
-/**
- * Bond amount with its unit. Simulated markets carry a USD figure, but a
- * chain market's `bondUsd` holds base units of whatever asset that market is
- * denominated in — labelling a 1 SOL bond "$1" would be a lie.
- */
-function fmtBond(ev: NonNullable<Evidence>, m: Market): string {
-  if (!m.asset) return fmtUsd2(ev.bondUsd);
-  return `${ev.bondUsd} ${m.asset === "usdc" ? "USDC" : "SOL"}`;
+/** Bond amount in SOL. Both sim and chain markets are SOL-denominated. */
+function fmtBond(ev: NonNullable<Evidence>): string {
+  return `${ev.bondSol} SOL`;
 }

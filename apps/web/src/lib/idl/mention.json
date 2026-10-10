@@ -1,5 +1,5 @@
 {
-  "address": "E6CW51RhjVAiMKJMjzfUNWDDyetqninZzRSLa4nRdZDV",
+  "address": "5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8",
   "metadata": {
     "name": "mention",
     "version": "0.1.0",
@@ -120,36 +120,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "backer_ata",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "transfer CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -283,36 +253,6 @@
           }
         },
         {
-          "name": "trader_ata",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "transfer CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -416,36 +356,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "challenger_ata",
-          "docs": [
-            "type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -569,36 +479,6 @@
           }
         },
         {
-          "name": "claimant_ata",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -690,6 +570,38 @@
           }
         },
         {
+          "name": "resolution_spec",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  115,
+                  111,
+                  108,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  115,
+                  112,
+                  101,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -724,14 +636,6 @@
           }
         },
         {
-          "name": "asset",
-          "type": {
-            "defined": {
-              "name": "AssetKind"
-            }
-          }
-        },
-        {
           "name": "b",
           "type": "u64"
         },
@@ -748,6 +652,15 @@
         {
           "name": "creator_fee_bps",
           "type": "u16"
+        },
+        {
+          "name": "resolution_spec_sha256",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -770,7 +683,7 @@
         {
           "name": "finalizer",
           "docs": [
-            "Permissionless; pays rent if a refund ATA must be created."
+            "Permissionless; pays nothing beyond tx fees."
           ],
           "writable": true,
           "signer": true
@@ -840,39 +753,9 @@
           }
         },
         {
-          "name": "proposer_ata",
-          "docs": [
-            "asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
           "name": "proposer_account",
           "writable": true,
           "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "system_program",
@@ -884,7 +767,7 @@
     {
       "name": "initialize_config",
       "docs": [
-        "One-time program setup: authority, trusted resolver, USDC mint, fee."
+        "One-time program setup: authority, trusted resolver, fee."
       ],
       "discriminator": [
         208,
@@ -920,9 +803,6 @@
               }
             ]
           }
-        },
-        {
-          "name": "usdc_mint"
         },
         {
           "name": "resolver"
@@ -1073,36 +953,6 @@
           }
         },
         {
-          "name": "resolver_ata",
-          "docs": [
-            "and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "CPI when the market is USDC-denominated."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -1242,36 +1092,6 @@
           }
         },
         {
-          "name": "trader_ata",
-          "docs": [
-            "per asset type and validated by the transfer CPI."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "vault_ata",
-          "docs": [
-            "Vault USDC ATA. USDC markets only."
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "ATA creation on USDC markets."
-          ]
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -1380,6 +1200,19 @@
         64,
         247,
         208
+      ]
+    },
+    {
+      "name": "ResolutionSpecCommitment",
+      "discriminator": [
+        251,
+        14,
+        107,
+        114,
+        139,
+        186,
+        225,
+        111
       ]
     },
     {
@@ -1534,104 +1367,76 @@
     },
     {
       "code": 6011,
-      "name": "InvalidTokenAccount",
-      "msg": "Token account data is invalid"
-    },
-    {
-      "code": 6012,
       "name": "InsufficientAmount",
       "msg": "Insufficient funds for this action"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "NotBinary",
       "msg": "Market is not a binary (LMSR) market"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "NotMajority",
       "msg": "Market is not a majority (pari-mutuel) market"
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "UnknownWord",
       "msg": "Word is not a valid outcome in this market"
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "Claimed",
       "msg": "Position must be zero to claim"
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "NoWinningShares",
       "msg": "No winning shares held"
     },
     {
-      "code": 6018,
+      "code": 6017,
       "name": "NotResolved",
       "msg": "Market has not resolved yet"
     },
     {
-      "code": 6019,
+      "code": 6018,
       "name": "MarketNotLocked",
       "msg": "Market must be locked before a proposal"
     },
     {
-      "code": 6020,
+      "code": 6019,
       "name": "AlreadyResolving",
       "msg": "Market is already resolving"
     },
     {
-      "code": 6021,
+      "code": 6020,
       "name": "NoPendingProposal",
       "msg": "No pending resolution proposal"
     },
     {
-      "code": 6022,
+      "code": 6021,
       "name": "WindowNotOpen",
       "msg": "Challenge window is not open"
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "InvalidResolution",
       "msg": "Outcome or evidence is invalid"
     },
     {
-      "code": 6024,
+      "code": 6023,
       "name": "SlippageTooHigh",
       "msg": "Exit price moved beyond slippage tolerance"
     },
     {
-      "code": 6025,
-      "name": "AssetNotSupported",
-      "msg": "This asset kind is not supported yet"
-    },
-    {
-      "code": 6026,
+      "code": 6024,
       "name": "MarketClosed",
       "msg": "Trading has ended for this market"
     }
   ],
   "types": [
-    {
-      "name": "AssetKind",
-      "docs": [
-        "Currency a market is denominated in. USDC markets settle through an SPL",
-        "token vault; SOL markets settle through the `Vault` PDA's lamports."
-      ],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Usdc"
-          },
-          {
-            "name": "Sol"
-          }
-        ]
-      }
-    },
     {
       "name": "Config",
       "docs": [
@@ -1646,10 +1451,6 @@
           },
           {
             "name": "resolver",
-            "type": "pubkey"
-          },
-          {
-            "name": "usdc_mint",
             "type": "pubkey"
           },
           {
@@ -1697,14 +1498,6 @@
             "type": {
               "defined": {
                 "name": "Vertical"
-              }
-            }
-          },
-          {
-            "name": "asset",
-            "type": {
-              "defined": {
-                "name": "AssetKind"
               }
             }
           },
@@ -1823,7 +1616,7 @@
             "name": "proposer",
             "docs": [
               "Resolver pubkey behind the current proposal; the bond refunds here on",
-              "finalize (via their ATA for USDC markets, lamports for SOL markets)."
+              "finalize (lamports to the proposer's system account)."
             ],
             "type": "pubkey"
           },
@@ -1850,6 +1643,15 @@
           {
             "name": "id",
             "type": "u64"
+          },
+          {
+            "name": "resolution_spec_sha256",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -2042,9 +1844,10 @@
       }
     },
     {
-      "name": "Vault",
+      "name": "ResolutionSpecCommitment",
       "docs": [
-        "Per-market escrow. Holds SOL directly; owns the USDC ATA when `asset` is USDC."
+        "Immutable commitment to the resolution rules agreed at market creation.",
+        "An all-zero hash marks legacy/demo markets that are not eligible for backend resolution."
       ],
       "type": {
         "kind": "struct",
@@ -2054,18 +1857,31 @@
             "type": "pubkey"
           },
           {
-            "name": "asset",
+            "name": "spec_sha256",
             "type": {
-              "defined": {
-                "name": "AssetKind"
-              }
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
-            "name": "mint",
-            "docs": [
-              "USDC mint for token markets, or the system program id for SOL markets."
-            ],
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "docs": [
+        "Per-market escrow. Holds SOL directly as its lamport balance."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
             "type": "pubkey"
           },
           {

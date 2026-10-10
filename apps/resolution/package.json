@@ -1,0 +1,18 @@
+{
+  "name": "@mention/resolution",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./canonical-json": {
+      "types": "./src/canonical-json.d.ts",
+      "import": "./src/canonical-json.mjs"
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

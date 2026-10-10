@@ -3,10 +3,9 @@
 //! pro-rata at settlement.
 
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::Token};
 
 use crate::error::ErrorCode;
-use crate::state::{AssetKind, Market, MarketStatus, MarketType, Position, Vault, WordBack};
+use crate::state::{Market, MarketStatus, MarketType, Position, Vault, WordBack};
 
 #[derive(Accounts)]
 pub struct BackWord<'info> {
@@ -39,21 +38,6 @@ pub struct BackWord<'info> {
     )]
     pub position: Box<Account<'info, Position>>,
 
-    /// CHECK: Backer's USDC ATA (source of back funds); presence checked per
-    /// asset type and validated by the transfer CPI.
-    #[account(mut)]
-    pub backer_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: Vault USDC ATA; created idempotently and validated by the
-    /// transfer CPI when the market is USDC-denominated.
-    #[account(mut)]
-    pub vault_ata: Option<UncheckedAccount<'info>>,
-    /// CHECK: USDC mint, constrained to `config.usdc_mint`; used only for vault
-    /// ATA creation on USDC markets.
-    #[account(constraint = mint.key() == config.usdc_mint)]
-    pub mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -80,49 +64,12 @@ pub fn handler(ctx: Context<BackWord>, word: String, amount: u64) -> Result<()> 
         .ok_or(ErrorCode::UnknownWord)?;
 
     // Move funds in before mutating pools.
-    match market.asset {
-        AssetKind::Usdc => {
-            let backer_ata = ctx
-                .accounts
-                .backer_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            let vault_ata = ctx
-                .accounts
-                .vault_ata
-                .as_ref()
-                .ok_or(ErrorCode::InsufficientAmount)?;
-            crate::instructions::token_util::require_ata(
-                backer_ata,
-                ctx.accounts.backer.key(),
-                ctx.accounts.mint.key(),
-            )?;
-            crate::instructions::token_util::ensure_vault_ata(
-                &ctx.accounts.backer.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                &ctx.accounts.mint.to_account_info(),
-                vault_ata,
-                &ctx.accounts.associated_token_program.to_account_info(),
-                &ctx.accounts.token_program.to_account_info(),
-                &ctx.accounts.system_program.to_account_info(),
-            )?;
-            crate::instructions::token_util::deposit_usdc(
-                &ctx.accounts.token_program.to_account_info(),
-                backer_ata,
-                vault_ata,
-                &ctx.accounts.backer.to_account_info(),
-                amount,
-            )?;
-        }
-        AssetKind::Sol => {
-            crate::instructions::token_util::deposit_sol(
-                &ctx.accounts.system_program.to_account_info(),
-                &ctx.accounts.backer.to_account_info(),
-                &ctx.accounts.vault.to_account_info(),
-                amount,
-            )?;
-        }
-    }
+    crate::instructions::token_util::deposit_sol(
+        &ctx.accounts.system_program.to_account_info(),
+        &ctx.accounts.backer.to_account_info(),
+        &ctx.accounts.vault.to_account_info(),
+        amount,
+    )?;
 
     let pool = &mut market.words[slot];
     pool.pool += amount;

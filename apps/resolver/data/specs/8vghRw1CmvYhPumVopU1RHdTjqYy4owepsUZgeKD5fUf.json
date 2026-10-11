@@ -1,0 +1,41 @@
+{
+  "marketAddress": "8vghRw1CmvYhPumVopU1RHdTjqYy4owepsUZgeKD5fUf",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "8vghRw1CmvYhPumVopU1RHdTjqYy4owepsUZgeKD5fUf",
+    "marketType": "binary",
+    "outcomeOptions": [
+      "yes",
+      "no"
+    ],
+    "terms": [
+      {
+        "phrase": "Jay nepal",
+        "outcome": "yes"
+      }
+    ],
+    "source": {
+      "provider": "operator-upload",
+      "sourceId": "http://localhost:3000/create",
+      "url": "http://localhost:3000/create"
+    },
+    "window": {
+      "startsAtMs": 1791738183000,
+      "endsAtMs": 1791741783000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "ce0dca17223d58ae1ffe1fb73ba9906a3dce699edd4e0fb7fd7591c7e7da5a52",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [],
+    "speaker": null
+  },
+  "createdAt": 1791738203367
+}

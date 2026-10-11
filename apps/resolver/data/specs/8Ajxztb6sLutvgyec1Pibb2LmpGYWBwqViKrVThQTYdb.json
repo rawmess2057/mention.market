@@ -1,0 +1,78 @@
+{
+  "marketAddress": "8Ajxztb6sLutvgyec1Pibb2LmpGYWBwqViKrVThQTYdb",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "8Ajxztb6sLutvgyec1Pibb2LmpGYWBwqViKrVThQTYdb",
+    "marketType": "majority",
+    "outcomeOptions": [
+      "agents",
+      "open source",
+      "benchmark",
+      "Grok",
+      "safety",
+      "physics",
+      "nothingburger"
+    ],
+    "terms": [
+      {
+        "phrase": "agents",
+        "outcome": "agents"
+      },
+      {
+        "phrase": "open source",
+        "outcome": "open source"
+      },
+      {
+        "phrase": "benchmark",
+        "outcome": "benchmark"
+      },
+      {
+        "phrase": "Grok",
+        "outcome": "Grok"
+      },
+      {
+        "phrase": "safety",
+        "outcome": "safety"
+      },
+      {
+        "phrase": "physics",
+        "outcome": "physics"
+      },
+      {
+        "phrase": "nothingburger",
+        "outcome": "nothingburger"
+      }
+    ],
+    "source": {
+      "provider": "youtube-live",
+      "sourceId": "https://example.com/streams/2",
+      "url": "https://example.com/streams/2"
+    },
+    "window": {
+      "startsAtMs": 1791714469000,
+      "endsAtMs": 1791714474000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "c137b013b0c64f579988fb73037d5eee08f6386fbeaed1e6c920c6b1e812a0e8",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "agents",
+      "open source",
+      "benchmark",
+      "Grok",
+      "safety",
+      "physics",
+      "nothingburger"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1791714470667
+}

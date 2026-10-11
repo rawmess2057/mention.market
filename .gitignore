@@ -16,3 +16,8 @@ next-env.d.ts
 target
 .anchor
 .solana
+# Resolver runtime artifacts (audio, transcripts, staged candidates). The
+# canonical spec store (apps/resolver/data/specs) is committed for the demo.
+apps/resolver/data/audio
+apps/resolver/data/transcripts
+apps/resolver/data/candidates

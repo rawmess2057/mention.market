@@ -197,3 +197,31 @@ export function demoBatch(block = 0) {
     id: s.id + n * SEED_BLOCK_STEP,
   }));
 }
+
+/** Default source provider per vertical — free-form, used to classify events. */
+const PROVIDER_BY_VERTICAL = {
+  streams: "youtube-live",
+  podcasts: "rss",
+  earnings: "official-webcast",
+  sports: "official-broadcast",
+  politics: "official-webcast",
+};
+
+/** The single YES trigger phrase for a binary seed (quoted in the title). */
+export function binaryPhrase(seed) {
+  const match = seed.title.match(/[\u201c"]([^\u201d"]+)[\u201d"]/u);
+  if (match) return match[1];
+  return seed.title.replace(/^Will\b.*?\bsay\b/iu, "").replace(/\?+$/u, "").trim();
+}
+
+export function seedProvider(seed) {
+  return seed.provider ?? PROVIDER_BY_VERTICAL[seed.vertical] ?? "operator-upload";
+}
+
+export function seedSourceUrl(seed) {
+  return seed.sourceUrl ?? `https://example.com/${seed.vertical}/${seed.id}`;
+}
+
+export function seedKeywords(seed) {
+  return seed.type === "binary" ? [binaryPhrase(seed)] : [...seed.words];
+}

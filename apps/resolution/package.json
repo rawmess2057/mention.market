@@ -7,6 +7,13 @@
     "./canonical-json": {
       "types": "./src/canonical-json.d.ts",
       "import": "./src/canonical-json.mjs"
+    },
+    "./contracts": {
+      "import": "./src/contracts.mjs"
+    },
+    "./spec-builder": {
+      "types": "./src/spec-builder.d.ts",
+      "import": "./src/spec-builder.mjs"
     }
   },
   "scripts": {

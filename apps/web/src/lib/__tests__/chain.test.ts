@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SOL_DECIMALS,
+  decodeEvidenceSnippets,
   isStaleChainMarket,
   mapMarketToStore,
   mapPositionToStore,
@@ -159,6 +160,43 @@ describe("mapPositionToStore", () => {
     expect(p.yesShares).toBe(600);
     expect(p.wordBacks?.mango).toBe(2);
     expect(p.avgYesPrice).toBeCloseTo(500 / 600);
+  });
+});
+
+describe("decodeEvidenceSnippets", () => {
+  /** The on-chain EvidenceManifest stores canonical manifest bytes verbatim. */
+  function manifestBytes(manifest: unknown): Uint8Array {
+    return new TextEncoder().encode(JSON.stringify(manifest));
+  }
+
+  it("maps v1 excerpt fields onto transcript snippets", () => {
+    const bytes = manifestBytes({
+      schemaVersion: 1,
+      outcome: "agents",
+      excerpts: [
+        { startMs: 1_500, endMs: 2_500, speaker: "host", text: "agents are coming" },
+        { startMs: 4_000, endMs: 4_500, speaker: "guest", text: "open source" },
+      ],
+    });
+
+    expect(decodeEvidenceSnippets(bytes)).toEqual([
+      { t: 1_500, speaker: "host", text: "agents are coming" },
+      { t: 4_000, speaker: "guest", text: "open source" },
+    ]);
+  });
+
+  it("returns [] for empty, missing, or malformed bytes", () => {
+    expect(decodeEvidenceSnippets([])).toEqual([]);
+    expect(decodeEvidenceSnippets(null)).toEqual([]);
+    expect(decodeEvidenceSnippets(undefined)).toEqual([]);
+    expect(decodeEvidenceSnippets(manifestBytes({ excerpts: "nope" }))).toEqual([]);
+    expect(decodeEvidenceSnippets(new TextEncoder().encode("not json"))).toEqual([]);
+  });
+
+  it("defaults missing excerpt fields instead of throwing", () => {
+    expect(decodeEvidenceSnippets(manifestBytes({ excerpts: [{}] }))).toEqual([
+      { t: 0, speaker: "", text: "" },
+    ]);
   });
 });
 

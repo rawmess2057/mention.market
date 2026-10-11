@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@mention/resolution": "workspace:*",
+    "@mention/resolver": "workspace:*",
     "@coral-xyz/anchor": "^0.32.1",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-dropdown-menu": "^2.1.4",

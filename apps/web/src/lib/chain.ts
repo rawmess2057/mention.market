@@ -19,11 +19,20 @@ import { AnchorProvider, Program, BN } from "@coral-xyz/anchor/dist/cjs/index.js
 import bs58 from "bs58";
 import mentionIdl from "@/lib/idl/mention.json";
 import { canonicalJson } from "@mention/resolution/canonical-json";
+import { buildResolutionSpec } from "@mention/resolution/spec-builder";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn, lmsrSharesForCost } from "@/lib/lmsr";
 import { resample } from "@/lib/history";
 import type { PricePoint } from "@/lib/history";
 import { shortAddr } from "@/lib/format";
-import type { ActivityItem, Market, MarketStatus, MarketType, Position, Vertical } from "@/lib/types";
+import type {
+  ActivityItem,
+  Market,
+  MarketStatus,
+  MarketType,
+  Position,
+  TranscriptSnippet,
+  Vertical,
+} from "@/lib/types";
 
 export const PROGRAM_ID = new PublicKey("5xA4v2SasSoE8mPnWSpePV3U4piHgag51od6mrNDU8j8");
 export const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
@@ -138,6 +147,7 @@ interface ProgramLite {
       all(): Promise<Array<{ account: ChainMarketAccount; publicKey: PublicKey }>>;
     };
     position: { fetch(a: PublicKey): Promise<unknown> };
+    evidenceManifest: { fetch(a: PublicKey): Promise<unknown> };
   };
   methods: {
     createMarket(...args: unknown[]): ChainMethodsBuilder;
@@ -173,6 +183,14 @@ export function vaultPda(market: PublicKey): PublicKey {
 export function resolutionSpecPda(market: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("resolution-spec"), market.toBuffer()],
+    PROGRAM_ID
+  )[0];
+}
+
+/** EvidenceManifest PDA: seeds `[b"evidence", market, sha256]`. */
+export function evidencePda(market: PublicKey, sha256: Uint8Array | number[]): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("evidence"), market.toBuffer(), Buffer.from(sha256)],
     PROGRAM_ID
   )[0];
 }
@@ -408,7 +426,9 @@ export interface PositionAccountLike {
 export async function fetchChainMarket(id: number): Promise<Market | null> {
   try {
     const account = (await program.account.market.fetch(marketPda(id))) as unknown as ChainMarketAccount;
-    return mapMarketToStore(account);
+    const market = mapMarketToStore(account);
+    await attachChainEvidence(market, account);
+    return market;
   } catch {
     return null; // account closed or not created yet
   }
@@ -431,9 +451,66 @@ export async function fetchChainMarkets(ids: number[]): Promise<Market[]> {
  */
 export async function fetchChainMarketsAll(): Promise<Market[]> {
   const accounts = await program.account.market.all();
-  return accounts
-    .sort((a, b) => a.account.id.toNumber() - b.account.id.toNumber())
-    .map(({ account }) => mapMarketToStore(account as unknown as ChainMarketAccount));
+  const sorted = accounts.sort((a, b) => a.account.id.toNumber() - b.account.id.toNumber());
+  const markets = sorted.map(({ account }) =>
+    mapMarketToStore(account as unknown as ChainMarketAccount)
+  );
+  await Promise.all(
+    markets.map((m, i) =>
+      attachChainEvidence(m, sorted[i].account as unknown as ChainMarketAccount)
+    )
+  );
+  return markets;
+}
+
+/** Raw EvidenceManifest account: the program stores the manifest bytes verbatim. */
+interface EvidenceManifestAccount {
+  bytes: Uint8Array | number[];
+}
+
+/**
+ * Decode the on-chain evidence manifest JSON into UI snippets. The program
+ * stores the canonical manifest bytes verbatim, so this is a UTF-8 decode +
+ * JSON.parse of the v1 `excerpts` array; any failure degrades to no snippets.
+ */
+export function decodeEvidenceSnippets(
+  bytes: Uint8Array | number[] | null | undefined
+): TranscriptSnippet[] {
+  if (!bytes) return [];
+  try {
+    const text = new TextDecoder().decode(Uint8Array.from(bytes));
+    const manifest = JSON.parse(text) as {
+      excerpts?: Array<{ startMs?: number; speaker?: string; text?: string }>;
+    };
+    const excerpts = Array.isArray(manifest.excerpts) ? manifest.excerpts : [];
+    return excerpts.map((e) => ({
+      t: Number(e?.startMs ?? 0),
+      speaker: String(e?.speaker ?? ""),
+      text: String(e?.text ?? ""),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Attach committed on-chain evidence excerpts to a mapped market. Only markets
+ * whose `evidenceHash` is non-zero have an EvidenceManifest PDA; the read is
+ * best-effort (a market can briefly be `resolving` before evidence lands).
+ */
+async function attachChainEvidence(market: Market, account: ChainMarketAccount): Promise<void> {
+  if (!market.evidence) return;
+  const hash = account.evidenceHash;
+  if (!Array.isArray(hash) || hash.length !== 32 || hash.every((b) => b === 0)) return;
+  try {
+    const pda = evidencePda(marketPda(account.id.toNumber()), hash);
+    const ev = (await program.account.evidenceManifest.fetch(
+      pda
+    )) as unknown as EvidenceManifestAccount;
+    market.evidence.snippets = decodeEvidenceSnippets(ev.bytes);
+  } catch {
+    /* evidence not committed yet or a transient RPC hiccup — leave snippets empty */
+  }
 }
 
 export async function fetchChainPosition(
@@ -1139,32 +1216,17 @@ export async function chainCreateMarket(
   const bUi = CHAIN_CREATE_B_UI;
   const nowSec = Math.floor(Date.now() / 1000);
   const endTimeSec = nowSec + params.minutes * 60;
-  const outcomes = params.type === "binary" ? ["yes", "no"] : params.words;
-  const terms = params.type === "binary"
-    ? [{ phrase: params.binaryPhrase, outcome: "yes" }]
-    : params.words.map((phrase) => ({ phrase, outcome: phrase }));
-  const resolutionSpec = {
-    schemaVersion: 1,
+  const resolutionSpec = buildResolutionSpec({
     marketAddress: market.toBase58(),
     marketType: params.type,
-    outcomeOptions: outcomes,
-    terms,
-    source: {
-      provider: "operator-upload",
-      sourceId: params.sourceUrl,
-      url: params.sourceUrl,
-    },
+    words: params.words,
+    binaryPhrase: params.binaryPhrase,
+    sourceUrl: params.sourceUrl,
     window: {
       startsAtMs: nowSec * 1000,
       endsAtMs: endTimeSec * 1000,
     },
-    matching: {
-      mode: "exact_phrase",
-      caseSensitive: false,
-      punctuationSensitive: false,
-      speaker: null,
-    },
-  };
+  });
   const specBytes = new TextEncoder().encode(canonicalJson(resolutionSpec));
   const specHash = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", specBytes));
   const scale = SOL_DECIMALS;
@@ -1192,7 +1254,26 @@ export async function chainCreateMarket(
     .instruction();
   const sig = await sendAll(signer, [ix]);
   rememberChainId(id);
+  await persistLocalSpec(market.toBase58(), resolutionSpec);
   return { id, sig, solBalance: await solBalanceUi(signer.publicKey) };
+}
+
+/**
+ * Persist a freshly created market's canonical resolution spec to the
+ * resolver's local store (`/api/specs`). The program commits only the spec
+ * hash; without the bytes the market can never be resolved. Best-effort: a
+ * failure here does not fail the creation (the market exists on-chain).
+ */
+async function persistLocalSpec(marketAddress: string, spec: unknown): Promise<void> {
+  try {
+    await fetch("/api/specs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ marketAddress, spec }),
+    });
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /* ------------------------------------------------------------------ */

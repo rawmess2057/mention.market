@@ -1,0 +1,22 @@
+{
+  "name": "@mention/resolver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./store": "./src/store/spec-store.mjs",
+    "./events": "./src/events/model.mjs",
+    "./evidence": "./src/evidence/manifest.mjs",
+    "./pipeline": "./src/pipeline.mjs",
+    "./adapters/deepgram": "./src/adapters/deepgram.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@mention/resolution": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -39,6 +39,21 @@ export function vaultPda(market) {
   )[0];
 }
 
+export function resolutionSpecPda(market) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("resolution-spec"), market.toBuffer()],
+    PROGRAM_ID
+  )[0];
+}
+
+/** Evidence PDA keys on `sha256(bytes)`; pass the 32-byte digest. */
+export function evidencePda(market, sha256Bytes) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("evidence"), market.toBuffer(), Buffer.from(sha256Bytes)],
+    PROGRAM_ID
+  )[0];
+}
+
 export function positionPda(market, owner) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("position"), market.toBuffer(), owner.toBuffer()],
@@ -83,6 +98,10 @@ export function programFor(kp) {
 
 export const sha256Hex = (s) => createHash("sha256").update(s).digest("hex");
 export const hexToBytes = (h) => Uint8Array.from(Buffer.from(h, "hex"));
+export const bytesToHex = (u8) => Buffer.from(u8).toString("hex");
+/** SHA-256 (hex) of raw bytes — the on-chain `evidence.sha256` encoding. */
+export const sha256BytesHex = (bytes) =>
+  createHash("sha256").update(Buffer.from(bytes)).digest("hex");
 
 /** u64/i64 arg wrapping — the client's borsh coder requires BN instances. */
 export const bn = (x) => new BN(String(x));

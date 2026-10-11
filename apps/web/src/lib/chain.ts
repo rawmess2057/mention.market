@@ -237,8 +237,9 @@ export function isChainMarket(m: Market): boolean {
 export function isStaleChainMarket(m: Market, now = Date.now()): boolean {
   if (!isChainId(m.id)) return false;
   if (m.status === "open" && m.endTime <= now) return true;
-  if (m.status === "resolved" && (m.traders ?? 0) === 0) return true;
-  if (m.status === "resolved" && m.resolvedAt !== undefined && m.resolvedAt <= now - 60 * 60_000) return true;
+  // Don't filter resolved zero-trader markets aggressively for demo freshness
+  // if (m.status === "resolved" && (m.traders ?? 0) === 0) return true;
+  if (m.status === "resolved" && m.resolvedAt !== undefined && m.resolvedAt <= now - 24 * 60 * 60_000) return true;
   return false;
 }
 

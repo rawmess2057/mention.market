@@ -1012,7 +1012,7 @@ async function sendRawWithRetry(
   let lastErr: unknown;
   for (let i = 0; i < 6; i += 1) {
     try {
-      return await conn.sendRawTransaction(raw, { preflightCommitment: "confirmed" });
+      return await conn.sendRawTransaction(raw, { preflightCommitment: "confirmed", skipPreflight: true });
     } catch (err) {
       const code = (err as { code?: number } | null)?.code;
       const msg = String((err as { message?: string } | null)?.message ?? err);
@@ -1053,6 +1053,19 @@ export async function sendAll(
   const sig = signed.signature ? bs58.encode(signed.signature) : "";
   const raw = signed.serialize();
 
+  // Preflight simulation to catch errors before/with wallet flow (helps Phantom UX)
+  try {
+    const sim = await withRetry(() => conn.simulateTransaction(signed));
+    const err = (sim.value as any)?.err;
+    if (err) {
+      throw new Error(err.toString?.() ?? "Transaction simulation failed");
+    }
+  } catch (e) {
+    // Non-fatal: some wallets still warn; bubble a clearer message if it's the expected issue
+    const msg = String((e as any)?.message ?? e);
+    if (/simulation failed|insufficient/i.test(msg)) throw e;
+    // ignore transient simulation quirks
+  }
   const sentSig = await sendRawWithRetry(conn, raw, sig);
   await conn.confirmTransaction(
     { signature: sentSig, blockhash, lastValidBlockHeight },

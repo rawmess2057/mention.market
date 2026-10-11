@@ -237,8 +237,6 @@ export function isChainMarket(m: Market): boolean {
 export function isStaleChainMarket(m: Market, now = Date.now()): boolean {
   if (!isChainId(m.id)) return false;
   if (m.status === "open" && m.endTime <= now) return true;
-  // Don't filter resolved zero-trader markets aggressively for demo freshness
-  // if (m.status === "resolved" && (m.traders ?? 0) === 0) return true;
   if (m.status === "resolved" && m.resolvedAt !== undefined && m.resolvedAt <= now - 24 * 60 * 60_000) return true;
   return false;
 }
@@ -1054,19 +1052,6 @@ export async function sendAll(
   const sig = signed.signature ? bs58.encode(signed.signature) : "";
   const raw = signed.serialize();
 
-  // Preflight simulation to catch errors before/with wallet flow (helps Phantom UX)
-  try {
-    const sim = await withRetry(() => conn.simulateTransaction(signed));
-    const err = (sim.value as any)?.err;
-    if (err) {
-      throw new Error(err.toString?.() ?? "Transaction simulation failed");
-    }
-  } catch (e) {
-    // Non-fatal: some wallets still warn; bubble a clearer message if it's the expected issue
-    const msg = String((e as any)?.message ?? e);
-    if (/simulation failed|insufficient/i.test(msg)) throw e;
-    // ignore transient simulation quirks
-  }
   const sentSig = await sendRawWithRetry(conn, raw, sig);
   await conn.confirmTransaction(
     { signature: sentSig, blockhash, lastValidBlockHeight },

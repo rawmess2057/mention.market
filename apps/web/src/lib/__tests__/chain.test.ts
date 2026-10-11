@@ -83,13 +83,13 @@ describe("isStaleChainMarket", () => {
     expect(isStaleChainMarket({ ...base, endTime: now - 1 }, now)).toBe(true);
   });
 
-  it("hides a resolved market with no traders (script/test noise)", () => {
+  it("keeps a resolved market with no traders (demo shows fresh seeds)", () => {
     expect(
       isStaleChainMarket(
         { ...base, status: "resolved", resolvedAt: now - 1_000, traders: 0, winningOutcome: "yes" },
         now
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps a freshly resolved market that people traded", () => {
@@ -101,10 +101,19 @@ describe("isStaleChainMarket", () => {
     ).toBe(false);
   });
 
-  it("hides a resolved market older than an hour (ancient history)", () => {
+  it("keeps a resolved market older than an hour if within 24h (demo freshness)", () => {
     expect(
       isStaleChainMarket(
         { ...base, status: "resolved", resolvedAt: now - 61 * 60_000, traders: 3, winningOutcome: "yes" },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("hides a resolved market older than 24h (ancient)", () => {
+    expect(
+      isStaleChainMarket(
+        { ...base, status: "resolved", resolvedAt: now - 25 * 60 * 60_000, traders: 5, winningOutcome: "yes" },
         now
       )
     ).toBe(true);

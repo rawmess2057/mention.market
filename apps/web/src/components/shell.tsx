@@ -55,8 +55,8 @@ export function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-gray-warm/80 bg-cream/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+      <header className="sticky top-0 z-40 border-b border-gray-100/80 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8 lg:px-12">
           <Link href="/" className="group flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue text-white shadow-md">
               <Zap className="h-4 w-4" />

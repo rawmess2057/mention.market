@@ -85,14 +85,14 @@ export default function Home() {
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl border border-blue/15 bg-gradient-to-br from-blue-light via-white to-cream-dark p-6 md:p-8">
+      <section className="relative overflow-hidden rounded-2xl md:rounded-3xl border border-gray-100/80 bg-gradient-to-b from-white to-cream-dark p-8 md:p-10">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue/8 blur-3xl" />
         <div className="relative">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue/20 bg-blue-light px-3 py-1 text-[11px] font-medium text-blue">
             <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-blue" />
             On-chain markets · Solana devnet · SOL
           </div>
-          <h1 className="font-serif max-w-xl text-3xl font-extrabold leading-tight tracking-tight text-navy md:text-4xl">
+          <h1 className="font-serif max-w-xl text-3xl font-bold leading-tight tracking-tight text-navy md:text-4xl lg:text-5xl">
             Trade on what gets <span className="text-gradient">said</span>.
           </h1>
           <p className="mt-2 max-w-md text-sm text-text-secondary md:text-[15px]">

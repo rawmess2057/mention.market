@@ -24,7 +24,7 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
   return (
     <Link
       href={`/market/${m.slug}`}
-      className="grad-border lift group block rounded-2xl p-4"
+      className="grad-border group block rounded-2xl p-5 md:p-6"
       style={{
         boxShadow: `0 10px 30px -10px rgba(0,0,0,${0.04 + heatIntensity * 0.06})`,
       }}

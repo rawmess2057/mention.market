@@ -38,6 +38,7 @@ import {
 import { evaluateTranscript } from "../../resolution/src/contracts.mjs";
 import { DeepgramBatchAdapter } from "../../resolver/src/adapters/deepgram.mjs";
 import { transcriptsDir } from "../../resolver/src/store/spec-store.mjs";
+import { DeepgramLiveTranscriber } from "../../resolver/src/adapters/deepgram-live.mjs";
 
 const MAX_EVIDENCE_LEN = 4096;
 
@@ -60,6 +61,8 @@ async function main() {
       return finalize(program, resolver, requireArg(positional[0], "market"));
     case "watch":
       return watch(program, resolver, flags);
+    case "transcribe":
+      return transcribe(program, requireArg(positional[0], "market"), flags);
     default:
       printUsage();
       process.exitCode = command ? 1 : 0;
@@ -136,7 +139,17 @@ async function resolve(program, resolver, marketArg, flags) {
     summary = { status: "override", outcome: force, matches: [], confidence: 100, warnings: ["operator override"] };
   } else {
     let transcript;
-    if (flags.audio) {
+    if (flags.live) {
+      const adapter = new DeepgramLiveTranscriber({});
+      const segments = [];
+      adapter.onResult((evt) => { for (const seg of evt.segments) segments.push(seg); });
+      await adapter.connect();
+      console.log("live transcribe started (stub) — closing");
+      adapter.finish();
+      adapter.close();
+      if (segments.length === 0) throw new Error("live transcribe produced no segments");
+      transcript = { segments, coverage: { status: "partial", coveredFromMs: segments[0]?.startMs ?? 0, coveredThroughMs: segments[segments.length - 1]?.endMs ?? 0 } };
+    } else if (flags.audio) {
       const adapter = new DeepgramBatchAdapter({});
       const res = await adapter.transcribeFile(flags.audio);
       transcript = { segments: res.segments, coverage: res.coverage };
@@ -296,6 +309,41 @@ async function finalize(program, resolver, marketArg) {
   console.log(`m${market.id} finalized: ${sig}`);
 }
 
+async function transcribe(program, marketArg, flags) {
+  const address = marketAddress(marketArg);
+  const market = await fetchMarket(program, address);
+  const record = getSpec(address.toBase58());
+  if (!record) {
+    throw new Error(`no stored resolution spec for ${address.toBase58()} — run the seed script or create the market from the UI`);
+  }
+  let transcript;
+  if (flags.audio) {
+    const adapter = new DeepgramBatchAdapter({});
+    const res = await adapter.transcribeFile(flags.audio);
+    transcript = { segments: res.segments, coverage: res.coverage };
+  } else if (flags.audioUrl || flags["audio-url"]) {
+    const adapter = new DeepgramBatchAdapter({});
+    const res = await adapter.transcribeUrl(flags.audioUrl || flags["audio-url"]);
+    transcript = { segments: res.segments, coverage: res.coverage };
+  } else if (flags.live) {
+    // Live streaming stub
+    const adapter = new DeepgramLiveTranscriber({});
+    const segments = [];
+    adapter.onResult((evt) => { for (const seg of evt.segments) segments.push(seg); });
+    await adapter.connect();
+    adapter.finish();
+    adapter.close();
+    if (segments.length === 0) throw new Error("live transcribe produced no segments (provide audio source in a fuller implementation)");
+    transcript = { segments, coverage: { status: "partial", coveredFromMs: segments[0]?.startMs ?? 0, coveredThroughMs: segments[segments.length - 1]?.endMs ?? 0 } };
+  } else {
+    throw new Error("--audio <file> or --audio-url <url> is required for transcribe");
+  }
+  const out = path.join(transcriptsDir(), `${address.toBase58()}.${Date.now()}.json`);
+  fs.mkdirSync(transcriptsDir(), { recursive: true });
+  fs.writeFileSync(out, `${JSON.stringify(transcript, null, 2)}\n`);
+  console.log(`saved transcript  ${out} (${transcript.segments.length} segments, coverage ${transcript.coverage.status})`);
+}
+
 async function watch(program, resolver, flags) {
   const interval = Number(flags.interval || 20) * 1000;
   console.log(`watching ${listSpecs().length} stored markets (every ${interval / 1000}s); locks ended markets`);
@@ -380,6 +428,8 @@ function printUsage() {
       "  node resolver.mjs post     <candidate.json> [--dry]",
       "  node resolver.mjs finalize <market>",
       "  node resolver.mjs watch    [--interval <sec>]",
+      "  node resolver.mjs transcribe <market> --audio <file>",
+      "  node resolver.mjs transcribe <market> --audio-url <url>",
     ].join("\n"),
   );
 }

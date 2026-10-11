@@ -8,13 +8,15 @@
     "./events": "./src/events/model.mjs",
     "./evidence": "./src/evidence/manifest.mjs",
     "./pipeline": "./src/pipeline.mjs",
-    "./adapters/deepgram": "./src/adapters/deepgram.mjs"
+    "./adapters/deepgram": "./src/adapters/deepgram.mjs",
+    "./adapters/deepgram-live": "./src/adapters/deepgram-live.mjs"
   },
   "scripts": {
     "test": "node --test"
   },
   "dependencies": {
-    "@mention/resolution": "workspace:*"
+    "@mention/resolution": "workspace:*",
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=20"

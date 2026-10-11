@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="grid-backdrop" aria-hidden />
           <TopBar />
           <TickerTape />
-          <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:pb-12">{children}</main>
+          <main className="mx-auto w-full max-w-7xl px-6 pb-28 pt-6 md:px-8 lg:px-12 md:pb-14 md:pt-7">{children}</main>
           <BottomNav />
         </Providers>
       </body>

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, ExternalLink, ScrollText, Users, Volume2 } from "lucide-react";
@@ -23,6 +23,7 @@ import { useNow } from "@/hooks/useNow";
 import { useChainActivity } from "@/hooks/useChainActivity";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { isChainId } from "@/lib/chain";
+import type { PriceSeries } from "@/lib/history";
 import { VERTICAL_META } from "@/lib/types";
 
 const PriceChartWithTimeframe = dynamic(
@@ -40,8 +41,19 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
   const { slug } = use(params);
   const markets = useSim((s) => s.markets);
   const history = useSim((s) => s.history);
+  const wordHistory = useSim((s) => s.wordHistory);
   const now = useNow(1000);
   const m = Object.values(markets).find((x) => x.slug === slug);
+
+  // Word-race markets plot one line per option, in the market's own word order
+  // (so colors stay stable as options are toggled/lines appear).
+  const wordSeries = useMemo<PriceSeries[] | undefined>(() => {
+    if (!m || m.type !== "majority" || !m.words) return undefined;
+    const byWord = wordHistory[m.id] ?? {};
+    return m.words
+      .map((w) => ({ name: w.word, points: byWord[w.word] ?? [] }))
+      .filter((s) => s.points.length > 0);
+  }, [m, wordHistory]);
 
   useChainActivity(m);
 
@@ -143,7 +155,11 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                 </span>
                 <span className="text-[10px] text-gray-mid">Probability over time</span>
               </div>
-              <PriceChartWithTimeframe history={marketHistory} showBaseline={m.type === "binary"} />
+              <PriceChartWithTimeframe
+                history={marketHistory}
+                series={wordSeries}
+                showBaseline={m.type === "binary"}
+              />
             </div>
 
             {/* Trading Panel */}

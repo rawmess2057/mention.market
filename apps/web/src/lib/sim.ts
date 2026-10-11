@@ -10,7 +10,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { seededRandom, shortAddr } from "./format";
-import { mergePricePoints } from "./history";
+import { mergePricePoints, mergeSeriesPoints } from "./history";
 import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
@@ -502,6 +502,8 @@ interface SimState {
   chainActivityNonce: Record<string, number>;
   transcript: Record<string, TranscriptSnippet[]>;
   history: Record<string, PricePoint[]>; // timestamped sparkline/chart data per market
+  /** Per-word-race chart history: marketId -> word -> points. Volatile (not persisted). */
+  wordHistory: Record<string, Record<string, PricePoint[]>>;
   user: User;
   trades: TradeRecord[];
   books: Record<string, WalletBook>;
@@ -532,6 +534,8 @@ interface SimState {
   ingestChainPositions: (positions: Position[]) => void;
   ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
   ingestChainHistory: (marketId: string, points: PricePoint[]) => void;
+  /** Merge per-word chart series for a word-race market. */
+  ingestWordHistory: (marketId: string, byWord: Record<string, PricePoint[]>) => void;
   bumpChainActivity: (marketId: string) => void;
   setPendingTrade: (t: ConfirmTrade | null) => void;
   showToast: (msg: string | null) => void;
@@ -575,6 +579,8 @@ export const useSim = create<SimState>()(persist((set, get) => {
 
   // Seed plausible price walks so sparklines are never empty
   const history: Record<string, PricePoint[]> = {};
+  // Per-word walks for word-race markets so every option has a line from load.
+  const wordHistory: Record<string, Record<string, PricePoint[]>> = {};
   for (const m of Object.values(markets)) {
     const target =
       m.type === "binary" ? lmsrProbYes(m.yesShares, m.noShares, m.b) : leaderShare(m);
@@ -585,6 +591,21 @@ export const useSim = create<SimState>()(persist((set, get) => {
       Date.now(),
       5_000
     );
+    if (m.type === "majority" && m.words) {
+      const pot = m.words.reduce((s, w) => s + w.pool, 0);
+      const byWord: Record<string, PricePoint[]> = {};
+      m.words.forEach((w, i) => {
+        const share = pot > 0 ? w.pool / pot : 1 / Math.max(1, m.words!.length);
+        byWord[w.word] = seededWalkTimed(
+          share,
+          48,
+          (m.id.charCodeAt(1) + 7) * 7919 + (i + 1) * 104_729,
+          Date.now(),
+          5_000
+        );
+      });
+      wordHistory[m.id] = byWord;
+    }
   }
 
   return {
@@ -594,6 +615,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
     chainActivity: {},
     chainActivityNonce: {},
     history,
+    wordHistory,
     transcript,
     user: { ...CURRENT_USER },
     trades,
@@ -782,6 +804,16 @@ export const useSim = create<SimState>()(persist((set, get) => {
         mm.volume += amount;
         markets[marketId] = mm;
 
+        // Reflect the back immediately across every word's live series.
+        const wt = Date.now();
+        const pot = mm.words!.reduce((acc, x) => acc + x.pool, 0);
+        const byWord: Record<string, PricePoint[]> = { ...(s.wordHistory[marketId] ?? {}) };
+        for (const x of mm.words!) {
+          const share = pot > 0 ? x.pool / pot : 0;
+          byWord[x.word] = [...(byWord[x.word] ?? []), { t: wt, v: share }].slice(-240);
+        }
+        const wordHistory = { ...s.wordHistory, [marketId]: byWord };
+
         const positions = { ...s.positions };
         const p: Position = positions[marketId]
           ? structuredClone(positions[marketId])
@@ -793,7 +825,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const user = { ...s.user, balance: Math.max(0, s.user.balance - amount), points: s.user.points + pointsForTrade(amount) };
         const trades = [trade, ...s.trades].slice(0, 500);
         const book = { user, positions, trades };
-        return { markets, positions, user, trades, books: { ...s.books, [wallet]: book } };
+        return { markets, positions, user, trades, wordHistory, books: { ...s.books, [wallet]: book } };
       });
 
       get().showToast(`Backed \u201c${word}\u201d · ${fmtShares(amount)} SOL`);
@@ -959,6 +991,18 @@ export const useSim = create<SimState>()(persist((set, get) => {
             }
       ),
 
+    ingestWordHistory: (marketId, byWord) =>
+      set((s) =>
+        Object.keys(byWord).length === 0
+          ? s
+          : {
+              wordHistory: {
+                ...s.wordHistory,
+                [marketId]: mergeSeriesPoints(s.wordHistory[marketId] ?? {}, byWord),
+              },
+            }
+      ),
+
     ingestChainActivity: (marketId, items) =>
       set((s) => {
         const prev = s.chainActivity[marketId] ?? [];
@@ -993,6 +1037,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const newActivity: ActivityItem[] = [];
         const newTranscript: Record<string, TranscriptSnippet[]> = { ...s.transcript };
         const newHistory: Record<string, PricePoint[]> = { ...s.history };
+        const newWordHistory: Record<string, Record<string, PricePoint[]>> = { ...s.wordHistory };
         const resolveAwards: Record<string, number> = {};
         let notifications = s.notifications;
         let resolveToast: string | null = null;
@@ -1134,6 +1179,15 @@ export const useSim = create<SimState>()(persist((set, get) => {
               ...(newHistory[m.id] ?? []),
               { t: Date.now(), v: leaderShare(mm) },
             ].slice(-120);
+            // Per-word series so every option in a race is represented live.
+            const wt = Date.now();
+            const pot = mm.words.reduce((acc, w) => acc + w.pool, 0);
+            const byWord: Record<string, PricePoint[]> = { ...(newWordHistory[m.id] ?? {}) };
+            for (const w of mm.words) {
+              const share = pot > 0 ? w.pool / pot : 0;
+              byWord[w.word] = [...(byWord[w.word] ?? []), { t: wt, v: share }].slice(-240);
+            }
+            newWordHistory[m.id] = byWord;
             markets[m.id] = mm;
           }
 
@@ -1178,6 +1232,7 @@ export const useSim = create<SimState>()(persist((set, get) => {
           activity: [...newActivity, ...s.activity].slice(0, 60),
           transcript: newTranscript,
           history: newHistory,
+          wordHistory: newWordHistory,
           books,
           user,
           notifications,

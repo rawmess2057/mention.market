@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   changePct,
   mergePricePoints,
+  mergeSeriesPoints,
   normalizeHistory,
   resample,
   selectChartPoints,
+  selectChartSeries,
   sessionChange,
   toChartData,
   toValues,
   windowed,
+  type PriceSeries,
 } from "../history";
 
 describe("normalizeHistory", () => {
@@ -136,6 +139,59 @@ describe("mergePricePoints retention", () => {
     const out = mergePricePoints(base, [{ t: 1_000, v: 0.9 }]);
     expect(out).toHaveLength(151);
     expect(out[0].t).toBe(0);
+  });
+});
+
+describe("mergeSeriesPoints", () => {
+  it("merges each key idempotently", () => {
+    const base = { AI: [{ t: 1_000, v: 0.5 }] };
+    const incoming = {
+      AI: [
+        { t: 1_000, v: 0.5 },
+        { t: 2_000, v: 0.6 },
+      ],
+      crypto: [{ t: 2_000, v: 0.4 }],
+    };
+    const out = mergeSeriesPoints(base, incoming);
+    expect(out.AI).toEqual([
+      { t: 1_000, v: 0.5 },
+      { t: 2_000, v: 0.6 },
+    ]);
+    expect(out.crypto).toEqual([{ t: 2_000, v: 0.4 }]);
+    expect(mergeSeriesPoints(out, incoming)).toEqual(out);
+  });
+
+  it("applies the cap per key", () => {
+    const base = { AI: Array.from({ length: 5 }, (_, i) => ({ t: i, v: i / 5 })) };
+    const out = mergeSeriesPoints(base, { AI: [{ t: 10, v: 1 }] }, 3);
+    expect(out.AI).toHaveLength(3);
+    expect(out.AI[out.AI.length - 1]).toEqual({ t: 10, v: 1 });
+  });
+});
+
+describe("selectChartSeries", () => {
+  const now = 10_000_000;
+
+  it("windows every series over the shared timeframe and drops empties", () => {
+    const series: PriceSeries[] = [
+      {
+        name: "AI",
+        points: [
+          { t: now - 3_600_000, v: 0.1 },
+          { t: now - 40_000, v: 0.4 },
+          { t: now - 20_000, v: 0.5 },
+        ],
+      },
+      { name: "crypto", points: [{ t: now - 20_000, v: 0.3 }] },
+      { name: "empty", points: [] },
+    ];
+    const out = selectChartSeries(series, "1m", now);
+    expect(out.map((s) => s.name)).toEqual(["AI", "crypto"]);
+    expect(out[0].points.map((p) => p.t)).toEqual([now - 40_000, now - 20_000]);
+  });
+
+  it("returns [] when every series is empty", () => {
+    expect(selectChartSeries([{ name: "a", points: [] }], "all", now)).toEqual([]);
   });
 });
 

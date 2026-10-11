@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChainPriceSeries,
+  buildChainWordSeries,
   type ChainSeriesMarket,
   type DecodedChainIx,
 } from "../chain";
@@ -96,6 +97,54 @@ describe("buildChainPriceSeries (majority)", () => {
     expect(
       buildChainPriceSeries(market, [rec("backWord", { word: "AI", amount: 50 })])
     ).toEqual([]);
+  });
+});
+
+describe("buildChainWordSeries (majority)", () => {
+  const market = (p: Partial<ChainSeriesMarket> = {}): ChainSeriesMarket => ({
+    type: "majority",
+    b: B,
+    yesShares: 0,
+    noShares: 0,
+    totalPool: 400,
+    words: [
+      { word: "AI", pool: 100 },
+      { word: "crypto", pool: 300 },
+    ],
+    ...p,
+  });
+
+  it("emits aligned per-word points over the shared pot", () => {
+    const out = buildChainWordSeries(market(), [
+      rec("backWord", { word: "AI", amount: 100 }, 1_700_000_000_000, 1),
+      rec("backWord", { word: "crypto", amount: 300 }, 1_700_000_010_000, 2),
+    ]);
+    expect(Object.keys(out).sort()).toEqual(["AI", "crypto"]);
+    expect(out.AI).toHaveLength(2);
+    expect(out.crypto).toHaveLength(2);
+    expect(out.AI[0].v).toBeCloseTo(1); // only AI backed so far
+    expect(out.crypto[0].v).toBeCloseTo(0);
+    expect(out.AI[1].v).toBeCloseTo(0.25);
+    expect(out.crypto[1].v).toBeCloseTo(0.75);
+    expect(out.AI.map((p) => p.t)).toEqual(out.crypto.map((p) => p.t));
+  });
+
+  it("returns {} when the replay diverges from the account state", () => {
+    expect(
+      buildChainWordSeries(
+        market({ totalPool: 10_000, words: [{ word: "AI", pool: 10_000 }] }),
+        [rec("backWord", { word: "AI", amount: 50 })]
+      )
+    ).toEqual({});
+  });
+
+  it("returns {} for a market with no trades", () => {
+    expect(
+      buildChainWordSeries(
+        market({ totalPool: 0, words: [{ word: "AI", pool: 0 }] }),
+        []
+      )
+    ).toEqual({});
   });
 });
 

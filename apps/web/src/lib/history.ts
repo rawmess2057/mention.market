@@ -146,6 +146,49 @@ export function selectChartPoints(
   return { points, count: points.length };
 }
 
+/** A named price series — one line on a multi-series (word-race) chart. */
+export interface PriceSeries {
+  name: string;
+  points: PricePoint[];
+}
+
+/**
+ * Merge two per-key series maps idempotently (one `mergePricePoints` pass per
+ * key), so a word-race market's live appends and reconstructed backfills can
+ * coexist without duplicates or eviction.
+ */
+export function mergeSeriesPoints(
+  base: Record<string, PricePoint[]>,
+  incoming: Record<string, PricePoint[]>,
+  cap?: number
+): Record<string, PricePoint[]> {
+  const out: Record<string, PricePoint[]> = { ...base };
+  for (const [key, pts] of Object.entries(incoming)) {
+    out[key] = mergePricePoints(out[key] ?? [], pts, cap);
+  }
+  return out;
+}
+
+/**
+ * Window + resample every series in a multi-series chart over one shared
+ * timeframe. Series with no points in the window are dropped (so a word that
+ * hasn't been backed yet doesn't render an empty legend row); the rest keep a
+ * stable order matching the input.
+ */
+export function selectChartSeries(
+  series: PriceSeries[],
+  timeframe: ChartTimeframe,
+  now: number,
+  maxPoints?: number
+): PriceSeries[] {
+  const out: PriceSeries[] = [];
+  for (const s of series) {
+    const { points } = selectChartPoints(s.points, timeframe, now, maxPoints);
+    if (points.length > 0) out.push({ name: s.name, points });
+  }
+  return out;
+}
+
 /** Filter to last `windowMs` of points. */
 export function windowed(points: PricePoint[], windowMs: number, now = Date.now()): PricePoint[] {
   const cutoff = now - windowMs;

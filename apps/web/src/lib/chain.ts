@@ -780,22 +780,82 @@ export function buildChainPriceSeries(
   return points.length === 0 ? [] : resample(points, cap);
 }
 
-const seriesCache = new Map<number, { t: number; pts: PricePoint[] }>();
-const seriesInflight = new Map<number, Promise<PricePoint[]>>();
+/**
+ * Reconstruct a word-race (majority) market's per-word price history from its
+ * `back_word` instructions: replay the pools in order and emit one point per
+ * word at each event timestamp (aligned x-axis across all options, each value
+ * the word's share of the running pot). Self-validating like
+ * `buildChainPriceSeries` — returns `{}` when the replay drifts from the
+ * account state so callers can fall back to live-append points.
+ */
+export function buildChainWordSeries(
+  market: ChainSeriesMarket,
+  records: DecodedChainIx[],
+  opts?: { cap?: number }
+): Record<string, PricePoint[]> {
+  const cap = opts?.cap ?? 240;
+  const series: Record<string, PricePoint[]> = {};
+  for (const w of market.words) series[w.word] = [];
+  const pools = new Map(market.words.map((w) => [w.word, 0]));
+  let total = 0;
+  for (const r of records) {
+    const norm = normalizeIxName(r.name);
+    if (norm !== "backword") continue;
+    const word = String(r.data.word ?? "");
+    const amount = bnToNumber(r.data.amount);
+    if (amount <= 0) continue;
+    pools.set(word, (pools.get(word) ?? 0) + amount);
+    total += amount;
+    const t = r.at || Date.now();
+    for (const w of market.words) {
+      series[w.word].push({
+        t,
+        v: total > 0 ? (pools.get(w.word) ?? 0) / total : 0,
+      });
+    }
+  }
+  const poolTol = Math.max(2, (market.totalPool + pools.size) * 0.01);
+  if (
+    Math.abs(total - market.totalPool) > poolTol ||
+    market.words.some((w) => Math.abs((pools.get(w.word) ?? 0) - w.pool) > poolTol)
+  ) {
+    return {};
+  }
+  const out: Record<string, PricePoint[]> = {};
+  for (const w of market.words) {
+    const pts = series[w.word];
+    if (pts.length > 0) out[w.word] = resample(pts, cap);
+  }
+  return out;
+}
+
+const seriesCache = new Map<number, { t: number; data: ChainSeriesData }>();
+const seriesInflight = new Map<number, Promise<ChainSeriesData>>();
 const SERIES_TTL_MS = 30_000;
 
+/** Reconstructed series for an on-chain market: one leader line + per-word lines. */
+export interface ChainSeriesData {
+  leader: PricePoint[];
+  /** Word-race per-option series; empty for binary markets. */
+  words: Record<string, PricePoint[]>;
+}
+
+const EMPTY_SERIES: ChainSeriesData = { leader: [], words: {} };
+
 /**
- * Fetch the reconstructed price series for an on-chain market (one account
- * read + the decoded trade history). Returns `[]` on any failure or when the
- * replay can't be validated, so callers can degrade to live-append points.
- *
- * Non-empty results are cached briefly and concurrent requests are deduped to
- * avoid hammering the (rate-limited) RPC from the poller, cards and header.
+ * Fetch the reconstructed series for an on-chain market in a single pass (one
+ * account read + the decoded trade history) and return both the leader line
+ * (cards/sparklines) and, for word-race markets, every option's line (chart).
+ * Cached briefly and deduped to avoid hammering the rate-limited RPC.
  */
-export async function fetchChainPriceSeries(id: number): Promise<PricePoint[]> {
+export async function fetchChainSeries(id: number): Promise<ChainSeriesData> {
   const cached = seriesCache.get(id);
-  if (cached && cached.pts.length > 0 && Date.now() - cached.t < SERIES_TTL_MS) {
-    return cached.pts;
+  if (
+    cached &&
+    (cached.data.leader.length > 0 || Object.keys(cached.data.words).length > 0) &&
+    Date.now() - cached.t < SERIES_TTL_MS
+  ) {
+    return cached.data;
   }
   const inflight = seriesInflight.get(id);
   if (inflight) return inflight;
@@ -814,11 +874,19 @@ export async function fetchChainPriceSeries(id: number): Promise<PricePoint[]> {
         totalPool: account.totalPool.toNumber(),
         words: account.words.map((w) => ({ word: w.word, pool: w.pool.toNumber() })),
       };
-      const pts = buildChainPriceSeries(market, records, { cap: 240 });
-      if (pts.length > 0) seriesCache.set(id, { t: Date.now(), pts });
-      return pts;
+      const data: ChainSeriesData = {
+        leader: buildChainPriceSeries(market, records, { cap: 240 }),
+        words:
+          market.type === "majority"
+            ? buildChainWordSeries(market, records, { cap: 240 })
+            : {},
+      };
+      if (data.leader.length > 0 || Object.keys(data.words).length > 0) {
+        seriesCache.set(id, { t: Date.now(), data });
+      }
+      return data;
     } catch {
-      return [];
+      return EMPTY_SERIES;
     } finally {
       seriesInflight.delete(id);
     }
@@ -826,6 +894,12 @@ export async function fetchChainPriceSeries(id: number): Promise<PricePoint[]> {
   seriesInflight.set(id, p);
   return p;
 }
+
+/** Leader-only reconstructed series (kept for cards/sparklines). */
+export async function fetchChainPriceSeries(id: number): Promise<PricePoint[]> {
+  return (await fetchChainSeries(id)).leader;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Transactions                                                        */

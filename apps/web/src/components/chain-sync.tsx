@@ -5,11 +5,12 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import {
   fetchChainMarketsAll,
   fetchChainPosition,
-  fetchChainPriceSeries,
+  fetchChainSeries,
   isStaleChainMarket,
 } from "@/lib/chain";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
+import type { PricePoint } from "@/lib/history";
 import type { Market } from "@/lib/types";
 
 const POLL_MS = 30_000;
@@ -27,6 +28,16 @@ function marketPrice(m: Market): number | null {
   const pot = words.reduce((s, w) => s + w.pool, 0);
   if (pot <= 0) return null;
   return Math.max(...words.map((w) => w.pool)) / pot;
+}
+
+/** Live share per option for a word-race market, or null when nothing is pooled. */
+function marketWordShares(m: Market): Record<string, number> | null {
+  const words = m.words ?? [];
+  const pot = words.reduce((s, w) => s + w.pool, 0);
+  if (pot <= 0) return null;
+  const out: Record<string, number> = {};
+  for (const w of words) out[w.word] = w.pool / pot;
+  return out;
 }
 
 /**
@@ -55,9 +66,12 @@ export function ChainSync() {
       if (inFlight.current.has(marketId)) return;
       inFlight.current.add(marketId);
       try {
-        const points = await fetchChainPriceSeries(Number(marketId.slice(1)));
+        const { leader, words } = await fetchChainSeries(Number(marketId.slice(1)));
         if (!alive) return;
-        useSim.getState().ingestChainHistory(marketId, points);
+        useSim.getState().ingestChainHistory(marketId, leader);
+        if (Object.keys(words).length > 0) {
+          useSim.getState().ingestWordHistory(marketId, words);
+        }
         // Mark even on empty so a history-less market isn't refetched forever.
         backfilled.current.set(marketId, volume);
       } catch {
@@ -85,7 +99,12 @@ export function ChainSync() {
         // constant between trades) would otherwise add a point every 30s and,
         // once past the merge cap, evict the sparse reconstructed trade history.
         const now = Date.now();
-        const { history: histByMarket, ingestChainHistory } = useSim.getState();
+        const {
+          history: histByMarket,
+          wordHistory: wordHistByMarket,
+          ingestChainHistory,
+          ingestWordHistory,
+        } = useSim.getState();
         for (const m of markets) {
           const v = marketPrice(m);
           if (v === null) continue;
@@ -94,6 +113,24 @@ export function ChainSync() {
           const moved = !last || Math.abs(last.v - v) > 1e-6;
           const stale = !last || now - last.t > LIVE_MAX_GAP_MS;
           if (moved || stale) ingestChainHistory(m.id, [{ t: now, v }]);
+        }
+
+        // Same live imprint, per option, for word-race markets so every line
+        // gets a current point (not just the leader).
+        for (const m of markets) {
+          if (m.type !== "majority") continue;
+          const shares = marketWordShares(m);
+          if (!shares) continue;
+          const wh = wordHistByMarket[m.id] ?? {};
+          const appends: Record<string, PricePoint[]> = {};
+          for (const [word, v] of Object.entries(shares)) {
+            const pts = wh[word] ?? [];
+            const last = pts[pts.length - 1];
+            const moved = !last || Math.abs(last.v - v) > 1e-6;
+            const stale = !last || now - last.t > LIVE_MAX_GAP_MS;
+            if (moved || stale) appends[word] = [{ t: now, v }];
+          }
+          if (Object.keys(appends).length > 0) ingestWordHistory(m.id, appends);
         }
 
         // Reconstructed history: fetch once per market, refresh when a trade

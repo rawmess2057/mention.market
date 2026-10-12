@@ -30,6 +30,8 @@ type SortKey = (typeof SORTS)[number]["key"];
 export default function Home() {
   const markets = useSim((s) => s.markets);
   const history = useSim((s) => s.history);
+  const chainSynced = useSim((s) => s.chainSynced);
+  const chainSyncError = useSim((s) => s.chainSyncError);
   const [filter, setFilter] = useState<Vertical | "all">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("trending");
@@ -45,6 +47,10 @@ export default function Home() {
     [markets, showDemoMarkets]
   );
   const live = all.filter((m) => m.status === "open");
+  // With nothing in the current view, search/filter/sort are all no-ops — mark
+  // them inactive instead of letting them look usable and do nothing.
+  const nothingToList = all.length === 0;
+  const inertHint = showDemoMarkets ? "No demo markets loaded" : "No on-chain markets listed";
   const listed = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = [...all].filter((m) => {
@@ -157,6 +163,8 @@ export default function Home() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search markets, events…"
+              disabled={nothingToList}
+              title={nothingToList ? `Nothing to search — ${inertHint.toLowerCase()}` : undefined}
               className="h-9 bg-white pl-9 text-sm"
             />
           </div>
@@ -165,11 +173,14 @@ export default function Home() {
               <button
                 key={s.key}
                 onClick={() => setSort(s.key)}
+                disabled={nothingToList}
+                title={nothingToList ? `Nothing to sort — ${inertHint.toLowerCase()}` : undefined}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   sort === s.key
                     ? "bg-blue-light text-blue"
-                    : "text-gray-mid hover:text-navy hover:bg-cream-dark"
+                    : "text-gray-mid hover:text-navy hover:bg-cream-dark",
+                  nothingToList && "cursor-not-allowed opacity-50 hover:bg-transparent"
                 )}
               >
                 {s.label}
@@ -182,11 +193,14 @@ export default function Home() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
+              disabled={nothingToList}
+              title={nothingToList ? `Nothing to filter — ${inertHint.toLowerCase()}` : undefined}
               className={cn(
                 "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
                 filter === f.key
                   ? "border-blue bg-blue-light text-blue"
-                  : "border-gray-warm text-gray-mid hover:border-blue/40 hover:text-navy"
+                  : "border-gray-warm text-gray-mid hover:border-blue/40 hover:text-navy",
+                nothingToList && "cursor-not-allowed opacity-50 hover:border-gray-warm hover:text-gray-mid"
               )}
             >
               {f.label}
@@ -198,15 +212,24 @@ export default function Home() {
       {/* Market list */}
       {all.length === 0 ? (
         <section className="rounded-xl border border-dashed border-gray-warm py-12 text-center">
-          <p className="text-sm text-gray-mid">
-            {showDemoMarkets
-              ? "No demo markets are available."
-              : "No on-chain markets found on Solana devnet."}
-          </p>
-          {!showDemoMarkets && (
-            <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">
-              Create an on-chain market
-            </Link>
+          {showDemoMarkets ? (
+            <p className="text-sm text-gray-mid">No demo markets are available.</p>
+          ) : chainSyncError ? (
+            <p className="text-sm text-gray-mid">
+              Couldn&apos;t reach Solana devnet — retrying about every 30s.
+            </p>
+          ) : !chainSynced ? (
+            <p className="flex items-center justify-center gap-2 text-sm text-gray-mid">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue" />
+              Checking Solana devnet for markets…
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-mid">No on-chain markets found on Solana devnet.</p>
+              <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">
+                Create an on-chain market
+              </Link>
+            </>
           )}
         </section>
       ) : (

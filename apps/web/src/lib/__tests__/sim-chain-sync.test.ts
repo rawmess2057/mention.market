@@ -56,7 +56,11 @@ describe("reconcileChainMarkets", () => {
 
 describe("syncChainMarkets", () => {
   beforeEach(() => {
-    useSim.setState({ markets: { c9: market("c9"), c7001: market("c7001"), m1: market("m1") } });
+    useSim.setState({
+      markets: { c9: market("c9"), c7001: market("c7001"), m1: market("m1") },
+      chainSynced: false,
+      chainSyncError: false,
+    });
   });
 
   it("prunes a closed market left over from a previous session", () => {
@@ -67,6 +71,20 @@ describe("syncChainMarkets", () => {
   it("empties the on-chain slate when devnet has no markets", () => {
     useSim.getState().syncChainMarkets([]);
     expect(Object.keys(useSim.getState().markets)).toEqual(["m1"]);
+  });
+
+  it("flags the store as synced even when devnet has no markets", () => {
+    expect(useSim.getState().chainSynced).toBe(false);
+    useSim.getState().syncChainMarkets([]);
+    expect(useSim.getState().chainSynced).toBe(true);
+    expect(useSim.getState().chainSyncError).toBe(false);
+  });
+
+  it("clears a previous sync error on the next successful poll", () => {
+    useSim.getState().setChainSyncError(true);
+    expect(useSim.getState().chainSyncError).toBe(true);
+    useSim.getState().syncChainMarkets([market("c9")]);
+    expect(useSim.getState().chainSyncError).toBe(false);
   });
 
   it("also drops the pruned market's chart history", () => {

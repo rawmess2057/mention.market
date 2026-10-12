@@ -535,6 +535,15 @@ interface SimState {
    * GPA result): chain markets that vanished from the chain are dropped.
    */
   syncChainMarkets: (markets: Market[]) => void;
+  /**
+   * True once a whole-program market fetch has succeeded this session, so the
+   * empty state can tell "devnet has no markets" from "we haven't looked yet".
+   * Session-only: never persisted.
+   */
+  chainSynced: boolean;
+  /** True when the latest chain poll failed and nothing has synced yet. */
+  chainSyncError: boolean;
+  setChainSyncError: (failed: boolean) => void;
   ingestChainPositions: (positions: Position[]) => void;
   ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
   ingestChainHistory: (marketId: string, points: PricePoint[]) => void;
@@ -625,6 +634,8 @@ export const useSim = create<SimState>()(persist((set, get) => {
     trades,
     books: {},
     activeWallet: null,
+    chainSynced: false,
+    chainSyncError: false,
     pendingTrade: null,
     toast: null,
     notifications: [],
@@ -962,7 +973,8 @@ export const useSim = create<SimState>()(persist((set, get) => {
     syncChainMarkets: (incoming) =>
       set((s) => {
         const { markets, removed } = reconcileChainMarkets(s.markets, incoming);
-        if (removed.length === 0) return { markets };
+        const synced = { chainSynced: true, chainSyncError: false };
+        if (removed.length === 0) return { markets, ...synced };
         // Drop the derived chart state of the vanished markets too, so the
         // detail page can't plot a market that no longer exists on-chain.
         const history = { ...s.history };
@@ -971,8 +983,10 @@ export const useSim = create<SimState>()(persist((set, get) => {
           delete history[id];
           delete wordHistory[id];
         }
-        return { markets, history, wordHistory };
+        return { markets, ...synced, history, wordHistory };
       }),
+
+    setChainSyncError: (failed) => set({ chainSyncError: failed }),
 
     ingestChainPositions: (incoming) => {
       const wallet = get().activeWallet;

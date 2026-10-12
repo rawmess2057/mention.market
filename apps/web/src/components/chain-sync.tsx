@@ -168,6 +168,9 @@ export function ChainSync() {
           }
         }
       } catch (err) {
+        // Surfaced in the home page empty state: "checking devnet" must not be
+        // indistinguishable from "we never reached it".
+        useSim.getState().setChainSyncError(true);
         console.warn("chain sync failed:", err);
       } finally {
         inspecting = false;

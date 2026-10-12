@@ -1,0 +1,41 @@
+{
+  "marketAddress": "EzHuyKVrnjE9w3wHwWq6d59xqP3MsM45kZqGqLeaQMwV",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "EzHuyKVrnjE9w3wHwWq6d59xqP3MsM45kZqGqLeaQMwV",
+    "marketType": "binary",
+    "outcomeOptions": [
+      "yes",
+      "no"
+    ],
+    "terms": [
+      {
+        "phrase": "Kata Kata",
+        "outcome": "yes"
+      }
+    ],
+    "source": {
+      "provider": "operator-upload",
+      "sourceId": "https://mentionmarket.vercel.app/",
+      "url": "https://mentionmarket.vercel.app/"
+    },
+    "window": {
+      "startsAtMs": 1791785449000,
+      "endsAtMs": 1791965449000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "69bdb0c902168abfcf7eadaa7f01a5e5a79015d13b30b1e295b367afeecc121f",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [],
+    "speaker": null
+  },
+  "createdAt": 1791785471747
+}

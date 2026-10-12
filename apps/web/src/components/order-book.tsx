@@ -169,7 +169,7 @@ export function OrderBook({ market }: { market: Market }) {
 
         <motion.div whileTap={disabled || submitting ? undefined : { scale: 0.98 }} className="mt-3">
           <Button
-            variant={side === "yes" ? "yes" : "no"}
+            variant="default"
             size="default"
             className="w-full"
             disabled={disabled || submitting}

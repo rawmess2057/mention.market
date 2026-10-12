@@ -62,6 +62,20 @@ export function TradePanel({ market }: { market: Market }) {
   return (
     <>
       <div className="rounded-2xl border border-gray-warm bg-white p-4 shadow-card">
+        {/* Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-navy">
+            Trade
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-md bg-green-light px-1.5 py-0.5 font-mono text-[10px] font-semibold text-green">
+              YES {Math.round(price * 100)}%
+            </span>
+            <span className="rounded-md bg-red-brand-light px-1.5 py-0.5 font-mono text-[10px] font-semibold text-red-brand">
+              NO {Math.round((1 - price) * 100)}%
+            </span>
+          </div>
+        </div>
         {/* Segmented side selector */}
         <div className="relative grid grid-cols-2 gap-1 rounded-xl bg-cream-dark p-1">
           {(["yes", "no"] as const).map((s) => (
@@ -69,7 +83,7 @@ export function TradePanel({ market }: { market: Market }) {
               key={s}
               onClick={() => setSide(s)}
               className={cn(
-                "relative z-10 rounded-lg py-2.5 text-center transition-colors",
+                "relative z-10 rounded-lg py-3.5 text-center transition-colors",
                 side === s ? "text-white" : "text-gray-mid hover:text-navy"
               )}
             >
@@ -112,7 +126,13 @@ export function TradePanel({ market }: { market: Market }) {
           />
           <div className="mt-2 grid grid-cols-4 gap-1.5">
             {quickAmounts.map((q) => (
-              <Button key={q} variant="secondary" size="sm" onClick={() => setAmount(String(q))}>
+              <Button
+                key={q}
+                variant="secondary"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setAmount(String(q))}
+              >
                 {fmtAsset(q)}
               </Button>
             ))}
@@ -147,7 +167,7 @@ export function TradePanel({ market }: { market: Market }) {
 
         <motion.div whileTap={disabled ? undefined : { scale: 0.98 }} className="mt-4">
           <Button
-            variant={side === "yes" ? "yes" : "no"}
+            variant="default"
             size="xl"
             className="w-full"
             disabled={disabled}

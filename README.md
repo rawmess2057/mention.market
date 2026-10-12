@@ -128,7 +128,14 @@ Notes:
   poll (≈30s, and immediately after a reload): the store is reconciled with the
   chain account list, so nothing has to be cleared by hand.
 - Only the `mention_chain_ids` registry is sticky — a freed id is never reused,
-  so new UI markets start above the highest id seen before (or at 100). Clear
-  that one key (or use a fresh browser profile) for a low id range.
+  so new UI markets start above the highest id seen before (or at 100). The
+  create flow then probes devnet for the first id with no market account, so a
+  stale registry (another browser profile, a cleared localStorage, an id a
+  script created) can no longer collide with an existing PDA. Clear that one
+  key for a low id range.
 - Create a market in the UI to launch it on-chain (`b = 1 SOL`, reserve ante
   ≈ 0.69 SOL + rent from the creator wallet) or create a simulated/offline one.
+  The wizard checks the program's create limits before it opens the wallet
+  (title/event ≤ 64 bytes, word labels ≤ 32, ≤ 16 words, ≥ 5 minutes) and keeps
+  the on-chain launch disabled until they pass, so an over-long question no
+  longer costs a devnet transaction that reverts with a bare wallet error.

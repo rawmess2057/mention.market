@@ -3,7 +3,7 @@
 import { use, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, ExternalLink, ScrollText, Users, Volume2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Radio, ScrollText, Users, Volume2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { ResolutionGrammar } from "@/components/resolution-grammar";
 import { ActivityFeed } from "@/components/activity-feed";
 import { ClaimCard } from "@/components/claim-card";
 import { TheWhisper } from "@/components/the-whisper";
+import { WaveformStrip } from "@/components/viz/waveform-strip";
 import { fmtTimeLeft, fmtSol } from "@/lib/format";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
@@ -160,6 +161,20 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                 series={wordSeries}
                 showBaseline={m.type === "binary"}
               />
+              <div className="border-t border-gray-warm px-4 py-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-mid">
+                  <Radio className="h-3 w-3 animate-pulse-live text-red-brand" />
+                  Stream audio
+                  <span className="ml-auto normal-case tracking-normal text-gray-mid">
+                    {m.source}
+                  </span>
+                </div>
+                <WaveformStrip
+                  seed={m.slug.length * 7 + m.volume}
+                  live={m.status === "open"}
+                  className="h-8"
+                />
+              </div>
             </div>
 
             {/* Trading Panel */}

@@ -2,17 +2,39 @@
 
 import Link from "next/link";
 import { memo } from "react";
-import { Flame, Users, Volume2 } from "lucide-react";
+import { Users, Volume2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { LeaderBar } from "@/components/viz/leader-bar";
-import { Sparkline } from "@/components/viz/sparkline";
+import { SplitBar } from "@/components/viz/split-bar";
 import { AnimatedNumber } from "@/components/viz/animated-number";
 import { cn, fmtTimeLeft } from "@/lib/format";
-import { sessionChange, toValues, type HistoryInput } from "@/lib/history";
+import { sessionChange, type HistoryInput } from "@/lib/history";
 import { useSim } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
-import { VERTICAL_META, type Market } from "@/lib/types";
+import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 import { lmsrProbYes } from "@/lib/lmsr";
+
+const VERTICAL_CHIP: Record<Vertical, string> = {
+  streams: "bg-blue-light",
+  sports: "bg-green-light",
+  earnings: "bg-amber-50",
+  politics: "bg-red-brand-light",
+  podcasts: "bg-cream-dark",
+};
+
+function VerticalChip({ vertical, className }: { vertical: Vertical; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base",
+        VERTICAL_CHIP[vertical],
+        className
+      )}
+    >
+      {VERTICAL_META[vertical].emoji}
+    </span>
+  );
+}
 
 export const MarketCard = memo(function MarketCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
@@ -24,25 +46,23 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
   return (
     <Link
       href={`/market/${m.slug}`}
-      className="grad-border group block rounded-2xl p-5 md:p-6"
+      className="grad-border lift group block rounded-2xl p-5 md:p-6"
       style={{
         boxShadow: `0 10px 30px -10px rgba(0,0,0,${0.04 + heatIntensity * 0.06})`,
       }}
     >
-      <div className="mb-2.5 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] text-gray-mid">
-            <span>{VERTICAL_META[m.vertical].emoji}</span>
-            <span className="truncate">{m.event}</span>
-          </div>
-          <h3 className="truncate text-[15px] font-semibold text-navy transition-colors group-hover:text-blue">
+      <div className="mb-3 flex items-start gap-3">
+        <VerticalChip vertical={m.vertical} />
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 truncate text-[11px] text-gray-mid">{m.event}</div>
+          <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-navy transition-colors group-hover:text-blue">
             {m.title}
           </h3>
         </div>
         <StatusBadge status={m.status} />
       </div>
 
-      {m.type === "binary" ? <BinarySummary m={m} history={history} /> : <MajoritySummary m={m} />}
+      {m.type === "binary" ? <BinaryOutcome m={m} history={history} /> : <MajorityOutcome m={m} />}
 
       <div className="mt-3.5 flex items-center gap-3 text-[11px] text-gray-mid">
         <span className="flex items-center gap-1">
@@ -57,7 +77,7 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
       </div>
     </Link>
   );
-})
+});
 
 function StatusPill({ m, now }: { m: Market; now: number }) {
   if (m.status === "resolved") {
@@ -120,7 +140,7 @@ function ChangePill({ change }: { change: number }) {
     <span
       className={cn(
         "rounded-md px-1.5 py-0.5 font-mono text-[10px]",
-        up ? "bg-green-light text-green" : "bg-red-light text-red-brand"
+        up ? "bg-green-light text-green" : "bg-red-brand-light text-red-brand"
       )}
     >
       {label}
@@ -128,34 +148,28 @@ function ChangePill({ change }: { change: number }) {
   );
 }
 
-function BinarySummary({ m, history }: { m: Market; history?: HistoryInput }) {
+function BinaryOutcome({ m, history }: { m: Market; history?: HistoryInput }) {
   const p = lmsrProbYes(m.yesShares, m.noShares, m.b);
-  // Fixed brand blue — reserves green/red for YES/NO text + momentum only.
-  const stroke = "#2E7DF6";
-  const values = toValues(history, [p, p]);
   const change = m.status === "open" ? sessionChange(history) : 0;
+  const yes = Math.round(p * 100);
+  const no = Math.round((1 - p) * 100);
   return (
-    <div className="flex items-center gap-3">
-      <Sparkline data={values} width={110} height={34} stroke={stroke} domain={[0, 1]} className="w-[110px]" />
-      <div className="flex flex-col gap-1">
-        <div className="flex items-baseline gap-1.5">
-          <AnimatedNumber
-            value={p * 100}
-            format={(v) => `${Math.round(v)}%`}
-            className="font-mono text-lg font-bold text-green"
-          />
-          <span className="text-xs text-gray-mid">/</span>
-          <span className="font-mono text-sm font-semibold text-red-brand">
-            {Math.round((1 - p) * 100)}%
-          </span>
-        </div>
+    <div className="space-y-2.5">
+      <SplitBar yes={p} />
+      <div className="flex items-center gap-1.5">
+        <span className="rounded-md bg-green-light px-2 py-0.5 font-mono text-[11px] font-semibold text-green">
+          YES {yes}%
+        </span>
+        <span className="rounded-md bg-red-brand-light px-2 py-0.5 font-mono text-[11px] font-semibold text-red-brand">
+          NO {no}%
+        </span>
         {m.status === "open" && <ChangePill change={change} />}
       </div>
     </div>
   );
 }
 
-function MajoritySummary({ m }: { m: Market }) {
+function MajorityOutcome({ m }: { m: Market }) {
   const words = m.words ?? [];
   const pot = words.reduce((s, w) => s + w.pool, 0);
   const sorted = [...words].sort((a, b) => b.pool - a.pool).slice(0, 3);
@@ -163,21 +177,30 @@ function MajoritySummary({ m }: { m: Market }) {
     <div className="space-y-2">
       {sorted.map((w, i) => {
         const share = pot > 0 ? (w.pool / pot) * 100 : 0;
+        const leader = i === 0;
         return (
           <div key={w.word} className="flex items-center gap-2 text-xs">
-            <span className={cn("w-28 truncate font-medium", i === 0 ? "text-navy" : "text-text-secondary")}>
+            <span
+              className={cn(
+                "w-24 truncate font-medium",
+                leader ? "text-navy" : "text-text-secondary"
+              )}
+            >
               {w.word.trim()}
             </span>
             <LeaderBar
               value={share}
               className="h-1.5 flex-1"
               barClassName={
-                i === 0
-                  ? "bg-gradient-to-r from-blue to-blue-dark"
-                  : "bg-blue/40"
+                leader ? "bg-gradient-to-r from-green to-green/80" : "bg-blue/40"
               }
             />
-            <span className="w-8 text-right font-mono text-[11px] text-gray-mid">
+            <span
+              className={cn(
+                "rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold",
+                leader ? "bg-green-light text-green" : "bg-blue-light text-blue"
+              )}
+            >
               {Math.round(share)}%
             </span>
           </div>
@@ -206,7 +229,6 @@ export function LiveCarousel({ markets }: { markets: Market[] }) {
 function LiveCard({ m }: { m: Market }) {
   const history = useSim((s) => s.history[m.id]);
   const now = useNow(1000);
-  const values = toValues(history);
   const change = sessionChange(history);
 
   const p = m.type === "binary" ? lmsrProbYes(m.yesShares, m.noShares, m.b) : null;
@@ -216,7 +238,7 @@ function LiveCard({ m }: { m: Market }) {
       href={`/market/${m.slug}`}
       className="grad-border lift block h-full rounded-2xl p-4"
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2.5 flex items-center justify-between">
         <span className="flex items-center gap-1.5 rounded-full bg-red-brand/10 px-2 py-0.5 text-[10px] font-bold text-red-brand on-air-shimmer">
           <span className="h-1.5 w-1.5 rounded-full bg-red-brand" />
           ON AIR
@@ -228,31 +250,34 @@ function LiveCard({ m }: { m: Market }) {
           {fmtTimeLeft(m.endTime - now)}
         </span>
       </div>
-      <h3 className="mb-1 truncate text-sm font-semibold text-navy">{m.title}</h3>
-      <div className="mb-2 text-[11px] text-gray-mid">{m.event}</div>
+      <div className="mb-2 flex items-start gap-2.5">
+        <VerticalChip vertical={m.vertical} className="h-8 w-8 text-sm" />
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-navy">{m.title}</h3>
+          <div className="mt-0.5 truncate text-[11px] text-gray-mid">{m.event}</div>
+        </div>
+      </div>
       {p !== null ? (
-        <div className="flex items-center justify-between gap-2">
-          <Sparkline
-            data={values.length >= 2 ? values : [p, p]}
-            width={100}
-            height={30}
-            stroke="#2E7DF6"
-            domain={[0, 1]}
-            className="w-[100px] flex-1"
-          />
-          <div className="flex flex-col items-end gap-1">
-            <AnimatedNumber
-              value={p * 100}
-              format={(v) => `${Math.round(v)}%`}
-              className="font-mono text-base font-bold text-green"
-            />
+        <div className="space-y-2">
+          <SplitBar yes={p} height={6} />
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-md bg-green-light px-1.5 py-0.5 font-mono text-[10px] font-semibold text-green">
+              YES {Math.round(p * 100)}%
+            </span>
+            <span className="rounded-md bg-red-brand-light px-1.5 py-0.5 font-mono text-[10px] font-semibold text-red-brand">
+              NO {Math.round((1 - p) * 100)}%
+            </span>
             <ChangePill change={change} />
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5 text-[11px] text-orange-600">
-          <Flame className="h-3 w-3" />
-          {fmtMarketAmount(m.volume, true)} in the pot
+        <div className="flex items-center gap-1.5">
+          <AnimatedNumber
+            value={m.volume}
+            format={(v) => fmtMarketAmount(v, true)}
+            className="text-[11px] font-semibold text-orange-600"
+          />
+          <span className="text-[11px] text-orange-600">in the pot</span>
         </div>
       )}
     </Link>

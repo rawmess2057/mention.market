@@ -23,7 +23,7 @@ import { buildResolutionSpec } from "@mention/resolution/spec-builder";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn, lmsrSharesForCost } from "@/lib/lmsr";
 import { resample } from "@/lib/history";
 import type { PricePoint } from "@/lib/history";
-import { shortAddr } from "@/lib/format";
+import { fmtErr, shortAddr } from "@/lib/format";
 import type {
   ActivityItem,
   Market,
@@ -311,6 +311,198 @@ export function rememberChainId(id: number): void {
 /** Next fresh market id: max(known)+1, never below 100. */
 export function nextChainId(): number {
   return Math.max(100, Math.max(...knownChainIds()) + 1);
+}
+
+/** Does a market account already exist on devnet for this id? */
+export async function marketAccountExists(id: number): Promise<boolean> {
+  const info = await withRetry(() => connection().getAccountInfo(marketPda(id)), 3, 500);
+  return info !== null;
+}
+
+/**
+ * First market id that is still free on devnet, starting from `nextChainId()`.
+ *
+ * `nextChainId()` is only a *per-browser* registry, so it will happily propose
+ * an id whose account already exists — created from another profile, by a
+ * script, or by a session whose localStorage was cleared. `create_market`
+ * `init`s the market PDA, so such a create dies inside the system program with
+ * `custom program error: 0x0` ("already in use"), which Phantom reports as a
+ * bare "Unexpected error" and which the user cannot recover from because the
+ * id is proposed again on every retry. Probing the chain first removes that
+ * whole class of failure.
+ *
+ * An RPC failure while probing is treated as "free": the caller reserves the
+ * id before signing, so a retry still advances past it.
+ */
+export async function freeChainId(
+  isOccupied: (id: number) => Promise<boolean> = (id) =>
+    marketAccountExists(id).catch(() => false),
+  limit = 64
+): Promise<number> {
+  let id = nextChainId();
+  for (let i = 0; i < limit; i += 1) {
+    if (!(await isOccupied(id))) return id;
+    id += 1;
+  }
+  throw new Error("No free market id on devnet — run apps/program/scripts/cleanup.mjs first.");
+}
+
+/* ------------------------------------------------------------------ */
+/* Create-time limits + readable errors                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Program-side limits the UI must respect *before* it asks the wallet to sign.
+ * They mirror `programs/mention/src/constants.rs`; a mismatch turns a typo into
+ * a devnet transaction that reverts (and a wallet error nobody can act on).
+ * Lengths are UTF-8 bytes, matching Rust's `String::len()`.
+ */
+export const MAX_TITLE_BYTES = 64;
+export const MAX_WORD_BYTES = 32;
+export const MAX_WORDS_PER_MARKET = 16;
+export const MIN_CREATE_MINUTES = 5;
+
+/** UTF-8 byte length, i.e. what the program actually measures. */
+export function byteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/**
+ * The title the program receives. Word-race markets do not send the user's
+ * label verbatim: the client derives `Word race: <event>`, so an event name
+ * that fits on its own can still overflow `MAX_TITLE_LEN` once prefixed.
+ */
+export function chainCreateTitle(
+  params: Pick<ChainCreateParams, "type" | "event" | "title">
+): string {
+  return params.type === "binary" ? params.title : `Word race: ${params.event}`;
+}
+
+/**
+ * Human-readable reasons this create would be rejected on-chain. Empty means
+ * the transaction the wallet is asked to sign satisfies the program's checks.
+ */
+export function chainCreateProblems(params: ChainCreateParams): string[] {
+  const problems: string[] = [];
+  const title = chainCreateTitle(params);
+  const titleBytes = byteLength(title);
+
+  if (titleBytes > MAX_TITLE_BYTES) {
+    problems.push(
+      params.type === "binary"
+        ? `The question is ${titleBytes} bytes; the program allows ${MAX_TITLE_BYTES}. Shorten it or pick the demo launch.`
+        : `"Word race: ${params.event}" is ${titleBytes} bytes; the program allows ${MAX_TITLE_BYTES}. Use a shorter event name.`
+    );
+  }
+  // Only binary markets send the event separately — a majority title already
+  // embeds it, so that case is covered by the check above.
+  if (params.type === "binary" && byteLength(params.event) > MAX_TITLE_BYTES) {
+    problems.push(
+      `The event name is ${byteLength(params.event)} bytes; the program allows ${MAX_TITLE_BYTES}.`
+    );
+  }
+
+  if (params.type === "majority") {
+    if (params.words.length < 2) problems.push("A word race needs at least two words.");
+    if (params.words.length > MAX_WORDS_PER_MARKET) {
+      problems.push(`A word race allows at most ${MAX_WORDS_PER_MARKET} words.`);
+    }
+    const longWord = params.words.find((w) => byteLength(w) > MAX_WORD_BYTES);
+    if (longWord) {
+      problems.push(`"${longWord}" is ${byteLength(longWord)} bytes; a word allows ${MAX_WORD_BYTES}.`);
+    }
+  }
+
+  if (!Number.isFinite(params.minutes) || params.minutes < MIN_CREATE_MINUTES) {
+    problems.push(`The market must run at least ${MIN_CREATE_MINUTES} minutes.`);
+  }
+  return problems;
+}
+
+/**
+ * Anchor error code -> message, taken straight from the IDL so it can never
+ * drift out of sync with `programs/mention/src/error.rs`.
+ */
+const PROGRAM_ERROR_MESSAGES: Record<number, string> = Object.fromEntries(
+  ((mentionIdl as { errors?: Array<{ code: number; msg: string }> }).errors ?? []).map((e) => [
+    e.code,
+    e.msg,
+  ])
+);
+
+/** System-program failures the `init`-based create hits first. */
+const SYSTEM_ERROR_MESSAGES: Record<number, string> = {
+  0: "Market id already in use on devnet — retry for a fresh id.",
+  1: "Not enough devnet SOL to escrow this market (≈0.7 SOL reserve + rent).",
+};
+
+/**
+ * Every message (and attached log line) reachable through a wrapped error.
+ * Wallets nest the provider error in `.error` (Phantom puts the simulation
+ * logs under `data.logs`), Anchor/RPC errors nest in `.cause`.
+ */
+function errorMessages(err: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<unknown>();
+  const pushLogs = (value: unknown) => {
+    if (Array.isArray(value)) out.push(...value.filter((l): l is string => typeof l === "string"));
+  };
+  let cur: unknown = err;
+  while (cur && typeof cur === "object" && !seen.has(cur)) {
+    seen.add(cur);
+    const message = (cur as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) out.push(message.trim());
+    const data = (cur as { data?: { logs?: unknown } }).data;
+    pushLogs((cur as { logs?: unknown }).logs);
+    pushLogs(data?.logs);
+    cur = (cur as { error?: unknown }).error ?? (cur as { cause?: unknown }).cause;
+  }
+  if (typeof err === "string" && err.trim()) out.push(err.trim());
+  return out;
+}
+
+/** Wrapper messages that carry no information on their own. */
+const GENERIC_ERROR = /^(unexpected error|transaction failed|failed to send transaction|error)$/i;
+
+/**
+ * Turn a wallet/RPC/program failure into something a trader can act on.
+ *
+ * Wallets wrap the real cause (`WalletSignTransactionError: Unexpected error`
+ * with the provider error in `.error`) and the program reports rejects as an
+ * opaque number, so both get unwrapped here: the wrapped messages and any
+ * attached program logs are scanned, a `custom program error: 0x…` / anchor
+ * `Error Number: 6009` is decoded through the IDL, and only then does the raw
+ * text fall through.
+ */
+export function chainErrorText(err: unknown): string {
+  const messages = errorMessages(err);
+  const blob = messages.join("\n");
+
+  const anchorCode = blob.match(/Error Number:\s*(\d+)/);
+  const hexCode = blob.match(/custom program error:\s*0x([0-9a-fA-F]+)/);
+  const code = anchorCode ? Number(anchorCode[1]) : hexCode ? parseInt(hexCode[1], 16) : null;
+  if (code !== null) {
+    const programMessage = PROGRAM_ERROR_MESSAGES[code];
+    if (programMessage) return programMessage;
+    const systemMessage = SYSTEM_ERROR_MESSAGES[code];
+    if (systemMessage) return systemMessage;
+  }
+
+  if (/still in use|already in use|already been initialized/i.test(blob)) {
+    return SYSTEM_ERROR_MESSAGES[0];
+  }
+  if (/insufficient lamports|insufficient funds|negative lamports/i.test(blob)) {
+    return SYSTEM_ERROR_MESSAGES[1];
+  }
+  if (/429|too many requests|rate limit/i.test(blob)) {
+    return "Network busy (rate limited) — retry in a moment.";
+  }
+  if (/user rejected|request rejected|declined/i.test(blob)) {
+    return "You rejected the request in your wallet.";
+  }
+
+  const specific = [...messages].reverse().find((m) => !GENERIC_ERROR.test(m.split("\n")[0].trim()));
+  return fmtErr(specific ?? err);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1241,7 +1433,17 @@ export async function chainCreateMarket(
   signer: ChainSigner,
   params: ChainCreateParams
 ): Promise<ChainCreateResult> {
-  const id = nextChainId();
+  // Fail before the wallet prompt: an over-long title otherwise costs a
+  // signature, a devnet transaction that reverts, and a wallet error the user
+  // cannot act on (6009 TitleTooLong was the failure mode on devnet).
+  const problems = chainCreateProblems(params);
+  if (problems.length) throw new Error(problems[0]);
+
+  const id = await freeChainId();
+  // Reserve before signing so a retry can never re-propose this id: the
+  // program would reject the duplicate PDA, and the wallet would report that
+  // as the same opaque error.
+  rememberChainId(id);
   const market = marketPda(id);
   const bUi = CHAIN_CREATE_B_UI;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -1282,10 +1484,21 @@ export async function chainCreateMarket(
       systemProgram: SYSTEM_PROGRAM,
     } as never)
     .instruction();
-  const sig = await sendAll(signer, [ix]);
-  rememberChainId(id);
-  await persistLocalSpec(market.toBase58(), resolutionSpec);
-  return { id, sig, solBalance: await solBalanceUi(signer.publicKey) };
+  try {
+    const sig = await sendAll(signer, [ix]);
+    await persistLocalSpec(market.toBase58(), resolutionSpec);
+    return { id, sig, solBalance: await solBalanceUi(signer.publicKey) };
+  } catch (err) {
+    // A confirmation timeout is indistinguishable from a failure from here,
+    // but the market account is not: if it exists the transaction landed, so
+    // report the create instead of a failure the user would "retry" straight
+    // into a duplicate-PDA rejection.
+    if (await marketAccountExists(id).catch(() => false)) {
+      await persistLocalSpec(market.toBase58(), resolutionSpec);
+      return { id, sig: "", solBalance: await solBalanceUi(signer.publicKey) };
+    }
+    throw new Error(chainErrorText(err));
+  }
 }
 
 /**

@@ -62,7 +62,14 @@ export function positionPda(market, owner) {
 }
 
 export function connection() {
-  return new Connection("https://api.devnet.solana.com", "confirmed");
+  // Default to the shared public devnet endpoint, but let a dedicated RPC
+  // (Helius/QuickNode) override it: the public one rate-limits hard enough to
+  // stall multi-transaction scripts like the cleanup sweep and deploys.
+  const url =
+    process.env.SOLANA_RPC_URL ??
+    process.env.ANCHOR_PROVIDER_URL ??
+    "https://api.devnet.solana.com";
+  return new Connection(url, "confirmed");
 }
 
 /** Pre-instruction to raise the per-tx compute budget above the 200k default.

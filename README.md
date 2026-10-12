@@ -83,6 +83,12 @@ whole flow a bit before presenting:
 ```bash
 cd apps/program
 
+# 0. Optional: wipe every market left over from a previous session. Closes each
+#    market + vault + resolution-spec, sweeps its positions and evidence
+#    manifests, and refunds all escrow + rent to the config authority (the
+#    deploy keypair). Authority-only; see scripts/cleanup.mjs for env overrides.
+node scripts/cleanup.mjs
+
 # 1. One-time: initialize the config + resolver, then fund it.
 node scripts/bootstrap.mjs
 
@@ -106,6 +112,15 @@ Notes:
 - The app auto-discovers on-chain markets with a single RPC every 15s — no id
   registry edits when you reseed. Use `SEED_BLOCK` (0 → ids 9–16, 1 → 25–32, …)
   for each fresh demo batch.
+- `node scripts/cleanup.mjs` is the fast way to reach a clean slate: it calls the
+  program's authority-only `close_market` instruction (added for exactly this),
+  which reaps a market's accounts and returns the vault balance to the
+  authority. It force-closes even resolved markets, so run it before a demo, not
+  after one where people still have winnings to claim.
+- `close_market` lives in a program build that must be deployed; if the cleanup
+  script reports the instruction is missing, redeploy (`anchor program deploy`).
+  Closing a market with very many positions/evidence accounts can exceed the
+  transaction size limit — the script reports and skips those.
 - The browser wallet (and the seeding wallet) need devnet SOL. `solana airdrop`
   is rate-limited, so top up from a wallet that has SOL:
   `solana transfer <addr> 5 --allow-unfunded-recipient`.

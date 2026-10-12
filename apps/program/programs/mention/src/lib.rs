@@ -61,6 +61,14 @@ pub mod mention {
         lock_market::handler(ctx)
     }
 
+    /// Devnet cleanup: the config authority reaps a market, refunding the
+    /// vault's balance and the market/vault/spec rent to a chosen recipient.
+    /// Optionally sweeps the market's Position/EvidenceManifest accounts passed
+    /// as remaining accounts.
+    pub fn close_market<'info>(ctx: Context<'info, CloseMarket<'info>>) -> Result<()> {
+        close_market::handler(ctx)
+    }
+
     /// Flip the global kill switch. Only the config authority may call it.
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         set_paused::handler(ctx, paused)

@@ -1,7 +1,7 @@
 use {
     anchor_lang::{
         prelude::Pubkey,
-        solana_program::instruction::Instruction,
+        solana_program::instruction::{AccountMeta, Instruction},
         AccountDeserialize, InstructionData, ToAccountMetas,
     },
     litesvm::LiteSVM,
@@ -2019,4 +2019,293 @@ fn test_set_paused_blocks_trading() {
     .unwrap();
     svm.expire_blockhash();
     send(&mut svm, &[buy()], &trader).unwrap();
+}
+
+// ---------------------------------------------------------------------------
+// Devnet cleanup: close_market
+// ---------------------------------------------------------------------------
+
+fn close_market_ix(
+    program_id: Pubkey,
+    authority: Pubkey,
+    market: Pubkey,
+    recipient: Pubkey,
+    remaining: Vec<Pubkey>,
+) -> Instruction {
+    let mut metas = mention::accounts::CloseMarket {
+        authority,
+        config: config_pda(program_id),
+        market,
+        vault: vault_pda(program_id, market),
+        resolution_spec: resolution_spec_pda(program_id, market),
+        recipient,
+    }
+    .to_account_metas(None);
+    metas.extend(remaining.into_iter().map(|pubkey| AccountMeta {
+        pubkey,
+        is_signer: false,
+        is_writable: true,
+    }));
+    Instruction::new_with_bytes(program_id, &mention::instruction::CloseMarket {}.data(), metas)
+}
+
+/// Closing a market drains the vault (escrow + rent) to the recipient and reaps
+/// the market, vault and resolution-spec accounts.
+#[test]
+fn test_close_market_refunds_and_reaps() {
+    let (mut svm, payer, program_id) = setup();
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 3_600;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        70,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let trader = Keypair::new();
+    svm.airdrop(&trader.pubkey(), 10 * LAMPORTS).unwrap();
+    send(
+        &mut svm,
+        &[buy_binary_ix(
+            program_id,
+            trader.pubkey(),
+            market,
+            0,
+            1_000_000_000,
+            0,
+        )],
+        &trader,
+    )
+    .unwrap();
+
+    let vault_lamports = svm
+        .get_account(&vault_pda(program_id, market))
+        .unwrap()
+        .lamports;
+    assert!(
+        vault_lamports > 1_000_000_000,
+        "vault should hold escrow above rent, got {vault_lamports}"
+    );
+
+    let authority_before = svm.get_account(&payer.pubkey()).unwrap().lamports;
+    send(
+        &mut svm,
+        &[close_market_ix(
+            program_id,
+            payer.pubkey(),
+            market,
+            payer.pubkey(),
+            vec![],
+        )],
+        &payer,
+    )
+    .unwrap();
+    let authority_after = svm.get_account(&payer.pubkey()).unwrap().lamports;
+
+    assert!(svm.get_account(&market).is_none(), "market should be reaped");
+    assert!(
+        svm.get_account(&vault_pda(program_id, market)).is_none(),
+        "vault should be reaped"
+    );
+    assert!(
+        svm.get_account(&resolution_spec_pda(program_id, market))
+            .is_none(),
+        "resolution spec should be reaped"
+    );
+
+    // The recipient (== authority here) nets the whole vault minus the tx fee.
+    let delta = authority_after as i128 - authority_before as i128;
+    assert!(
+        delta >= vault_lamports as i128 - 10_000_000,
+        "recipient should receive the vault balance, delta = {delta}, vault = {vault_lamports}"
+    );
+}
+
+/// Only the config authority may reap a market; a rogue signer cannot move
+/// anyone's escrow or delete a live market.
+#[test]
+fn test_close_market_rejects_non_authority() {
+    let (mut svm, payer, program_id) = setup();
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 3_600;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        71,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let attacker = Keypair::new();
+    svm.airdrop(&attacker.pubkey(), 10 * LAMPORTS).unwrap();
+    let err = send(
+        &mut svm,
+        &[close_market_ix(
+            program_id,
+            attacker.pubkey(),
+            market,
+            attacker.pubkey(),
+            vec![],
+        )],
+        &attacker,
+    )
+    .unwrap_err();
+    assert!(err.contains("Unauthorized"), "unexpected error: {err}");
+    assert!(
+        svm.get_account(&market).is_some(),
+        "market must survive an unauthorized close attempt"
+    );
+}
+
+/// Position and EvidenceManifest accounts for the market passed as remaining
+/// accounts are swept along with it.
+#[test]
+fn test_close_market_sweeps_positions_and_evidence() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        72,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let trader = Keypair::new();
+    svm.airdrop(&trader.pubkey(), 10 * LAMPORTS).unwrap();
+    send(
+        &mut svm,
+        &[buy_binary_ix(
+            program_id,
+            trader.pubkey(),
+            market,
+            1,
+            500_000_000,
+            0,
+        )],
+        &trader,
+    )
+    .unwrap();
+
+    advance(&mut svm, 6);
+    send(
+        &mut svm,
+        &[lock_market_ix(program_id, payer.pubkey(), market)],
+        &payer,
+    )
+    .unwrap();
+    let bytes = b"{\"outcome\":\"no\"}".to_vec();
+    let sha = evidence_sha256(&bytes);
+    send(
+        &mut svm,
+        &[post_evidence_ix(
+            program_id,
+            resolver.pubkey(),
+            market,
+            bytes,
+            TEST_SPEC,
+        )],
+        &resolver,
+    )
+    .unwrap();
+
+    let pos = position_pda(program_id, market, trader.pubkey());
+    let ev = evidence_pda(program_id, market, sha);
+    assert!(svm.get_account(&pos).is_some());
+    assert!(svm.get_account(&ev).is_some());
+
+    send(
+        &mut svm,
+        &[close_market_ix(
+            program_id,
+            payer.pubkey(),
+            market,
+            payer.pubkey(),
+            vec![pos, ev],
+        )],
+        &payer,
+    )
+    .unwrap();
+
+    assert!(svm.get_account(&market).is_none());
+    assert!(svm.get_account(&pos).is_none(), "position should be swept");
+    assert!(svm.get_account(&ev).is_none(), "evidence should be swept");
+}
+
+/// A Position belonging to a different market is rejected rather than swept, so
+/// a stray meta can never close unrelated state.
+#[test]
+fn test_close_market_rejects_foreign_remaining_account() {
+    let (mut svm, payer, program_id) = setup();
+    let _resolver = bootstrap(&mut svm, &payer, program_id);
+
+    let end = unix_now(&svm) + 3_600;
+    let (ix_a, market_a) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        73,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    let (ix_b, market_b) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        74,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix_a, ix_b], &payer).unwrap();
+
+    let trader = Keypair::new();
+    svm.airdrop(&trader.pubkey(), 10 * LAMPORTS).unwrap();
+    send(
+        &mut svm,
+        &[buy_binary_ix(
+            program_id,
+            trader.pubkey(),
+            market_a,
+            0,
+            500_000_000,
+            0,
+        )],
+        &trader,
+    )
+    .unwrap();
+
+    let foreign = position_pda(program_id, market_a, trader.pubkey());
+    let err = send(
+        &mut svm,
+        &[close_market_ix(
+            program_id,
+            payer.pubkey(),
+            market_b,
+            payer.pubkey(),
+            vec![foreign],
+        )],
+        &payer,
+    )
+    .unwrap_err();
+    assert!(err.contains("InvalidMarket"), "unexpected error: {err}");
+    assert!(
+        svm.get_account(&market_b).is_some(),
+        "market must survive a rejected sweep"
+    );
+    assert!(
+        svm.get_account(&foreign).is_some(),
+        "foreign position must be untouched"
+    );
 }

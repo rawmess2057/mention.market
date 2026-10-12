@@ -1,5 +1,6 @@
 pub mod back_word;
 pub mod claim;
+pub mod close_market;
 pub mod create_market;
 pub mod initialize_config;
 pub mod lock_market;
@@ -11,6 +12,7 @@ pub mod trade;
 
 pub use back_word::*;
 pub use claim::*;
+pub use close_market::*;
 pub use create_market::*;
 pub use initialize_config::*;
 pub use lock_market::*;

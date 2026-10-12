@@ -241,6 +241,37 @@ export function isStaleChainMarket(m: Market, now = Date.now()): boolean {
   return false;
 }
 
+/**
+ * Reconcile the store's chain markets with the accounts that actually exist
+ * on-chain.
+ *
+ * `fetchChainMarketsAll` is a whole-program GPA, so it is authoritative: a
+ * chain market missing from the response no longer exists on devnet (its
+ * accounts were closed, e.g. by `scripts/cleanup.mjs`). Merging alone would
+ * leave it on the home page forever — nothing else ever removes store entries —
+ * and, since non-seed markets are persisted, it survives every refresh too.
+ *
+ * Simulated (`m…`) and seeded markets are never touched; only chain ids are
+ * pruned, and `incoming` is always written so updates/inserts still land.
+ */
+export function reconcileChainMarkets(
+  current: Record<string, Market>,
+  incoming: Market[]
+): { markets: Record<string, Market>; removed: string[] } {
+  const live = new Set(incoming.map((m) => m.id));
+  const markets: Record<string, Market> = {};
+  const removed: string[] = [];
+  for (const [id, m] of Object.entries(current)) {
+    if (isChainId(id) && !live.has(id)) {
+      removed.push(id);
+      continue;
+    }
+    markets[id] = m;
+  }
+  for (const m of incoming) markets[m.id] = m;
+  return { markets, removed };
+}
+
 /** Encode `[u8;32]` hashes as hex for display. */
 export function bytesToHex(bytes: Uint8Array | number[]): string {
   return Array.from(bytes)

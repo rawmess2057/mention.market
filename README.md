@@ -124,7 +124,11 @@ Notes:
 - The browser wallet (and the seeding wallet) need devnet SOL. `solana airdrop`
   is rate-limited, so top up from a wallet that has SOL:
   `solana transfer <addr> 5 --allow-unfunded-recipient`.
-- Clear the demo browser's `localStorage` (`mention_chain_ids`) or use a fresh
-  profile, otherwise leftover ids from earlier sessions clutter the list.
+- Markets closed by `cleanup.mjs` disappear from an open browser on the next
+  poll (≈30s, and immediately after a reload): the store is reconciled with the
+  chain account list, so nothing has to be cleared by hand.
+- Only the `mention_chain_ids` registry is sticky — a freed id is never reused,
+  so new UI markets start above the highest id seen before (or at 100). Clear
+  that one key (or use a fresh browser profile) for a low id range.
 - Create a market in the UI to launch it on-chain (`b = 1 SOL`, reserve ante
   ≈ 0.69 SOL + rent from the creator wallet) or create a simulated/offline one.

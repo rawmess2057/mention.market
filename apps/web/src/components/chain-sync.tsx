@@ -42,11 +42,11 @@ function marketWordShares(m: Market): Record<string, number> | null {
 
 /**
  * Polls every on-chain market (single GPA, so reseeded batches need no id
- * registry changes) and merges the latest state into the sim store, hidden
- * from the "live" bay once they go stale. Also mirrors the connected wallet's
- * on-chain positions, appends a live price point per poll, and backfills the
- * real price history (reconstructed from the market's trades) once per market.
- * Renders nothing.
+ * registry changes) and reconciles the sim store against it — latest state in,
+ * closed accounts out — hiding stale markets from the "live" bay. Also mirrors
+ * the connected wallet's on-chain positions, appends a live price point per
+ * poll, and backfills the real price history (reconstructed from the market's
+ * trades) once per market. Renders nothing.
  */
 export function ChainSync() {
   const { connected, publicKey } = useWallet();
@@ -85,14 +85,20 @@ export function ChainSync() {
       if (inspecting) return; // a slow devnet cycle must never stack on the next tick
       inspecting = true;
       try {
-        const markets = (await fetchChainMarketsAll()).filter((m) => !isStaleChainMarket(m));
-        if (!alive) return;
-        // Newly-resolved on-chain markets the wallet holds a stake in → notify.
         const prev = useSim.getState().markets;
+        const allMarkets = await fetchChainMarketsAll();
+        if (!alive) return;
+        // The GPA is the source of truth for what exists on-chain, so reconcile
+        // the store against it: a chain market whose accounts were closed (see
+        // `scripts/cleanup.mjs`) drops out instead of lingering on the home page
+        // forever. Everything fetched stays in the store — even the stale
+        // markets the lists below hide — so detail/claim views still resolve.
+        useSim.getState().syncChainMarkets(allMarkets);
+        const markets = allMarkets.filter((m) => !isStaleChainMarket(m));
+        // Newly-resolved on-chain markets the wallet holds a stake in → notify.
         const fresh = markets.filter(
           (m) => prev[m.id] && prev[m.id].status !== "resolved" && m.status === "resolved"
         );
-        useSim.getState().ingestChainMarkets(markets);
 
         // Live price imprint: append a point only when the price moved or the
         // last sample has gone stale. A flat on-chain market (the LMSR price is

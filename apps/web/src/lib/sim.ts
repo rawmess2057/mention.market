@@ -15,7 +15,7 @@ import type { PricePoint } from "./history";
 import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
 import { claimPayout } from "./settle";
-import { CHAIN_CREATE_B_UI, isChainId } from "./chain";
+import { CHAIN_CREATE_B_UI, isChainId, reconcileChainMarkets } from "./chain";
 import type {
   ActivityItem,
   LeaderboardRow,
@@ -530,7 +530,11 @@ interface SimState {
     rules: string;
     chainId?: number;
   }) => string;
-  ingestChainMarkets: (markets: Market[]) => void;
+  /**
+   * Replace the store's view of the on-chain markets with `markets` (the whole
+   * GPA result): chain markets that vanished from the chain are dropped.
+   */
+  syncChainMarkets: (markets: Market[]) => void;
   ingestChainPositions: (positions: Position[]) => void;
   ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
   ingestChainHistory: (marketId: string, points: PricePoint[]) => void;
@@ -955,13 +959,20 @@ export const useSim = create<SimState>()(persist((set, get) => {
       return id;
     },
 
-    ingestChainMarkets: (incoming) => {
+    syncChainMarkets: (incoming) =>
       set((s) => {
-        const markets = { ...s.markets };
-        for (const m of incoming) markets[m.id] = m;
-        return { markets };
-      });
-    },
+        const { markets, removed } = reconcileChainMarkets(s.markets, incoming);
+        if (removed.length === 0) return { markets };
+        // Drop the derived chart state of the vanished markets too, so the
+        // detail page can't plot a market that no longer exists on-chain.
+        const history = { ...s.history };
+        const wordHistory = { ...s.wordHistory };
+        for (const id of removed) {
+          delete history[id];
+          delete wordHistory[id];
+        }
+        return { markets, history, wordHistory };
+      }),
 
     ingestChainPositions: (incoming) => {
       const wallet = get().activeWallet;

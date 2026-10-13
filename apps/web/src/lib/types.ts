@@ -26,6 +26,8 @@ export interface Market {
   createdAt: number;
   startsAt?: number;
   endTime: number;
+  /** When the sim locked betting on this market (drives the live/resolving stage). */
+  lockedAt?: number;
   resolvedAt?: number;
   volume: number;
   traders: number;
@@ -125,7 +127,7 @@ export interface LeaderboardRow {
 export interface NotificationItem {
   id: string;
   at: number;
-  kind: "resolved" | "watch" | "proposal" | "challenge" | "chain-resolved";
+  kind: "locked" | "resolved" | "challenge" | "chain-resolved";
   marketId: string;
   marketSlug?: string;
   marketTitle: string;
@@ -153,12 +155,17 @@ export const VERTICAL_META: Record<
   podcasts: { label: "Podcasts", emoji: "🎙️" },
 };
 
+/**
+ * One status vocabulary for the whole app. Each state maps to a single
+ * semantic token family — live/no, warn, brand, yes — so a badge can never
+ * borrow a colour that means something else elsewhere on screen.
+ */
 export const STATUS_META: Record<
   MarketStatus,
   { label: string; className: string }
 > = {
-  open: { label: "Live", className: "bg-live/10 text-red-brand border-red-brand/20" },
-  locked: { label: "Locked", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  resolving: { label: "Resolving", className: "bg-blue-light text-blue border-blue/20" },
-  resolved: { label: "Resolved", className: "bg-green-light text-green border-green/20" },
+  open: { label: "Live", className: "bg-no-soft text-no border-no-line" },
+  locked: { label: "Locked", className: "bg-warn-soft text-warn border-warn-line" },
+  resolving: { label: "Resolving", className: "bg-blue-light text-blue border-blue/25" },
+  resolved: { label: "Resolved", className: "bg-yes-soft text-yes border-yes-line" },
 };

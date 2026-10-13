@@ -28,11 +28,11 @@ export function EvidenceSection({ market }: { market: Market }) {
         : "Evidence ready";
 
   return (
-    <div className="rounded-xl border border-blue/15 bg-blue-light/30 p-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue">
-          <Gavel className="h-3.5 w-3.5" />
-          Resolution
+        <div className="label-caps flex items-center gap-2 text-blue">
+          <Gavel className="h-3.5 w-3.5" aria-hidden />
+          Resolution status
         </div>
         {m.confidence !== undefined && (
           <span className="font-mono text-xs font-bold text-blue">

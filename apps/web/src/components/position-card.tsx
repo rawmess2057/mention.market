@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Wallet } from "lucide-react";
+import { Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
 import { lmsrPositionValue } from "@/lib/lmsr";
@@ -17,11 +17,11 @@ export function PositionCard({ market }: { market: Market }) {
   const showToast = useSim((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
-  const [selling, setSelling] = useState(false);
+  const [selling, setSelling] = useState<string | null>(null);
 
   const onSell = async (side: "yes" | "no", shares: number) => {
     if (selling) return;
-    setSelling(true);
+    setSelling(side);
     try {
       const sig = chainMarket ? await chain.sell(m, side, shares) : null;
       sellBinary(m.id, side, shares);
@@ -29,7 +29,7 @@ export function PositionCard({ market }: { market: Market }) {
     } catch (err) {
       showToast(`Sell failed: ${fmtErr(err)}`);
     } finally {
-      setSelling(false);
+      setSelling(null);
     }
   };
 
@@ -47,99 +47,137 @@ export function PositionCard({ market }: { market: Market }) {
         yesShares: yes,
         noShares: no,
       });
-      const cost =
-        (pos.avgYesPrice ?? 0) * yes + (pos.avgNoPrice ?? 0) * no;
+      const cost = (pos.avgYesPrice ?? 0) * yes + (pos.avgNoPrice ?? 0) * no;
       return { kind: "binary", yes, no, value, cost, pnl: value - cost };
     }
-    const backs = pos.wordBacks ?? {};
-    const entries = Object.entries(backs).filter(([, v]) => v > 0);
+    const entries = Object.entries(pos.wordBacks ?? {}).filter(([, v]) => v > 0);
     if (entries.length === 0) return null;
-    const total = entries.reduce((s, [, v]) => s + v, 0);
-    return { kind: "majority", backs: entries, total };
+    return {
+      kind: "majority",
+      backs: entries,
+      total: entries.reduce((s, [, v]) => s + v, 0),
+    };
   }, [pos, m]);
 
   if (!summary) return null;
 
   return (
-    <div className="rounded-xl border border-blue/15 bg-blue-light/50 p-4">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue">
-        <Wallet className="h-3.5 w-3.5" />
-        Your position
+    <section className="panel overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
+        <Briefcase className="h-3.5 w-3.5 text-blue" aria-hidden />
+        <span className="label-caps text-navy">Your position</span>
       </div>
 
-      {summary.kind === "binary" ? (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-mid">Shares</span>
-            <span className="font-mono font-semibold text-navy">
+      <div className="space-y-2.5 p-4">
+        {summary.kind === "binary" ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
               {summary.yes > 0 && (
-                <span className="text-green">{summary.yes.toFixed(1)} YES</span>
-              )}
-              {summary.yes > 0 && summary.no > 0 && <span className="text-gray-mid"> · </span>}
-              {summary.no > 0 && <span className="text-red-brand">{summary.no.toFixed(1)} NO</span>}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-mid">Cost / Value</span>
-            <span className="font-mono font-semibold text-navy">
-              {fmtSol(summary.cost)} → {fmtSol(summary.value)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-mid">Unrealized P&L</span>
-            <span
-              className={cn(
-                "font-mono font-bold",
-                summary.pnl >= 0 ? "text-green" : "text-red-brand"
-              )}
-            >
-              {summary.pnl >= 0 ? "+" : ""}
-              {fmtSol(summary.pnl)}
-            </span>
-          </div>
-          {m.status === "open" && (
-            <div className="flex gap-2 pt-1">
-              {summary.yes > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  disabled={selling}
-                  onClick={() => onSell("yes", summary.yes)}
-                >
-                  {selling ? "Selling…" : "Sell YES"}
-                </Button>
+                <Holding side="yes" shares={summary.yes} avg={pos?.avgYesPrice} />
               )}
               {summary.no > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  disabled={selling}
-                  onClick={() => onSell("no", summary.no)}
-                >
-                  {selling ? "Selling…" : "Sell NO"}
-                </Button>
+                <Holding side="no" shares={summary.no} avg={pos?.avgNoPrice} />
               )}
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          {summary.backs.map(
-            ([word, amt]) => (
-              <div key={word} className="flex items-center justify-between text-sm">
-                <span className="truncate font-medium text-navy">{word}</span>
-                <span className="font-mono font-semibold text-navy">{fmtSol(amt)}</span>
+            <Row label="Cost → value" value={`${fmtSol(summary.cost)} → ${fmtSol(summary.value)}`} />
+            <Row
+              label="Unrealized P&L"
+              value={`${summary.pnl >= 0 ? "+" : ""}${fmtSol(summary.pnl)}`}
+              tone={summary.pnl >= 0 ? "yes" : "no"}
+            />
+            {m.status === "open" && (
+              <div className="flex gap-2 pt-1">
+                {summary.yes > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    disabled={!!selling}
+                    onClick={() => onSell("yes", summary.yes)}
+                  >
+                    {selling === "yes" ? "Selling…" : "Sell YES"}
+                  </Button>
+                )}
+                {summary.no > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    disabled={!!selling}
+                    onClick={() => onSell("no", summary.no)}
+                  >
+                    {selling === "no" ? "Selling…" : "Sell NO"}
+                  </Button>
+                )}
               </div>
-            )
-          )}
-          <div className="flex items-center justify-between border-t border-gray-warm pt-1.5 text-xs text-gray-mid">
-            <span>Total backed</span>
-            <span className="font-mono">{fmtSol(summary.total)}</span>
-          </div>
-        </div>
+            )}
+          </>
+        ) : (
+          <>
+            {summary.backs.map(([word, amt]) => (
+              <Row key={word} label={word} value={fmtSol(amt)} />
+            ))}
+            <Row
+              label="Total backed"
+              value={fmtSol(summary.total)}
+              className="border-t border-ink-100 pt-2"
+            />
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Holding({
+  side,
+  shares,
+  avg,
+}: {
+  side: "yes" | "no";
+  shares: number;
+  avg?: number;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-tile border px-3 py-2",
+        side === "yes" ? "border-yes-line bg-yes-soft" : "border-no-line bg-no-soft"
       )}
+    >
+      <div className={cn("label-caps", side === "yes" ? "text-yes" : "text-no")}>{side}</div>
+      <div className="tnum mt-0.5 font-mono text-sm font-bold text-navy">
+        {shares.toFixed(1)} sh
+      </div>
+      {avg !== undefined && (
+        <div className="tnum text-micro text-gray-mid">avg {Math.round(avg * 100)}¢</div>
+      )}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  tone,
+  className,
+}: {
+  label: string;
+  value: string;
+  tone?: "yes" | "no";
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center justify-between gap-3 text-label", className)}>
+      <span className="min-w-0 truncate text-gray-mid">{label}</span>
+      <span
+        className={cn(
+          "tnum shrink-0 font-mono font-semibold",
+          tone === "yes" ? "text-yes" : tone === "no" ? "text-no" : "text-navy"
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }

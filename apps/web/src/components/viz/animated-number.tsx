@@ -32,7 +32,11 @@ export function AnimatedNumber({
     const start = performance.now();
     const dur = 420;
     const step = (now: number) => {
-      const t = Math.min(1, (now - start) / dur);
+      // Clamp both ends: a frame timestamp can arrive before `start` (virtual
+      // time, background tabs, coarse clocks) and an unclamped negative progress
+      // extrapolates the cubic far outside the from→to range, printing values
+      // like "-10277".
+      const t = Math.min(1, Math.max(0, (now - start) / dur));
       const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(from + (to - from) * eased);
       if (t < 1) raf.current = requestAnimationFrame(step);

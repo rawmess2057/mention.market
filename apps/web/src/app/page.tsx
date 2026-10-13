@@ -101,7 +101,7 @@ export default function Home() {
           <h1 className="font-serif max-w-xl text-3xl font-bold leading-tight tracking-tight text-navy md:text-4xl lg:text-5xl">
             Trade on what gets <span className="text-gradient">said</span>.
           </h1>
-          <p className="mt-2 max-w-md text-sm text-text-secondary md:text-[15px]">
+          <p className="mt-2 max-w-md text-body text-ink-500 md:text-body-lg">
             Trade markets deployed to Solana devnet. Trades, positions, and claims use the Anchor
             program; outcomes are submitted by the configured resolver.
           </p>

@@ -15,8 +15,8 @@ const buttonVariants = cva(
         outline: "border border-gray-warm bg-white hover:bg-cream-dark text-navy",
         ghost: "hover:bg-cream-dark text-navy",
         destructive: "bg-red-brand text-white hover:bg-red-brand/90 shadow-sm",
-        yes: "bg-green text-white hover:bg-green/90 shadow-[0_2px_12px_rgba(43,117,80,0.25)]",
-        no: "bg-red-brand text-white hover:bg-red-brand/90 shadow-[0_2px_12px_rgba(199,91,58,0.25)]",
+        yes: "bg-yes text-white hover:bg-yes-strong shadow-[0_2px_12px_rgba(43,117,80,0.25)]",
+        no: "bg-no text-white hover:bg-no-strong shadow-[0_2px_12px_rgba(199,91,58,0.25)]",
       },
       size: {
         default: "h-10 px-4",

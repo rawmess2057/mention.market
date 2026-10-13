@@ -9,8 +9,14 @@ import { settleMajority } from "@/lib/parimutuel";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
-import type { Market, Position } from "@/lib/types";
+import type { Market } from "@/lib/types";
 
+/**
+ * Resolution outcome + claim, in one card.
+ *
+ * Tone follows the research: winning should feel earned but not casino-loud,
+ * and a losing position should be told plainly rather than hidden.
+ */
 export function ClaimCard({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
   const pos = useSim((s) => s.positions[m.id]);
@@ -39,60 +45,78 @@ export function ClaimCard({ market }: { market: Market }) {
   }
 
   const profit = payout - cost;
+  const won = payout > 0;
 
   return (
-    <div
+    <section
       className={cn(
-        "rounded-xl border border-green/20 bg-green-light/50 p-4",
+        "panel overflow-hidden",
+        won && "border-yes-line",
         flash && "win-flash"
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-green">
-          <PartyPopper className="h-3.5 w-3.5" />
-          Market resolved
+      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
+        <PartyPopper className={cn("h-3.5 w-3.5", won ? "text-yes" : "text-gray-mid")} aria-hidden />
+        <span className="label-caps text-navy">{won ? "You called it" : "Resolved"}</span>
+        <span className="tnum ml-auto text-micro text-gray-mid">
+          winner{" "}
+          <span className="font-mono font-bold text-yes">
+            {m.winningOutcome.toUpperCase()}
+          </span>
+        </span>
+      </div>
+
+      <div className="space-y-2.5 p-4">
+        <div className="flex items-baseline justify-between">
+          <span className="text-label text-gray-mid">Your payout</span>
+          <span className="tnum font-mono text-2xl font-bold text-navy">{fmtSol(payout)}</span>
         </div>
-        <span className="text-xs text-gray-mid">
-          Winner: <span className="font-bold text-green">{m.winningOutcome.toUpperCase()}</span>
-        </span>
-      </div>
+        <div className="flex items-center justify-between text-label">
+          <span className="text-gray-mid">P&amp;L</span>
+          <span
+            className={cn(
+              "tnum font-mono font-bold",
+              profit >= 0 ? "text-yes" : "text-no"
+            )}
+          >
+            {profit >= 0 ? "+" : ""}
+            {fmtSol(profit)}
+          </span>
+        </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <span className="text-gray-mid">Your payout</span>
-        <span className="font-mono text-lg font-bold text-navy">{fmtSol(payout)}</span>
+        {won ? (
+          <Button
+            variant="yes"
+            size="lg"
+            className="w-full"
+            disabled={claiming || pos.claimed || payout <= 0}
+            onClick={async () => {
+              if (claiming) return;
+              setClaiming(true);
+              try {
+                if (chainMarket) await chain.claim(m.id);
+                claim(m.id);
+                setFlash(true);
+                setConfetti((c) => c + 1);
+                setTimeout(() => setFlash(false), 1000);
+              } catch (err) {
+                showToast(`Claim failed: ${fmtErr(err)}`);
+              } finally {
+                setClaiming(false);
+              }
+            }}
+          >
+            {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtSol(payout)}`}
+          </Button>
+        ) : (
+          <p className="rounded-tile bg-ink-50 px-3 py-2 text-micro leading-relaxed text-gray-mid">
+            The market resolved at {m.winningOutcome.toUpperCase()}
+            {m.confidence !== undefined ? ` (${m.confidence}% confidence)` : ""}. The transcript
+            excerpt behind it is in the resolution panel — worth a look before the next one.
+          </p>
+        )}
       </div>
-      <div className="mt-1 flex items-center justify-between text-xs">
-        <span className="text-gray-mid">P&L</span>
-        <span className={cn("font-mono font-bold", profit >= 0 ? "text-green" : "text-red-brand")}>
-          {profit >= 0 ? "+" : ""}
-          {fmtSol(profit)}
-        </span>
-      </div>
-
-      <Button
-        variant="yes"
-        size="lg"
-        className="mt-3 w-full"
-        disabled={claiming || pos.claimed || payout <= 0}
-        onClick={async () => {
-          if (claiming) return;
-          setClaiming(true);
-          try {
-            if (chainMarket) await chain.claim(m.id);
-            claim(m.id);
-            setFlash(true);
-            setConfetti((c) => c + 1);
-            setTimeout(() => setFlash(false), 1000);
-          } catch (err) {
-            showToast(`Claim failed: ${fmtErr(err)}`);
-          } finally {
-            setClaiming(false);
-          }
-        }}
-      >
-        {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtSol(payout)}`}
-      </Button>
       <Confetti fire={confetti} />
-    </div>
+    </section>
   );
 }

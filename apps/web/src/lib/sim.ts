@@ -575,7 +575,6 @@ interface PersistedState {
   activeWallet: string | null;
   activity: ActivityItem[];
   customMarkets: Record<string, Market>;
-  notifications?: NotificationItem[];
 }
 
 const SEED_IDS = new Set(SEED_MARKETS.map((m) => m.id));
@@ -1065,23 +1064,22 @@ export const useSim = create<SimState>()(persist((set, get) => {
         const newWordHistory: Record<string, Record<string, PricePoint[]>> = { ...s.wordHistory };
         const resolveAwards: Record<string, number> = {};
         let notifications = s.notifications;
-        let resolveToast: string | null = null;
 
         for (const m of Object.values(markets)) {
           const heldHere = (mid: string) => !!s.positions[mid];
           if (isChainId(m.id)) continue; // on-chain markets resolve via the program + oracle
           if (m.status === "open" && Date.now() >= m.endTime) {
-            // Locked: propose a deterministic outcome and open the challenge window.
+            // Betting closes: mark the market live/locked and alert holders.
             const mm = structuredClone(m);
-            mm.status = "resolving";
-            proposeResolution(mm, newTranscript[mm.slug] ?? []);
+            mm.status = "locked";
+            mm.lockedAt = Date.now();
             if (heldHere(m.id)) {
               notifications = addNotification(notifications, {
-                kind: "proposal",
+                kind: "locked",
                 marketId: m.id,
                 marketSlug: mm.slug,
                 marketTitle: m.title,
-                text: `New resolution proposal on \u201c${m.title}\u201d`,
+                text: `\u201c${m.title}\u201d is live — betting locked`,
               });
             }
             markets[m.id] = mm;
@@ -1095,20 +1093,22 @@ export const useSim = create<SimState>()(persist((set, get) => {
             });
             continue;
           }
+          if (m.status === "locked") {
+            // Once the lock has settled, propose an outcome and open the
+            // challenge window. Seeded markets (no `lockedAt`) stay locked.
+            if (m.lockedAt !== undefined && Date.now() >= m.lockedAt + SIM_LOCK_MS) {
+              const mm = structuredClone(m);
+              mm.status = "resolving";
+              proposeResolution(mm, newTranscript[mm.slug] ?? []);
+              markets[m.id] = mm;
+            }
+            continue;
+          }
           if (m.status === "resolving") {
             const mm = structuredClone(m);
             // A resolving market with no proposal (seeded/legacy) gets one now.
             if (!mm.evidence) {
               proposeResolution(mm, newTranscript[mm.slug] ?? []);
-              if (heldHere(m.id)) {
-                notifications = addNotification(notifications, {
-                  kind: "proposal",
-                  marketId: m.id,
-                  marketSlug: mm.slug,
-                  marketTitle: m.title,
-                  text: `New resolution proposal on \u201c${m.title}\u201d`,
-                });
-              }
               markets[m.id] = mm;
               continue;
             }
@@ -1116,15 +1116,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
             if (Date.now() >= mm.evidence.challengeDeadline) {
               if (mm.evidence.challenged) {
                 proposeResolution(mm, newTranscript[mm.slug] ?? []);
-                if (heldHere(m.id)) {
-                  notifications = addNotification(notifications, {
-                    kind: "proposal",
-                    marketId: m.id,
-                    marketSlug: mm.slug,
-                    marketTitle: m.title,
-                    text: `Re-proposed on \u201c${m.title}\u201d — review again`,
-                  });
-                }
               } else {
                 mm.status = "resolved";
                 mm.winningOutcome = mm.evidence.winningOutcome;
@@ -1133,16 +1124,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
                 for (const [wk, book] of Object.entries(s.books)) {
                   const pts = holdToResolvePoints(book.positions, m.id);
                   if (pts) resolveAwards[wk] = (resolveAwards[wk] ?? 0) + pts;
-                }
-                if (heldHere(m.id)) {
-                  resolveToast = `\u201c${m.title}\u201d resolved — check your claims`;
-                  notifications = addNotification(notifications, {
-                    kind: "resolved",
-                    marketId: m.id,
-                    marketSlug: mm.slug,
-                    marketTitle: m.title,
-                    text: `\u201c${m.title}\u201d resolved ${(mm.evidence.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
-                  });
                 }
               }
               markets[m.id] = mm;
@@ -1225,20 +1206,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
               ...lines.slice(-30),
               { t: t0 + 8_000 + Math.floor(rnd() * 20_000), speaker: "host", text },
             ];
-            // Alert a holder when a watched word is spoken on their market.
-            if (heldHere(m.id) && mm.type === "binary") {
-              for (const phrase of WATCH_WORDS[m.slug] ?? []) {
-                if (mentions(text, phrase)) {
-                  notifications = addNotification(notifications, {
-                    kind: "watch",
-                    marketId: m.id,
-                    marketSlug: m.slug,
-                    marketTitle: m.title,
-                    text: `Watch word \u201c${phrase}\u201d heard on \u201c${m.title}\u201d`,
-                  });
-                }
-              }
-            }
           }
         }
 
@@ -1262,7 +1229,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
           user,
           notifications,
         };
-        if (resolveToast) out.toast = resolveToast;
         return out;
       });
     },
@@ -1274,7 +1240,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
     books: s.books,
     activeWallet: s.activeWallet,
     activity: s.activity.slice(0, 200),
-    notifications: s.notifications.slice(0, 40),
     customMarkets: Object.fromEntries(
       Object.entries(s.markets).filter(([id]) => !SEED_IDS.has(id))
     ),
@@ -1293,7 +1258,6 @@ export const useSim = create<SimState>()(persist((set, get) => {
       ...current,
       markets,
       activity: p.activity ?? current.activity,
-      notifications: p.notifications ?? current.notifications,
       books,
       activeWallet,
       positions: book.positions,
@@ -1309,6 +1273,9 @@ export const useSim = create<SimState>()(persist((set, get) => {
 
 /** Challenge window used by the sim (kept short so the pipeline is visible). */
 const SIM_CHALLENGE_WINDOW_MS = 2 * MIN;
+
+/** How long a market sits "locked/live" before the sim proposes a resolution. */
+const SIM_LOCK_MS = 30_000;
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));

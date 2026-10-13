@@ -1,41 +1,37 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, ExternalLink, Radio, ScrollText, Users, Volume2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChartSkeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { PulseFeed } from "@/components/pulse-feed";
-import { OrderBook } from "@/components/order-book";
-import { TradePanel } from "@/components/trade-panel";
+import { TradeTicket } from "@/components/trade-ticket";
+import { RecentTrades } from "@/components/recent-trades";
+import { TrustPanel } from "@/components/trust-panel";
 import { WordBoard } from "@/components/word-board";
+import { MarketHero } from "@/components/market-hero";
 import { PositionCard } from "@/components/position-card";
-import { EvidenceSection } from "@/components/evidence-viewer";
-import { ResolutionGrammar } from "@/components/resolution-grammar";
-import { ActivityFeed } from "@/components/activity-feed";
 import { ClaimCard } from "@/components/claim-card";
+import { ActivityFeed } from "@/components/activity-feed";
 import { TheWhisper } from "@/components/the-whisper";
-import { WaveformStrip } from "@/components/viz/waveform-strip";
-import { fmtTimeLeft, fmtSol } from "@/lib/format";
+import { fmtAgo, fmtSol } from "@/lib/format";
 import { useSim, WATCH_WORDS } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
 import { useChainActivity } from "@/hooks/useChainActivity";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { isChainId } from "@/lib/chain";
 import type { PriceSeries } from "@/lib/history";
 import { VERTICAL_META } from "@/lib/types";
 
 const PriceChartWithTimeframe = dynamic(
-  () =>
-    import("@/components/price-chart").then((m) => m.PriceChartWithTimeframe),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="shimmer h-[313px] rounded-2xl border border-gray-warm bg-white" />
-    ),
-  }
+  () => import("@/components/price-chart").then((m) => m.PriceChartWithTimeframe),
+  { ssr: false, loading: () => <ChartSkeleton /> }
 );
 
 export default function MarketPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -43,8 +39,17 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
   const markets = useSim((s) => s.markets);
   const history = useSim((s) => s.history);
   const wordHistory = useSim((s) => s.wordHistory);
+  const showToast = useSim((s) => s.showToast);
   const now = useNow(1000);
+  const isDesktop = useIsDesktop();
   const m = Object.values(markets).find((x) => x.slug === slug);
+
+  // One selection, two homes: the sticky desktop rail and the mobile sheet.
+  const [railSide, setRailSide] = useState<"yes" | "no">("yes");
+  const [railWord, setRailWord] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetSide, setSheetSide] = useState<"yes" | "no">("yes");
+  const [sheetWord, setSheetWord] = useState<string | null>(null);
 
   // Word-race markets plot one line per option, in the market's own word order
   // (so colors stay stable as options are toggled/lines appear).
@@ -71,170 +76,220 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
 
   const watch = WATCH_WORDS[m.slug] ?? [m.title.replace(/[^a-zA-Z ]/g, "").trim()];
   const marketHistory = history[m.id] ?? [];
+  const lastAt = marketHistory.length > 0 ? marketHistory[marketHistory.length - 1].t : 0;
   const chainYes =
     isChainId(m.id) && m.type === "binary"
       ? lmsrProbYes(m.yesShares, m.noShares, m.b)
       : null;
+  const words = [...(m.words ?? [])].sort((a, b) => b.pool - a.pool);
+  const leadWord = words[0]?.word ?? null;
+
+  const openTrade = (opts: { side?: "yes" | "no"; word?: string }) => {
+    if (opts.side) setRailSide(opts.side);
+    if (opts.word) setRailWord(opts.word);
+    if (isDesktop) return;
+    setSheetSide(opts.side ?? railSide);
+    setSheetWord(opts.word ?? railWord);
+    setSheetOpen(true);
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/market/${m.slug}`);
+      showToast("Market link copied");
+    } catch {
+      showToast("Couldn't copy the link");
+    }
+  };
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-4 pb-24 lg:pb-2">
         {/* Header */}
-        <div>
+        <header>
           <Link
             href="/"
-            className="mb-3 inline-flex items-center gap-1 text-xs text-gray-mid hover:text-navy transition-colors"
+            className="inline-flex items-center gap-1 text-micro text-gray-mid transition-colors hover:text-navy"
           >
-            <ArrowLeft className="h-3 w-3" /> All markets
+            <ArrowLeft className="h-3 w-3" aria-hidden /> All markets
           </Link>
-          <div className="flex items-start justify-between gap-3">
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="mb-1 flex items-center gap-1.5 text-xs text-gray-mid">
-                <span>{VERTICAL_META[m.vertical].emoji}</span>
-                <span className="truncate">{m.event}</span>
-                <a
-                  href={m.sourceUrl || "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-1 inline-flex items-center gap-0.5 text-blue hover:underline"
-                >
-                  {m.source} <ExternalLink className="h-2.5 w-2.5" />
-                </a>
-              </div>
-              <h1 className="font-serif text-xl font-bold tracking-tight text-navy md:text-2xl">{m.title}</h1>
-            </div>
-            <StatusBadge status={m.status} />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-warm bg-white px-2.5 py-1 text-gray-mid">
-              <Volume2 className="h-3 w-3" /> Vol
-              <span className="font-mono font-semibold text-navy">
-                {fmtSol(m.volume, { compact: true })}
-              </span>
-            </span>
-            <span className="flex items-center gap-1.5 rounded-full border border-gray-warm bg-white px-2.5 py-1 text-gray-mid">
-              <Users className="h-3 w-3" />{" "}
-              <span className="font-mono font-semibold text-navy">
-                {m.traders.toLocaleString()}
-              </span>{" "}
-              traders
-            </span>
-            {chainYes !== null && (
-              <span className="flex items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-2.5 py-1 font-mono font-semibold text-green">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
-                {Math.round(chainYes * 100)}% YES
-              </span>
-            )}
-            <span
-              suppressHydrationWarning
-              className="flex items-center gap-1.5 rounded-full border border-blue/20 bg-blue-light px-2.5 py-1 font-mono font-semibold text-blue"
-            >
-              ⏱ {m.status === "open" ? fmtTimeLeft(m.endTime - now) : "—"}
-            </span>
-          </div>
-        </div>
-
-        {/* 3-Column Newsroom Grid */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[15%_55%_30%] lg:gap-5">
-          {/* LEFT COLUMN: Pulse Feed */}
-          <div className="hidden lg:block">
-            <PulseFeed
-              slug={m.slug}
-              watchWords={watch}
-              className="h-[600px] sticky top-20"
-            />
-          </div>
-
-          {/* CENTER COLUMN: The Arena */}
-          <div className="space-y-4">
-            {/* Market Chart */}
-            <div className="rounded-2xl border border-gray-warm bg-white shadow-card overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-gray-warm px-4 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-navy">
-                  Price Chart
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-gray-mid">
+                <span>
+                  {VERTICAL_META[m.vertical].emoji} {VERTICAL_META[m.vertical].label}
                 </span>
-                <span className="text-[10px] text-gray-mid">Probability over time</span>
+                <span aria-hidden>·</span>
+                <span className="truncate">{m.event}</span>
+                {m.sourceUrl && (
+                  <a
+                    href={m.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-0.5 font-medium text-blue hover:underline"
+                  >
+                    {m.source} <ExternalLink className="h-2.5 w-2.5" aria-hidden />
+                  </a>
+                )}
+              </div>
+              <h1 className="mt-1 font-serif text-2xl font-bold leading-tight tracking-tight text-navy md:text-3xl">
+                {m.title}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusBadge status={m.status} />
+              <button
+                type="button"
+                onClick={copyLink}
+                aria-label="Copy market link"
+                className="rounded-field border border-ink-200 p-2 text-gray-mid transition-colors hover:bg-ink-50 hover:text-navy"
+              >
+                <Share2 className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
+          {/* Main column */}
+          <div className="space-y-4">
+            <MarketHero market={m} onTrade={openTrade} />
+
+            <section className="panel overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
+                <span className="label-caps text-navy">
+                  {m.type === "binary" ? "Probability" : "Word race odds"}
+                </span>
+                <span suppressHydrationWarning className="text-micro text-gray-mid">
+                  {lastAt > 0 ? `updated ${fmtAgo(lastAt)}` : "waiting for the first print"}
+                </span>
               </div>
               <PriceChartWithTimeframe
                 history={marketHistory}
                 series={wordSeries}
                 showBaseline={m.type === "binary"}
               />
-              <div className="border-t border-gray-warm px-4 py-2.5">
-                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-mid">
-                  <Radio className="h-3 w-3 animate-pulse-live text-red-brand" />
-                  Stream audio
-                  <span className="ml-auto normal-case tracking-normal text-gray-mid">
-                    {m.source}
-                  </span>
-                </div>
-                <WaveformStrip
-                  seed={m.slug.length * 7 + m.volume}
-                  live={m.status === "open"}
-                  className="h-8"
-                />
-              </div>
-            </div>
+            </section>
 
-            {/* Trading Panel */}
-            {m.type === "binary" ? <TradePanel market={m} /> : <WordBoard market={m} />}
+            {m.type !== "binary" && (
+              <WordBoard
+                market={m}
+                selected={railWord}
+                onSelect={(word) => openTrade({ word })}
+              />
+            )}
 
-            {/* Position & Claim */}
+            <Tabs defaultValue="transcript" className="space-y-3">
+              <TabsList className="w-full justify-start rounded-tile bg-ink-100 p-1">
+                <TabsTrigger value="transcript" className="flex-1 sm:flex-none">
+                  Transcript
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="flex-1 sm:flex-none">
+                  Activity
+                </TabsTrigger>
+                <TabsTrigger value="rules" className="flex-1 sm:flex-none">
+                  Rules
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="transcript">
+                <PulseFeed slug={m.slug} watchWords={watch} className="h-[520px]" />
+              </TabsContent>
+
+              <TabsContent value="activity">
+                <ActivityFeed marketId={m.id} limit={20} />
+              </TabsContent>
+
+              <TabsContent value="rules">
+                <TrustPanel market={m} />
+              </TabsContent>
+            </Tabs>
+
             <PositionCard market={m} />
             <ClaimCard market={m} />
-
-            {/* Evidence */}
-            <EvidenceSection market={m} />
           </div>
 
-          {/* RIGHT COLUMN: Order Book */}
-          <div className="space-y-4">
-            <OrderBook market={m} />
+          {/* Sticky trade rail */}
+          <aside className="hidden lg:sticky lg:top-20 lg:block lg:self-start">
+            <div className="space-y-4">
+              <section className="panel p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="label-caps text-navy">Trade</span>
+                  {chainYes !== null && (
+                    <span className="tnum ml-auto inline-flex items-center gap-1.5 rounded-pill border border-yes-line bg-yes-soft px-2 py-0.5 font-mono text-micro font-semibold text-yes">
+                      <span className="live-dot" aria-hidden />
+                      {Math.round(chainYes * 100)}¢ on-chain
+                    </span>
+                  )}
+                </div>
+                <TradeTicket
+                  market={m}
+                  side={railSide}
+                  onSideChange={setRailSide}
+                  word={railWord}
+                  onWordChange={setRailWord}
+                  showWordPicker={m.type === "binary"}
+                />
+              </section>
 
-            {/* Mobile: show transcript here on small screens */}
-            <div className="lg:hidden">
-              <Tabs defaultValue="transcript">
-                <TabsList className="w-full">
-                  <TabsTrigger value="transcript" className="flex-1">Transcript</TabsTrigger>
-                  <TabsTrigger value="activity" className="flex-1">Activity</TabsTrigger>
-                </TabsList>
-                <TabsContent value="transcript">
-                  <div className="rounded-xl border border-gray-warm bg-white p-4 text-sm text-gray-mid">
-                    <PulseFeed slug={m.slug} watchWords={watch} className="h-[300px]" />
-                  </div>
-                </TabsContent>
-                <TabsContent value="activity">
-                  <ActivityFeed marketId={m.id} />
-                </TabsContent>
-              </Tabs>
+              <TrustPanel market={m} />
+              <RecentTrades marketId={m.id} limit={6} />
             </div>
-
-            {/* Desktop: Activity + Rules */}
-            <div className="hidden lg:block">
-              <Tabs defaultValue="activity">
-                <TabsList className="w-full">
-                  <TabsTrigger value="activity" className="flex-1">Activity</TabsTrigger>
-                  <TabsTrigger value="rules" className="flex-1">Rules</TabsTrigger>
-                </TabsList>
-                <TabsContent value="activity">
-                  <ActivityFeed marketId={m.id} />
-                </TabsContent>
-                <TabsContent value="rules">
-                  <div className="rounded-xl border border-gray-warm bg-white p-4 text-sm leading-relaxed text-text-secondary">
-                    <div className="mb-2 flex items-center gap-1.5 font-semibold text-navy">
-                      <ScrollText className="h-3.5 w-3.5" /> Resolution rules
-                    </div>
-                    <ResolutionGrammar market={m} />
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
 
-      {/* The Whisper — market detail only */}
+      {/* Mobile: one-thumb trade entry, replacing the bottom nav on this route. */}
+      {m.status === "open" && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+          {m.type === "binary" ? (
+            <div className="flex gap-2">
+              <Button
+                variant="yes"
+                size="lg"
+                className="flex-1"
+                onClick={() => openTrade({ side: "yes" })}
+              >
+                YES {Math.round(lmsrProbYes(m.yesShares, m.noShares, m.b) * 100)}¢
+              </Button>
+              <Button
+                variant="no"
+                size="lg"
+                className="flex-1"
+                onClick={() => openTrade({ side: "no" })}
+              >
+                NO {Math.round((1 - lmsrProbYes(m.yesShares, m.noShares, m.b)) * 100)}¢
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={() => openTrade({ word: railWord ?? leadWord ?? undefined })}
+            >
+              {railWord ? `Back “${railWord}”` : "Back a word"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Mobile trade sheet */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent
+          title={m.type === "binary" ? "Place a trade" : "Back a word"}
+          description={`${m.title} · ${fmtSol(m.volume, { compact: true })} volume`}
+        >
+          <TradeTicket
+            market={m}
+            side={sheetSide}
+            onSideChange={setSheetSide}
+            word={sheetWord}
+            onWordChange={setSheetWord}
+            onFilled={() => setSheetOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
       <TheWhisper />
     </>
   );

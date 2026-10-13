@@ -41,21 +41,21 @@ export function ResolutionGrammar({ market }: { market: Market }) {
       <div className="flex items-start gap-1.5">
         <span
           className={cn(
-            "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border font-mono text-[9px] font-bold",
-            onChain ? "border-blue/30 bg-blue-light text-blue" : "border-gray-warm bg-cream-dark text-gray-mid"
+            "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border font-mono text-[10px] font-bold",
+            onChain ? "border-blue/30 bg-blue-light text-blue" : "border-ink-200 bg-ink-100 text-gray-mid"
           )}
           title="The exact condition that pays out"
         >
           i
         </span>
-        <p className="text-[13px] leading-relaxed text-text-secondary">{grammar}</p>
+        <p className="text-label leading-relaxed text-ink-500">{grammar}</p>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {chips.map((c) => (
           <span
             key={c.label}
             title={`${c.label}: ${c.value}`}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-warm bg-cream/60 px-2 py-1 text-[11px] font-medium text-gray-mid"
+            className="inline-flex items-center gap-1 rounded-field border border-ink-200 bg-ink-50 px-2 py-1 text-micro font-medium text-ink-500"
           >
             {c.icon}
             <span className="font-semibold">{c.label}:</span> {c.value}

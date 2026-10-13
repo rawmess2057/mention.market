@@ -17,7 +17,7 @@ import {
 
 /** Distinct line colors for word-race options; overflow gets generated hues. */
 export const WORD_CHART_COLORS = [
-  "#2E7DF6", "#C75B3A", "#2B7550", "#B8860B", "#7B4FBF", "#0F8B8D",
+  "#2D5CFF", "#C75B3A", "#2B7550", "#B8860B", "#7B4FBF", "#0F8B8D",
   "#D14D72", "#4A6FA5", "#8C6D1F", "#5C8A3A", "#A64AC9", "#B5651D",
 ];
 
@@ -55,16 +55,16 @@ function createPriceChart(container: HTMLElement) {
     },
     crosshair: {
       vertLine: {
-        color: "rgba(46, 125, 246, 0.3)",
+        color: "rgba(45, 92, 255, 0.3)",
         width: 1,
         style: 2,
-        labelBackgroundColor: "#2E7DF6",
+        labelBackgroundColor: "#2D5CFF",
       },
       horzLine: {
-        color: "rgba(46, 125, 246, 0.3)",
+        color: "rgba(45, 92, 255, 0.3)",
         width: 1,
         style: 2,
-        labelBackgroundColor: "#2E7DF6",
+        labelBackgroundColor: "#2D5CFF",
       },
     },
     rightPriceScale: {
@@ -373,28 +373,30 @@ export function PriceChartWithTimeframe({
 
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className="flex items-center gap-1 border-b border-gray-warm px-3 py-2">
+      <div className="flex items-center gap-1 border-b border-ink-200 px-3 py-2">
         {CHART_TIMEFRAMES.map((tf) => (
           <button
             key={tf}
             onClick={() => setTimeframe(tf)}
+            aria-pressed={timeframe === tf}
             className={cn(
-              "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+              "rounded-field px-2.5 py-1 text-micro font-semibold transition-colors",
               timeframe === tf
                 ? "bg-blue-light text-blue"
-                : "text-gray-mid hover:text-navy hover:bg-cream-dark"
+                : "text-gray-mid hover:bg-ink-100 hover:text-navy"
             )}
           >
             {tf === "all" ? "All" : tf}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[10px] text-gray-mid">
-          {isMulti ? `${visible.length}/${multi.length} lines` : `${pointCount} pts`} ·{" "}
-          {timeframe === "all" ? "all" : timeframe}
+        <span className="tnum ml-auto font-mono text-[10px] text-gray-mid">
+          {isMulti
+            ? `${visible.length}/${multi.length} words`
+            : `${pointCount} prints`}
         </span>
       </div>
       {isMulti && multi.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-gray-warm px-3 py-2">
+        <div className="flex flex-wrap gap-1.5 border-b border-ink-200 px-3 py-2">
           {multi.map((s) => {
             const off = hidden.has(s.name);
             return (
@@ -403,10 +405,10 @@ export function PriceChartWithTimeframe({
                 type="button"
                 onClick={() => toggle(s.name)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors",
+                  "flex items-center gap-1.5 rounded-field border px-2 py-1 text-micro font-medium transition-colors",
                   off
-                    ? "border-gray-warm text-gray-mid opacity-50"
-                    : "border-gray-warm text-navy hover:bg-cream-dark"
+                    ? "border-ink-200 text-gray-mid opacity-50"
+                    : "border-ink-200 text-navy hover:bg-ink-100"
                 )}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />

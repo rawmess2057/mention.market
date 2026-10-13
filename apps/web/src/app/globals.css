@@ -8,18 +8,29 @@
   --color-cream-dark: #F0EDE8;
   --color-navy: #0F172A;
   --color-navy-light: #1E293B;
-  --color-blue: #2E7DF6;
-  --color-blue-light: #EBF2FF;
-  --color-blue-dark: #1A5CC8;
+  --color-blue: #2D5CFF;
+  --color-blue-light: #EDF1FF;
+  --color-blue-dark: #1B3FCC;
   --color-green: #2B7550;
   --color-green-light: #E8F5F0;
   --color-red: #C75B3A;
   --color-red-light: #FDF0EB;
   --color-gray-warm: #E5E1DB;
-  --color-gray-mid: #A8A29E;
-  --color-gray-cool: #94A3B8;
-  --color-text-primary: #1A1A1A;
+  --color-gray-mid: #78716C;
+  --color-gray-cool: #8291A6;
+  --color-warn: #9A6512;
+  --color-text-primary: #0F172A;
   --color-text-secondary: #5A5A5A;
+
+  /* Ink ramp — the only greys UI text should use. */
+  --color-ink-900: #0B1220;
+  --color-ink-700: #1E293B;
+  --color-ink-500: #5A5A5A;
+  --color-ink-400: #78716C;
+  --color-ink-300: #A29C96;
+  --color-ink-200: #E5E1DB;
+  --color-ink-100: #F0EDE8;
+  --color-ink-50: #F9F7F4;
 
   /* Shadcn-style tokens */
   --background: 40 20% 97%;
@@ -30,12 +41,13 @@
   --muted-foreground: 20 5% 45%;
   --border: 30 10% 89%;
   --input: 30 10% 89%;
-  --ring: 217 91% 60%;
-  --primary: 217 91% 60%;
+  /* hue 227 = the brand blue (#2D5CFF) */
+  --ring: 227 100% 59%;
+  --primary: 227 100% 59%;
   --primary-foreground: 0 0% 100%;
   --secondary: 30 10% 95%;
   --secondary-foreground: 222 47% 11%;
-  --accent: 217 91% 60%;
+  --accent: 227 100% 59%;
   --accent-foreground: 0 0% 100%;
   --destructive: 14 62% 51%;
   --destructive-foreground: 0 0% 100%;
@@ -47,6 +59,14 @@
   --shadow-card: 0px 10px 30px -10px rgba(0,0,0,0.08);
   --shadow-card-hover: 0px 20px 40px -10px rgba(0,0,0,0.12);
   --shadow-dropdown: 0px 20px 60px -10px rgba(0,0,0,0.15);
+  --shadow-cta: 0 6px 18px -8px rgba(45, 92, 255, 0.5);
+
+  /* Motion — one spec for the whole app (see src/lib/motion.ts). */
+  --motion-press: 120ms;
+  --motion-hover: 180ms;
+  --motion-roll: 280ms;
+  --motion-panel: 400ms;
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -71,7 +91,34 @@ body {
 }
 
 ::selection {
-  background: rgba(46, 125, 246, 0.2);
+  background: rgba(45, 92, 255, 0.2);
+}
+
+/* ---------- Utilities ---------- */
+
+/* Stable digit widths for every price, size and count. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "cv11", "ss01";
+}
+
+/* Small caps section label — one style, everywhere. */
+.label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-gray-mid);
+}
+
+/* Live/on-air dot that never uses colour alone. */
+.live-dot {
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulse-live 2s ease-in-out infinite;
 }
 
 /* ---------- Subtle grid backdrop ---------- */
@@ -103,22 +150,34 @@ body {
   box-shadow: var(--shadow-card-hover);
 }
 
-/* Gradient hairline border card */
+/*
+ * Hairline card with a single brand-tinted edge. Replaces the old two-hue
+ * rainbow gradient: one accent, hairline weight, so the palette stays
+ * semantic (yes/no/brand) instead of decorative.
+ */
 .grad-border {
   position: relative;
+  border: 1px solid var(--color-ink-200);
+  border-top-color: rgba(45, 92, 255, 0.28);
   background: white;
-  border: 1px solid transparent;
-  background-clip: padding-box;
-  background-image: linear-gradient(white, white),
-    linear-gradient(135deg, rgba(46, 125, 246, 0.3), rgba(43, 117, 80, 0.1) 50%, rgba(46, 125, 246, 0.15));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
   border-radius: var(--radius-md, 12px);
   box-shadow: var(--shadow-card);
   transition:
     transform var(--transition-base),
     box-shadow var(--transition-base),
     border-color var(--transition-base);
+}
+
+/* Shared surface for the redesigned panels. */
+.panel {
+  background: white;
+  border: 1px solid var(--color-ink-200);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.surface-sunken {
+  background: var(--color-ink-100);
 }
 
 /* Hover lift */
@@ -203,7 +262,7 @@ body {
 
 /* Highlighted watched word in transcript */
 .word-hit {
-  background: linear-gradient(90deg, rgba(46, 125, 246, 0.15), rgba(46, 125, 246, 0.08));
+  background: linear-gradient(90deg, rgba(45, 92, 255, 0.15), rgba(45, 92, 255, 0.08));
   border-radius: 4px;
   padding: 0 3px;
   font-weight: 600;
@@ -214,11 +273,11 @@ body {
 }
 @keyframes hit-flash {
   0% {
-    background: rgba(46, 125, 246, 0.3);
-    box-shadow: 0 0 12px rgba(46, 125, 246, 0.3);
+    background: rgba(45, 92, 255, 0.3);
+    box-shadow: 0 0 12px rgba(45, 92, 255, 0.3);
   }
   100% {
-    background: rgba(46, 125, 246, 0.1);
+    background: rgba(45, 92, 255, 0.1);
   }
 }
 

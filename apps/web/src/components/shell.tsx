@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -12,14 +13,13 @@ import {
   PlusCircle,
   Trophy,
   User,
-  Zap,
   Bell,
   ChevronDown,
   Copy,
   ExternalLink,
   LogOut,
   CheckCircle2,
-  Radio,
+  Lock,
   ShieldAlert,
 } from "lucide-react";
 import { cn, fmtAgo, fmtSol, shortAddr } from "@/lib/format";
@@ -58,9 +58,15 @@ export function TopBar() {
       <header className="sticky top-0 z-40 border-b border-gray-100/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8 lg:px-12">
           <Link href="/" className="group flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue text-white shadow-md">
-              <Zap className="h-4 w-4" />
-            </span>
+            <Image
+              src="/mention-logo.svg"
+              alt=""
+              width={32}
+              height={32}
+              priority
+              unoptimized
+              className="h-8 w-8 shadow-md"
+            />
             <span className="text-[15px] font-bold tracking-tight text-navy">
               mention<span className="text-blue">.market</span>
             </span>
@@ -161,10 +167,9 @@ export function TopBar() {
 }
 
 const NOTIF_ICON: Record<NotificationItem["kind"], React.ReactNode> = {
+  locked: <Lock className="h-3.5 w-3.5 shrink-0 text-blue" />,
   resolved: <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
   "chain-resolved": <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
-  watch: <Radio className="h-3.5 w-3.5 shrink-0 text-blue" />,
-  proposal: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />,
   challenge: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />,
 };
 
@@ -210,7 +215,7 @@ function NotifBell() {
           <div className="max-h-[320px] overflow-y-auto">
             {notifications.length === 0 ? (
               <p className="px-3 py-8 text-center text-xs text-gray-mid">
-                No updates yet — resolution, challenges and watch-word alerts land here.
+                No updates yet — lock and resolution alerts for markets you trade land here.
               </p>
             ) : (
               notifications.slice(0, 10).map((n) => (
@@ -240,6 +245,9 @@ function NotifBell() {
 
 export function BottomNav() {
   const pathname = usePathname();
+  // Market pages own the bottom of the screen with their own trade action bar,
+  // so the tab bar would only compete with the primary action there.
+  if (pathname.startsWith("/market/")) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] md:hidden">
       <div className="mx-auto mb-3 max-w-[280px]">

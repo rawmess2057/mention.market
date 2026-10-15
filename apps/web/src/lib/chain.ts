@@ -26,6 +26,7 @@ import type { PricePoint } from "@/lib/history";
 import { fmtErr, shortAddr } from "@/lib/format";
 import { VOID_OUTCOME } from "@/lib/settle";
 import type {
+  Evidence,
   ActivityItem,
   Market,
   MarketStatus,
@@ -733,19 +734,77 @@ export function decodeEvidenceSnippets(
  * whose `evidenceHash` is non-zero have an EvidenceManifest PDA; the read is
  * best-effort (a market can briefly be `resolving` before evidence lands).
  */
+// Evidence manifests are immutable (the PDA is keyed by their sha256), so a
+// decoded manifest is cached for the session instead of refetched every poll.
+const evidenceCache = new Map<string, Evidence["snippets"]>();
+
 async function attachChainEvidence(market: Market, account: ChainMarketAccount): Promise<void> {
   if (!market.evidence) return;
   const hash = account.evidenceHash;
   if (!Array.isArray(hash) || hash.length !== 32 || hash.every((b) => b === 0)) return;
+  const key = `${account.id.toNumber()}:${bytesToHex(hash)}`;
+  const cached = evidenceCache.get(key);
+  if (cached) {
+    market.evidence.snippets = cached;
+    return;
+  }
   try {
     const pda = evidencePda(marketPda(account.id.toNumber()), hash);
     const ev = (await program.account.evidenceManifest.fetch(
       pda
     )) as unknown as EvidenceManifestAccount;
     market.evidence.snippets = decodeEvidenceSnippets(ev.bytes);
+    evidenceCache.set(key, market.evidence.snippets);
   } catch {
     /* evidence not committed yet or a transient RPC hiccup — leave snippets empty */
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Live market updates (websocket)                                     */
+/* ------------------------------------------------------------------ */
+
+interface AccountsCoderLike {
+  decode(name: string, data: Buffer): unknown;
+  memcmp(name: string): { offset?: number; bytes?: string };
+}
+
+/**
+ * Push every on-chain market change (trades, locks, proposals, resolutions)
+ * as it happens, over the RPC websocket. The poll in `chain-sync.tsx` stays as
+ * the reconciler; this makes prices move the moment anyone trades.
+ *
+ * @returns unsubscribe.
+ */
+export function subscribeChainMarkets(onMarket: (m: Market) => void): () => void {
+  const conn = connection();
+  // Anchor's coder keys accounts by their camelCase client name.
+  const coder = (program as unknown as { coder: { accounts: AccountsCoderLike } }).coder.accounts;
+  const filter = coder.memcmp("market");
+  let subId: number | null = null;
+  try {
+    subId = conn.onProgramAccountChange(
+      PROGRAM_ID,
+      (info) => {
+        try {
+          const account = coder.decode("market", info.accountInfo.data) as ChainMarketAccount;
+          const market = mapMarketToStore(account);
+          void attachChainEvidence(market, account).then(() => onMarket(market));
+        } catch {
+          /* not a market, or a layout this client doesn't know */
+        }
+      },
+      {
+        commitment: "confirmed",
+        filters: [{ memcmp: { offset: filter.offset ?? 0, bytes: filter.bytes ?? "" } }],
+      }
+    );
+  } catch {
+    /* websocket unavailable — the poll still keeps markets current */
+  }
+  return () => {
+    if (subId !== null) void conn.removeProgramAccountChangeListener(subId).catch(() => {});
+  };
 }
 
 export async function fetchChainPosition(
@@ -912,7 +971,7 @@ export interface DecodedChainIx {
  *
  * Best-effort: returns `[]` on any RPC/decode failure.
  */
-async function fetchDecodedChainIxsUncached(id: number): Promise<DecodedChainIx[]> {
+async function fetchDecodedChainIxsUncached(id: number, until?: string): Promise<DecodedChainIx[]> {
   try {
     const conn = connection();
     const addr = marketPda(id);
@@ -922,8 +981,10 @@ async function fetchDecodedChainIxsUncached(id: number): Promise<DecodedChainIx[
     let pages = 0;
     while (pages < 20) {
       pages += 1;
+      // `until` stops at the newest signature already decoded: only new
+      // transactions are fetched after the first full read.
       const batch = await withRetry(() =>
-        conn.getSignaturesForAddress(addr, { limit: pageSize, before })
+        conn.getSignaturesForAddress(addr, { limit: pageSize, before, until })
       );
       if (batch.length === 0) break;
       sigs.push(...batch.filter((s) => !s.err).map((s) => s.signature));
@@ -969,11 +1030,20 @@ async function fetchDecodedChainIxsUncached(id: number): Promise<DecodedChainIx[
 }
 
 // Decoded history is shared by the activity feed and the price-series
-// reconstruction; cache non-empty results briefly and dedupe concurrent
-// callers so the 15s poller and the page don't refetch the same transactions.
+// reconstruction. It is append-only, so after the first full read each
+// refresh asks only for signatures newer than the newest one held, and
+// concurrent callers share one request.
 const ixsCache = new Map<number, { t: number; recs: DecodedChainIx[] }>();
 const ixsInflight = new Map<number, Promise<DecodedChainIx[]>>();
 const IXS_TTL_MS = 30_000;
+
+/** Merge newly fetched records into the held ones (dedupe by sig + ix, keep order). */
+export function mergeDecodedIxs(held: DecodedChainIx[], fresh: DecodedChainIx[]): DecodedChainIx[] {
+  const seen = new Set(held.map((r) => `${r.sig}:${r.ix}`));
+  const added = fresh.filter((r) => !seen.has(`${r.sig}:${r.ix}`));
+  if (added.length === 0) return held;
+  return [...held, ...added].sort((a, b) => a.at - b.at || a.slot - b.slot);
+}
 
 export async function fetchDecodedChainIxs(id: number): Promise<DecodedChainIx[]> {
   const cached = ixsCache.get(id);
@@ -982,7 +1052,10 @@ export async function fetchDecodedChainIxs(id: number): Promise<DecodedChainIx[]
   if (inflight) return inflight;
   const p = (async () => {
     try {
-      const recs = await fetchDecodedChainIxsUncached(id);
+      const held = cached?.recs ?? [];
+      const newest = held.length > 0 ? held[held.length - 1].sig : undefined;
+      const fresh = await fetchDecodedChainIxsUncached(id, newest);
+      const recs = mergeDecodedIxs(held, fresh);
       if (recs.length > 0) ixsCache.set(id, { t: Date.now(), recs });
       return recs;
     } finally {
@@ -991,6 +1064,13 @@ export async function fetchDecodedChainIxs(id: number): Promise<DecodedChainIx[]
   })();
   ixsInflight.set(id, p);
   return p;
+}
+
+/** Force the next read of a market's history to look for new transactions now. */
+export function invalidateChainHistory(id: number): void {
+  const cached = ixsCache.get(id);
+  if (cached) ixsCache.set(id, { ...cached, t: 0 });
+  seriesCache.delete(id);
 }
 
 /** Snapshot of the market state the price series replays / validates against. */

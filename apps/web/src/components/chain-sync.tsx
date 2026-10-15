@@ -6,7 +6,9 @@ import {
   fetchChainMarketsAll,
   fetchChainPosition,
   fetchChainSeries,
+  invalidateChainHistory,
   isStaleChainMarket,
+  subscribeChainMarkets,
 } from "@/lib/chain";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { useStore } from "@/lib/store";
@@ -18,6 +20,20 @@ const POLL_MS = 30_000;
 const JITTER_MS = 5_000;
 /** Max gap between live samples on a flat market before we stamp a heartbeat. */
 const LIVE_MAX_GAP_MS = 5 * 60_000;
+
+/** The server's cached markets snapshot (`/api/markets`); throws if unavailable. */
+async function fetchMarketsSnapshot(): Promise<Market[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const res = await fetch("/api/markets", { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`snapshot ${res.status}`);
+    const { markets } = (await res.json()) as { markets: Market[] };
+    return markets;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Live probability the chart plots: YES prob (binary) or leader share (race). */
 function marketPrice(m: Market): number | null {
@@ -62,6 +78,7 @@ export function ChainSync() {
 
     let alive = true;
     let inspecting = false;
+    let firstPass = true;
 
     const backfill = async (marketId: string, volume: number) => {
       if (inFlight.current.has(marketId)) return;
@@ -87,7 +104,9 @@ export function ChainSync() {
       inspecting = true;
       try {
         const prev = useStore.getState().markets;
-        const allMarkets = await fetchChainMarketsAll();
+        // First pass: the CDN-cached snapshot (fast, shared); then direct reads.
+        const allMarkets = firstPass ? await fetchMarketsSnapshot().catch(() => fetchChainMarketsAll()) : await fetchChainMarketsAll();
+        firstPass = false;
         if (!alive) return;
         // The GPA is the source of truth for what exists on-chain, so reconcile
         // the store against it: a chain market whose accounts were closed (see
@@ -204,6 +223,36 @@ export function ChainSync() {
       started.current = false;
     };
   }, [connected, publicKey]);
+
+  // Live updates: every market account change arrives over the websocket the
+  // moment it lands, so prices move without waiting for the poll.
+  useEffect(() => {
+    const unsubscribe = subscribeChainMarkets((m) => {
+      const store = useStore.getState();
+      const prev = store.markets[m.id];
+      store.upsertChainMarket(m);
+      const v = marketPrice(m);
+      if (v !== null) store.ingestChainHistory(m.id, [{ t: Date.now(), v }]);
+      if (m.type === "majority") {
+        const shares = marketWordShares(m);
+        if (shares) {
+          const t = Date.now();
+          store.ingestWordHistory(m.id, Object.fromEntries(Object.entries(shares).map(([w, s]) => [w, [{ t, v: s }]])));
+        }
+      }
+      // A trade (volume moved): pull just its new transactions for the feed.
+      if (prev && prev.volume !== m.volume) {
+        const id = Number(m.slug.slice(1));
+        invalidateChainHistory(id);
+        store.bumpChainActivity(m.id);
+        void fetchChainSeries(id).then(({ leader, words }) => {
+          useStore.getState().ingestChainHistory(m.id, leader);
+          if (Object.keys(words).length > 0) useStore.getState().ingestWordHistory(m.id, words);
+        });
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   return null;
 }

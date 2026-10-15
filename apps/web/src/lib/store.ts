@@ -149,6 +149,8 @@ interface AppState {
   }) => string;
   /** Replace the store's view of the on-chain markets with the whole GPA result. */
   syncChainMarkets: (markets: Market[]) => void;
+  /** Apply one live account update (websocket); keeps known evidence quotes. */
+  upsertChainMarket: (market: Market) => void;
   setChainSyncError: (failed: boolean) => void;
   ingestChainPositions: (positions: Position[]) => void;
   ingestChainActivity: (marketId: string, items: ActivityItem[]) => void;
@@ -162,11 +164,20 @@ interface AppState {
   markAllRead: () => void;
 }
 
-/** What survives a reload: the wallet books. Markets always come fresh from devnet. */
+/**
+ * What survives a reload: the wallet books, plus the last-seen markets and
+ * their price series so a revisit renders instantly (stale-while-revalidate;
+ * the first chain read reconciles them).
+ */
 interface PersistedState {
   books: Record<string, WalletBook>;
   activeWallet: string | null;
+  markets?: Record<string, Market>;
+  history?: Record<string, PricePoint[]>;
 }
+
+/** Points kept per market in the persisted price cache. */
+const PERSISTED_POINTS = 240;
 
 export const STORE_KEY = "mention-market-v3";
 /** The simulation-era key. Its wallet books are real trade history: migrate them. */
@@ -498,6 +509,22 @@ export const useStore = create<AppState>()(
           return { markets, ...synced, history, wordHistory };
         }),
 
+      upsertChainMarket: (incoming) =>
+        set((s) => {
+          const prev = s.markets[incoming.id];
+          // A websocket push can race the evidence fetch: never drop quotes we
+          // already have for the same proposal.
+          const keepSnippets =
+            prev?.evidence?.snippets?.length &&
+            incoming.evidence &&
+            !incoming.evidence.snippets.length &&
+            prev.evidence.evidenceHash === incoming.evidence.evidenceHash;
+          const market = keepSnippets
+            ? { ...incoming, evidence: { ...incoming.evidence!, snippets: prev!.evidence!.snippets } }
+            : incoming;
+          return { markets: { ...s.markets, [incoming.id]: market } };
+        }),
+
       setChainSyncError: (failed) => set({ chainSyncError: failed }),
 
       ingestChainPositions: (incoming) => {
@@ -552,13 +579,32 @@ export const useStore = create<AppState>()(
       name: STORE_KEY,
       version: 1,
       storage,
-      partialize: (s) => ({ books: s.books, activeWallet: s.activeWallet }),
+      partialize: (s) => ({
+        books: s.books,
+        activeWallet: s.activeWallet,
+        markets: s.markets,
+        history: Object.fromEntries(
+          Object.entries(s.history).map(([id, pts]) => [id, pts.slice(-PERSISTED_POINTS)])
+        ),
+      }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PersistedState>;
         const books = p.books ?? {};
         const activeWallet = p.activeWallet && books[p.activeWallet] ? p.activeWallet : null;
         const book = projectBook(books, activeWallet);
-        return { ...current, books, activeWallet, positions: book.positions, trades: book.trades, user: book.user };
+        const markets = Object.fromEntries(
+          Object.entries(p.markets ?? {}).filter(([id, m]) => isChainId(id) && m && typeof m.id === "string")
+        );
+        return {
+          ...current,
+          books,
+          activeWallet,
+          markets,
+          history: p.history ?? {},
+          positions: book.positions,
+          trades: book.trades,
+          user: book.user,
+        };
       },
     }
   )

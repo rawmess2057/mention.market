@@ -151,7 +151,8 @@ function normalizeLiveResult(json) {
     }
     const text = words.slice(i,j).map(x=>String(x.word??x.punctuated_word??x.text??"")).join(" ").trim();
     if (text.length > 0) {
-      segments.push({ startMs: start, endMs: Math.max(end, ms(words[j-1]?.end ?? end)), speaker, text });
+      // The evaluator rejects empty speakers.
+      segments.push({ startMs: start, endMs: Math.max(end, ms(words[j-1]?.end ?? end)), speaker: speaker || "unknown", text });
     }
     i = j;
   }

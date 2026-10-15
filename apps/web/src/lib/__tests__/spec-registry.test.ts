@@ -66,6 +66,19 @@ describe("registerSpec", () => {
     );
     expect(res.status).toBe(409);
   });
+
+  it("hides storage failures behind a retryable 500", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await registerSpec(
+      { marketAddress: market.toBase58(), spec },
+      deps(specSha256, async () => {
+        throw new Error("password authentication failed for user 'neondb_owner'");
+      })
+    );
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: "spec storage is unavailable", retryable: true });
+    spy.mockRestore();
+  });
 });
 
 describe("decodeCommitment", () => {

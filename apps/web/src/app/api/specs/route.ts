@@ -55,6 +55,8 @@ export async function GET(req: Request) {
     if (!record) return NextResponse.json({ ok: false }, { status: 404 });
     return NextResponse.json(record);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    if (err instanceof TypeError) return NextResponse.json({ error: err.message }, { status: 400 });
+    console.error("spec store read failed", err);
+    return NextResponse.json({ error: "spec storage is unavailable" }, { status: 500 });
   }
 }

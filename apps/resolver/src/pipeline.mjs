@@ -3,6 +3,31 @@ import { evaluateTranscript, hashResolutionSpec, VOID_OUTCOME } from "@mention/r
 
 import { buildEvidence, EVALUATOR_VERSION, hashArtifact } from "./evidence/manifest.mjs";
 
+/** Matched segments cited as evidence excerpts. */
+export const MAX_EXCERPTS = 3;
+
+/**
+ * Shift an audio-relative transcript (times from 0, as Deepgram batch returns)
+ * onto the epoch clock the spec's window uses. `audioStartedAtMs` is when the
+ * recording began; for a recording of the event it defaults to the window
+ * start (operator-overridable when the recording starts earlier or later).
+ */
+export function normalizeTranscriptTime(transcript, audioStartedAtMs) {
+  if (!Number.isSafeInteger(audioStartedAtMs) || audioStartedAtMs < 0) {
+    throw new TypeError("audioStartedAtMs must be a non-negative safe integer");
+  }
+  const { segments, coverage, artifactSha256 } = normalizeTranscript(transcript);
+  const shift = (t) => t + audioStartedAtMs;
+  return {
+    segments: segments.map((s) => ({ ...s, startMs: shift(s.startMs), endMs: shift(s.endMs) })),
+    coverage:
+      coverage.status === "unavailable"
+        ? { ...coverage }
+        : { ...coverage, coveredFromMs: shift(coverage.coveredFromMs), coveredThroughMs: shift(coverage.coveredThroughMs) },
+    ...(artifactSha256 ? { artifactSha256 } : {}),
+  };
+}
+
 /**
  * Turn a resolution spec + a transcript into a reviewable candidate.
  *
@@ -35,7 +60,11 @@ export function buildCandidate({ spec, transcript, review, capturedAt, createdAt
     };
   }
 
-  const excerptIndexes = [...new Set(result.matches.map((m) => m.excerptIndex))].sort((a, b) => a - b);
+  // The earliest matches decide the outcome; on-chain evidence is capped at
+  // 4096 bytes, so cite only those (a binary YES may match hundreds of times).
+  const excerptIndexes = [...new Set(result.matches.map((m) => m.excerptIndex))]
+    .sort((a, b) => a - b)
+    .slice(0, MAX_EXCERPTS);
   const excerpts = excerptIndexes.map((i) => {
     const segment = segments[i];
     return { startMs: segment.startMs, endMs: segment.endMs, speaker: segment.speaker, text: segment.text };

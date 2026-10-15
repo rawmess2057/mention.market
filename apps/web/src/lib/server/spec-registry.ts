@@ -32,7 +32,7 @@ export interface RegisterDeps {
 
 export type RegisterResult =
   | { status: 200; body: { ok: true; marketAddress: string; specSha256: string } }
-  | { status: 400 | 404 | 409 | 422; body: { error: string; retryable?: boolean } };
+  | { status: 400 | 404 | 409 | 422 | 500; body: { error: string; retryable?: boolean } };
 
 /** Decode `ResolutionSpecCommitment` (8-byte discriminator, market, sha256, bump). */
 export function decodeCommitment(
@@ -103,6 +103,10 @@ export async function registerSpec(body: unknown, deps: RegisterDeps): Promise<R
   } catch (err) {
     const e = err as Error & { code?: string };
     if (e.code === "SPEC_CONFLICT") return { status: 409, body: { error: e.message } };
-    return { status: 400, body: { error: e.message } };
+    // Validation errors are the caller's; anything else is storage trouble,
+    // whose details (hosts, credentials) must not reach the client.
+    if (e instanceof TypeError) return { status: 400, body: { error: e.message } };
+    console.error("spec store write failed", e);
+    return { status: 500, body: { error: "spec storage is unavailable", retryable: true } };
   }
 }

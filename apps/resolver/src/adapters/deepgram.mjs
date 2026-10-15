@@ -5,6 +5,7 @@
  * streaming adapter will be added in Phase 3. All calls are network-bound — a
  * `DEEPGRAM_API_KEY` is required at runtime; tests use stubs.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -147,6 +148,9 @@ export class DeepgramBatchAdapter {
     this.model = opts.model ?? DEFAULT_MODEL;
     this.language = opts.language ?? DEFAULT_LANGUAGE;
     this.version = opts.version ?? "resolver/0.1.0";
+    // Punctuation gives sentence-sized segments and readable excerpts;
+    // diarization separates speakers.
+    this.query = { smart_format: true, diarize: true, ...(opts.query ?? {}) };
   }
 
   /**
@@ -157,7 +161,7 @@ export class DeepgramBatchAdapter {
     const full = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
     const bytes = await fs.readFile(full);
     const contentType = inferContentType(full, bytes);
-    const url = buildPrerecordedUrl({ model: this.model, language: this.language });
+    const url = buildPrerecordedUrl({ model: this.model, language: this.language, ...this.query });
     const json = await this.http.postBinary(url, bytes, contentType, {
       authorization: `Token ${this.apiKey}`,
     });
@@ -171,6 +175,7 @@ export class DeepgramBatchAdapter {
     const url = buildPrerecordedUrl({
       model: this.model,
       language: this.language,
+      ...this.query,
       ...(opts.query ?? {}),
     });
     const json = await this.http.postJson(
@@ -225,83 +230,77 @@ function inferContentType(filePath, bytes) {
   }
 }
 
+/** Segmenting policy: break on speaker change, a long pause, or at a sentence end once a segment is long. */
+const PAUSE_BREAK_MS = 1500;
+const SOFT_MAX_WORDS = 40;
+const HARD_MAX_WORDS = 120;
+const SENTENCE_END = /[.?!]["')\]]*$/;
+
 /**
- * Normalize Deepgram Nova-3 'listen' response into `{segments, coverage, artifactSha256}`.
- * Prefers word-level timestamps (`words`) to build stable excerpts; falls back to
- * utterances/paragraphs if missing.
+ * Normalize a Deepgram pre-recorded (`/v1/listen`) response into
+ * `{segments, coverage, artifactSha256}` for `evaluateTranscript`.
+ *
+ * Deepgram reports seconds from the start of the audio. Pass
+ * `startedAtMs` (when the recording began, epoch ms) to get times on the
+ * market's clock, and `splitAtMs` (e.g. the spec window's edges, same clock)
+ * to force segment breaks there: the evaluator only counts segments wholly
+ * inside the window, so a sentence straddling an edge would otherwise be
+ * dropped — and could turn a spoken phrase into a false NO.
+ *
+ * - Words are grouped into sentence-sized segments (the evaluator caps a
+ *   segment at 4000 chars, and evidence excerpts must stay small).
+ * - A missing speaker becomes `"unknown"` (the evaluator rejects empty ones);
+ *   diarized speakers are `"0"`, `"1"`, ….
+ * - Coverage is the whole audio file (`metadata.duration`): Deepgram heard
+ *   every second of it, so silence is still covered.
  */
-export function normalizeDeepgramResponse(json) {
+export function normalizeDeepgramResponse(json, { startedAtMs = 0, splitAtMs = [] } = {}) {
+  if (!Number.isSafeInteger(startedAtMs) || startedAtMs < 0) {
+    throw new TypeError("startedAtMs must be a non-negative safe integer");
+  }
   if (!json || typeof json !== "object") throw new TypeError("deepgram response is empty");
-  const channel = json?.results?.channels?.[0];
-  const alt = channel?.alternatives?.[0];
+  const alt = json?.results?.channels?.[0]?.alternatives?.[0];
   if (!alt) throw new TypeError("deepgram response has no transcript alternative");
 
+  const durationMs = ms(json?.metadata?.duration ?? json?.duration);
   const segments = [];
-  const words = alt?.words;
-  if (Array.isArray(words) && words.length > 0) {
-    // Bucket by speaker when diarization enabled (speaker is string like '0', '1').
-    // Build per-word but collapse consecutive same-speaker words into segments for clarity.
-    let i = 0;
-    while (i < words.length) {
-      const w = words[i];
-      const start = ms(w.start);
-      const end = ms(w.end);
-      const speaker = String(w.speaker ?? w.speaker_id ?? w.speakerLabel ?? "");
-      const speakerKey = speaker || "__none__";
-      let j = i + 1;
-      while (j < words.length) {
-        const nw = words[j];
-        const nwSpeaker = String(nw.speaker ?? nw.speaker_id ?? nw.speakerLabel ?? "");
-        const nwKey = nwSpeaker || speakerKey;
-        if (nwKey !== speakerKey) break;
-        j += 1;
+  const words = Array.isArray(alt.words) ? alt.words.filter((w) => wordText(w).length > 0) : [];
+
+  if (words.length > 0) {
+    let current = null;
+    for (const w of words) {
+      const speaker = speakerOf(w);
+      const startMs = startedAtMs + ms(w.start);
+      const endMs = Math.max(startedAtMs + ms(w.end), startMs + 1);
+      const breakHere =
+        current &&
+        (current.speaker !== speaker ||
+          // Isolate segments on each side of an edge (a word crossing it starts its own).
+          splitAtMs.some((edge) => (current.endMs <= edge && endMs > edge) || (current.startMs < edge && startMs >= edge)) ||
+          startMs - current.endMs >= PAUSE_BREAK_MS ||
+          current.words.length >= HARD_MAX_WORDS ||
+          (current.words.length >= SOFT_MAX_WORDS && SENTENCE_END.test(current.words.at(-1))));
+      if (!current || breakHere) {
+        if (current) segments.push(finish(current));
+        current = { startMs, endMs, speaker, words: [] };
       }
-      const text = words
-        .slice(i, j)
-        .map((x) => String(x.word ?? x.punctuated_word ?? x.text ?? ""))
-        .join(" ")
-        .trim();
-      if (text.length > 0) {
-        segments.push({ startMs: start, endMs: Math.max(end, ms(words[j - 1]?.end ?? end)), speaker, text });
-      }
-      i = j;
+      current.words.push(wordText(w));
+      current.endMs = Math.max(current.endMs, endMs);
     }
-  } else if (Array.isArray(alt?.paragraphs?.transcript) && alt?.paragraphs?.transcript.length > 0) {
-    // Minimal fallback; approximate timestamps from start/end if present.
-    const paras = alt.paragraphs.paragraphs ?? alt.paragraphs ?? [];
-    for (const p of Array.isArray(alt.paragraphs.paragraphs) ? alt.paragraphs.paragraphs : paras) {
-      const text = String(p.transcript ?? p.text ?? "").trim();
-      if (text.length === 0) continue;
-      segments.push({
-        startMs: ms(p.start),
-        endMs: ms(p.end),
-        speaker: String(p.speaker ?? p.speaker_id ?? ""),
-        text,
-      });
-    }
-  } else if (alt?.transcript) {
-    // Final fallback: single segment spanning the whole audio if timestamps missing.
-    const text = String(alt.transcript).trim();
-    if (text.length > 0) {
-      const duration = ms(json?.duration) ?? 0;
-      segments.push({ startMs: 0, endMs: duration || 1, speaker: "", text });
-    }
+    segments.push(finish(current));
+  } else if (typeof alt.transcript === "string" && alt.transcript.trim().length > 0 && durationMs > 0) {
+    // No word timings: one segment spanning the audio.
+    segments.push({ startMs: startedAtMs, endMs: startedAtMs + durationMs, speaker: "unknown", text: alt.transcript.trim() });
   }
 
-  // Determine coverage: if we got any segments and there's a duration, mark available/partial.
-  const durationMs = ms(json?.duration);
-  let coverage;
-  if (segments.length === 0 || !Number.isFinite(durationMs) || durationMs <= 0) {
-    coverage = { status: "unavailable", coveredFromMs: 0, coveredThroughMs: 0 };
-  } else {
-    const from = Math.min(...segments.map((s) => s.startMs));
-    const through = Math.max(...segments.map((s) => s.endMs));
-    if (from <= 0 && through >= durationMs * 0.99) {
-      coverage = { status: "available", coveredFromMs: 0, coveredThroughMs: Math.ceil(through) };
-    } else {
-      coverage = { status: "partial", coveredFromMs: from, coveredThroughMs: Math.ceil(through) };
-    }
-  }
+  const coverage =
+    durationMs > 0
+      ? {
+          status: "available",
+          coveredFromMs: startedAtMs,
+          coveredThroughMs: Math.max(startedAtMs + durationMs, ...segments.map((s) => s.endMs)),
+        }
+      : { status: "unavailable", coveredFromMs: 0, coveredThroughMs: 0 };
 
   return {
     segments: segments.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs),
@@ -310,13 +309,24 @@ export function normalizeDeepgramResponse(json) {
   };
 }
 
+function finish({ startMs, endMs, speaker, words }) {
+  return { startMs, endMs, speaker, text: words.join(" ") };
+}
+
+function wordText(w) {
+  return String(w.punctuated_word ?? w.word ?? w.text ?? "").trim();
+}
+
+function speakerOf(w) {
+  const raw = w.speaker ?? w.speaker_id ?? w.speakerLabel;
+  const speaker = raw == null ? "" : String(raw).trim();
+  return speaker || "unknown";
+}
+
+/** Deepgram reports times in seconds. */
 function ms(v) {
-  if (v == null) return 0;
   const n = Number(v);
-  if (!Number.isFinite(n)) return 0;
-  // Deepgram can return seconds or ms depending on endpoint; seconds is typical.
-  // Assume seconds if < 100_000 (a large audio is 10^6 seconds impossible, so seconds).
-  return n < 100_000 ? Math.round(n * 1000) : Math.round(n);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : 0;
 }
 
 function sha256Hex(str) {
@@ -328,4 +338,3 @@ function sha256Hex(str) {
     return undefined;
   }
 }
-import { createHash } from "node:crypto";

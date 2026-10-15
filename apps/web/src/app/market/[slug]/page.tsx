@@ -7,6 +7,7 @@ import { ArrowLeft, ExternalLink, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { QuoteTitle } from "@/components/ui/quote-title";
 import { ChartSkeleton, PanelSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { PulseFeed } from "@/components/pulse-feed";
@@ -153,9 +154,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                   </a>
                 )}
               </div>
-              <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-fg md:text-3xl">
-                {m.title}
-              </h1>
+              <QuoteTitle as="h1" title={m.title} className="mt-1.5 text-[32px] leading-[1.08] md:text-[44px]" />
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={m.status} />
@@ -172,8 +171,9 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
-          {/* Main column */}
-          <div className="space-y-4">
+          {/* Main column. `min-w-0`: the chart canvas takes its width from the
+              column, so the column must not take its width from the canvas. */}
+          <div className="min-w-0 space-y-4">
             <MarketHero market={m} onTrade={openTrade} />
 
             {/* Mobile: once trading ends, the outcome and claim lead the page. */}
@@ -277,7 +277,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
 
       {/* Mobile: one-thumb trade entry, replacing the bottom nav on this route. */}
       {trading && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+        <div className="glass fixed inset-x-0 bottom-0 z-30 border-t border-line/70 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
           {m.type === "binary" ? (
             <div className="flex gap-2">
               <Button

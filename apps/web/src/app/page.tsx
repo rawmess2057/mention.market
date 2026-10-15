@@ -74,10 +74,14 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-4 pt-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-fg md:text-3xl">Markets</h1>
-          <p className="mt-1 text-sm text-fg-muted">Trade on whether a phrase gets said. Settled on Solana from the transcript.</p>
+          <h1 className="font-display text-[40px] leading-none tracking-[-0.01em] text-fg md:text-[52px]">
+            What gets <span className="quote-hit">said</span>.
+          </h1>
+          <p className="mt-2.5 text-sm text-fg-muted md:text-[15px]">
+            Trade on whether a phrase is spoken. Settled on Solana from the transcript.
+          </p>
         </div>
         <div className="flex items-center gap-5">
           <Metric label="Trading" value={loading ? "—" : String(tradingCount)} live={tradingCount > 0} />
@@ -174,7 +178,7 @@ function Metric({ label, value, live }: { label: string; value: string; live?: b
 }
 
 function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>;
+  return <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3 [&>*>a]:flex-1">{children}</div>;
 }
 
 function Shelf({ title, markets, live }: { title: string; markets: Market[]; live?: boolean }) {
@@ -187,8 +191,10 @@ function Shelf({ title, markets, live }: { title: string; markets: Market[]; liv
         <span className="tnum font-normal text-fg-subtle">{markets.length}</span>
       </h2>
       <Grid>
-        {markets.map((m) => (
-          <MarketCard key={m.id} market={m} />
+        {markets.map((m, i) => (
+          <div key={m.id} className="rise flex" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
+            <MarketCard market={m} />
+          </div>
         ))}
       </Grid>
     </section>

@@ -97,18 +97,100 @@ body {
   animation: pulse-live 2s ease-in-out infinite;
 }
 
-/* ---------- Subtle grid backdrop ---------- */
-.grid-backdrop {
+/* ---------- Backdrop: two slow aurora blobs, a faded grid, film grain ---------- */
+.backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
+}
+.backdrop-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  will-change: transform;
+  animation: drift 28s ease-in-out infinite alternate;
+}
+.backdrop-blob-a {
+  top: -22vh;
+  left: 8vw;
+  width: 58vw;
+  height: 46vh;
+  background: radial-gradient(closest-side, rgb(var(--accent) / 0.22), transparent);
+}
+.backdrop-blob-b {
+  top: -12vh;
+  right: -10vw;
+  width: 46vw;
+  height: 40vh;
+  background: radial-gradient(closest-side, rgb(var(--yes) / 0.1), transparent);
+  animation-duration: 36s;
+  animation-direction: alternate-reverse;
+}
+.backdrop-grid {
+  position: absolute;
+  inset: 0;
   background-image:
-    radial-gradient(ellipse 60% 40% at 50% -10%, rgb(var(--accent) / 0.1), transparent 70%),
-    linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
-  background-size: 100% 100%, 64px 64px, 64px 64px;
-  mask-image: radial-gradient(ellipse 90% 50% at 50% 0%, black 10%, transparent 70%);
+    linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, black 0%, transparent 72%);
+}
+.backdrop-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* ---------- Glass: the floating chrome (top bar, bottom nav, trade bar) ---------- */
+.glass {
+  background: rgb(var(--bg) / 0.72);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/*
+ * Market card glow. `--glow` is the outcome colour the market leans toward and
+ * `--glow-a` how hard it leans; both are set inline by the card. Rests faint,
+ * breathes on hover.
+ */
+.card-glow {
+  position: relative;
+  isolation: isolate;
+}
+.card-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(120% 80% at 100% 0%, rgb(var(--glow, var(--accent)) / var(--glow-a, 0.08)), transparent 60%);
+  opacity: 0.7;
+  transition: opacity var(--transition-base);
+}
+.card-glow:hover::before {
+  opacity: 1;
+}
+
+/* The quoted phrase inside a market title: the thing being listened for. */
+.quote-hit {
+  font-style: italic;
+  color: rgb(var(--fg));
+  background: linear-gradient(transparent 58%, rgb(var(--accent) / 0.28) 58%, rgb(var(--accent) / 0.28) 92%, transparent 92%);
+  border-radius: 2px;
+  padding: 0 0.1em;
+  margin: 0 -0.05em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Staggered entrance for lists: set `--i` on each child. */
+.rise {
+  animation: rise 0.5s var(--ease-out-quint) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
 }
 
 /* ---------- Card styles ---------- */
@@ -367,7 +449,8 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .marquee {
+  .marquee,
+  .backdrop-blob {
     animation: none;
   }
 }

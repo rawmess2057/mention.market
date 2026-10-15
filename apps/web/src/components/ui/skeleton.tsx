@@ -13,20 +13,25 @@ export function Skeleton({ className }: { className?: string }) {
 export function MarketCardSkeleton() {
   // Mirrors `MarketCard` so nothing shifts when the data lands.
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-start gap-3">
-        <Skeleton className="h-8 w-8 rounded-tile" />
-        <div className="flex-1 space-y-1.5">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-4 w-4/5" />
-        </div>
+    <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-surface p-4">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-7 w-7 rounded-field" />
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="ml-auto h-4 w-16 rounded-pill" />
       </div>
-      <Skeleton className="h-7 w-24" />
+      <div className="space-y-1.5">
+        <Skeleton className="h-5 w-11/12" />
+        <Skeleton className="h-5 w-2/3" />
+      </div>
+      <div className="flex items-end justify-between">
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-8 w-24" />
+      </div>
       <div className="grid grid-cols-2 gap-1.5">
-        <Skeleton className="h-7 rounded-md" />
-        <Skeleton className="h-7 rounded-md" />
+        <Skeleton className="h-7 rounded-field" />
+        <Skeleton className="h-7 rounded-field" />
       </div>
-      <Skeleton className="h-3 w-32" />
+      <Skeleton className="h-3 w-24" />
     </div>
   );
 }

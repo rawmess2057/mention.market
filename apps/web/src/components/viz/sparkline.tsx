@@ -11,6 +11,9 @@ export function Sparkline({
   stroke = rgba("accent"),
   className,
   domain,
+  fluid = false,
+  strokeWidth = 1.5,
+  dot = true,
 }: {
   data: number[];
   width?: number;
@@ -19,6 +22,11 @@ export function Sparkline({
   className?: string;
   /** Fixed y-domain for honest scaling (e.g. [0,1] for binary probs). Defaults to auto min/max. */
   domain?: [number, number];
+  /** Stretch to the parent (background washes); otherwise render at `width` × `height` px. */
+  fluid?: boolean;
+  strokeWidth?: number;
+  /** Pulse a dot on the last point. */
+  dot?: boolean;
 }) {
   const gid = useId();
 
@@ -55,20 +63,32 @@ export function Sparkline({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className={cn("overflow-visible", className)}
+      className={cn("overflow-visible", fluid ? "h-full w-full" : "shrink-0", className)}
+      style={fluid ? undefined : { width, height }}
       preserveAspectRatio="none"
+      aria-hidden
     >
       <defs>
         <linearGradient id={`g-${gid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.2" />
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.22" />
           <stop offset="100%" stopColor={stroke} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={area} fill={`url(#g-${gid})`} />
-      <path d={path} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx={lastX} cy={lastY} r="2.5" fill={stroke}>
-        <animate attributeName="opacity" values="1;0.4;1" dur="1.6s" repeatCount="indefinite" />
-      </circle>
+      <path
+        d={path}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      {dot && (
+        <circle cx={lastX} cy={lastY} r="2.5" fill={stroke}>
+          <animate attributeName="opacity" values="1;0.4;1" dur="1.6s" repeatCount="indefinite" />
+        </circle>
+      )}
     </svg>
   );
 }

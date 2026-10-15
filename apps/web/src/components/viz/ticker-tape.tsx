@@ -8,6 +8,7 @@ import { toValues } from "@/lib/history";
 import { useStore } from "@/lib/store";
 import { isChainId, isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META } from "@/lib/types";
+import { watchWordsFor } from "@/lib/watch-words";
 import Link from "next/link";
 
 export function TickerTape() {
@@ -28,10 +29,10 @@ export function TickerTape() {
               : [...(m.words ?? [])].sort(
                   (a, b) => b.pool - a.pool || b.bettors - a.bettors
                 )[0]?.word ?? null;
-          const label =
-            m.type === "binary"
-              ? m.title.replace(/^Will they say /, "").slice(0, 22)
-              : (lead ?? "race").slice(0, 22);
+          // The phrase being listened for, when the title quotes one.
+          const phrase = m.type === "binary" ? watchWordsFor(m)[0] : lead;
+          const raw = phrase ? `“${phrase}”` : m.title.replace(/^Will (they|he|she) say /i, "");
+          const label = raw.length > 30 ? `${raw.slice(0, 29).trimEnd()}…` : raw;
           return { m, cur, delta: cur - prev, label };
         }),
     [markets, history]

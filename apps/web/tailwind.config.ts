@@ -87,6 +87,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
+        display: ["var(--font-display)", "Georgia", "serif"],
       },
       fontSize: {
         micro: ["11px", { lineHeight: "1.35" }],
@@ -122,8 +123,23 @@ const config: Config = {
         "on-air-shimmer": "on-air-shimmer 2s ease-in-out infinite",
         "whisper-in": "whisper-in 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
         "slip-flip": "slip-flip 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards",
+        rise: "rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+        drift: "drift 28s ease-in-out infinite alternate",
+        "glow-breathe": "glow-breathe 3.2s ease-in-out infinite",
       },
       keyframes: {
+        rise: {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        drift: {
+          from: { transform: "translate3d(0, 0, 0) scale(1)" },
+          to: { transform: "translate3d(6%, -4%, 0) scale(1.12)" },
+        },
+        "glow-breathe": {
+          "0%, 100%": { opacity: "0.55" },
+          "50%": { opacity: "1" },
+        },
         "fade-in": {
           from: { opacity: "0", transform: "translateY(4px)" },
           to: { opacity: "1", transform: "translateY(0)" },

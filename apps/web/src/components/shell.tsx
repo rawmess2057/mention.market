@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Home,
@@ -23,6 +23,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { cn, fmtAgo, fmtSol, shortAddr } from "@/lib/format";
+import { SPRING_TIGHT } from "@/lib/motion";
 import { useStore } from "@/lib/store";
 import type { NotificationItem } from "@/lib/types";
 
@@ -32,11 +33,15 @@ const WalletMultiButton = dynamic(
 );
 
 const NAV = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/", label: "Markets", icon: Home },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
   { href: "/create", label: "Create", icon: PlusCircle },
   { href: "/leaderboard", label: "Ranks", icon: Trophy },
 ];
+
+/** Market pages belong to the Markets tab. */
+const isActive = (pathname: string, href: string) =>
+  href === "/" ? pathname === "/" || pathname.startsWith("/market/") : pathname.startsWith(href);
 
 export function TopBar() {
   const { connected, publicKey, disconnect } = useWallet();
@@ -46,9 +51,9 @@ export function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-line/80 bg-surface/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8 lg:px-12">
-          <Link href="/" className="group flex items-center gap-2.5">
+      <header className="glass sticky top-0 z-40 border-b border-line/60">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-6 md:px-8 lg:px-12">
+          <Link href="/" className="group flex shrink-0 items-center gap-2.5">
             <Image
               src="/mention-logo.svg"
               alt=""
@@ -56,12 +61,38 @@ export function TopBar() {
               height={32}
               priority
               unoptimized
-              className="h-8 w-8 shadow-md"
+              className="h-8 w-8 rounded-[9px] shadow-md transition-transform duration-300 group-hover:rotate-[-6deg]"
             />
             <span className="text-[15px] font-bold tracking-tight text-fg">
               mention<span className="text-accent">.market</span>
             </span>
           </Link>
+
+          <nav aria-label="Primary" className="hidden items-center gap-0.5 rounded-pill border border-line/60 bg-surface/60 p-1 md:flex">
+            {NAV.map(({ href, label }) => {
+              const active = isActive(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                    active ? "text-fg" : "text-fg-muted hover:text-fg"
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="topnav-pill"
+                      transition={SPRING_TIGHT}
+                      className="absolute inset-0 -z-10 rounded-pill bg-surface-3 shadow-card"
+                    />
+                  )}
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
 
           <div className="flex items-center gap-3">
             {connected && (
@@ -232,24 +263,31 @@ export function BottomNav() {
   // so the tab bar would only compete with the primary action there.
   if (pathname.startsWith("/market/")) return null;
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] md:hidden">
-      <div className="mx-auto mb-3 max-w-[280px]">
-        <div className="flex items-center justify-around rounded-2xl border border-line bg-surface/95 px-2 py-2 shadow-lg backdrop-blur">
+    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] md:hidden">
+      <div className="mx-auto mb-3 max-w-[340px] px-4">
+        <div className="glass flex items-center justify-around rounded-2xl border border-line/80 p-1.5 shadow-dropdown">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href;
+            const active = isActive(pathname, href);
             return (
               <Link
                 key={href}
                 href={href}
                 aria-label={label}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
-                  active
-                    ? "bg-accent-strong text-accent-foreground shadow-md"
-                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  "relative flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-medium transition-colors",
+                  active ? "text-fg" : "text-fg-muted active:text-fg"
                 )}
               >
-                <Icon className="h-5 w-5" />
+                {active && (
+                  <motion.span
+                    layoutId="bottomnav-pill"
+                    transition={SPRING_TIGHT}
+                    className="absolute inset-0 -z-10 rounded-xl bg-surface-3"
+                  />
+                )}
+                <Icon className={cn("h-5 w-5 transition-transform", active && "-translate-y-px")} />
+                {label}
               </Link>
             );
           })}

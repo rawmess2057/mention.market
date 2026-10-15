@@ -115,6 +115,15 @@ test("override rejects an outcome the spec does not allow", () => {
   );
 });
 
+test("override can void any market, producing valid manual evidence", () => {
+  for (const spec of [binary(), majority()]) {
+    const candidate = buildOverrideCandidate({ spec, outcome: "void", review });
+    assert.equal(candidate.outcome, "void");
+    assert.equal(candidate.evidence.manifest.outcome, "void");
+    assert.equal(candidate.evidence.manifest.evaluator.method, "manual");
+  }
+});
+
 test("encode/decode round-trips the evidence bytes", () => {
   const spec = binary();
   const candidate = buildCandidate({

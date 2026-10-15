@@ -120,3 +120,24 @@ describe("claimableAmounts", () => {
     expect(out.open).toBeUndefined();
   });
 });
+describe("void settlement (mirrors claim.rs)", () => {
+  it("refunds binary YES and NO shares at 50/50", () => {
+    const m = binaryMarket({ status: "resolved", winningOutcome: "void" });
+    const pos: Position = { id: "p", marketId: "bm", yesShares: 30, noShares: 10, avgYesPrice: 0.6, avgNoPrice: 0.4 };
+    const q = claimPayout(m, pos);
+    expect(q?.side).toBe("void");
+    expect(q?.payout).toBe(20);
+    expect(q?.cost).toBeCloseTo(30 * 0.6 + 10 * 0.4, 9);
+  });
+
+  it("refunds every word-race back in full, with no rake", () => {
+    const m = majorityMarket({ status: "resolved", winningOutcome: "void" });
+    const pos: Position = { id: "p", marketId: "mm", wordBacks: { a: 7, b: 3 } };
+    expect(claimPayout(m, pos)?.payout).toBe(10);
+  });
+
+  it("owes nothing to a position that fully exited", () => {
+    const m = binaryMarket({ status: "resolved", winningOutcome: "void" });
+    expect(claimPayout(m, { id: "p", marketId: "bm", yesShares: 0, noShares: 0 })).toBeNull();
+  });
+});

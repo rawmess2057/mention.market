@@ -1,5 +1,5 @@
 import { canonicalJson } from "@mention/resolution/canonical-json";
-import { evaluateTranscript, hashResolutionSpec } from "@mention/resolution/contracts";
+import { evaluateTranscript, hashResolutionSpec, VOID_OUTCOME } from "@mention/resolution/contracts";
 
 import { buildEvidence, EVALUATOR_VERSION, hashArtifact } from "./evidence/manifest.mjs";
 
@@ -80,7 +80,8 @@ export function buildCandidate({ spec, transcript, review, capturedAt, createdAt
  */
 export function buildOverrideCandidate({ spec, outcome, review, capturedAt, createdAt }) {
   if (!spec) throw new TypeError("spec is required");
-  if (!spec.outcomeOptions.includes(outcome)) {
+  // `VOID_OUTCOME` voids the market (every position refunded) under any spec.
+  if (outcome !== VOID_OUTCOME && !spec.outcomeOptions.includes(outcome)) {
     throw new TypeError(`outcome "${outcome}" is not allowed by the spec`);
   }
   const now = Date.now();

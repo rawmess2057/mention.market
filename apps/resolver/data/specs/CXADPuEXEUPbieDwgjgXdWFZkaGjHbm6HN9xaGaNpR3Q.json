@@ -1,0 +1,66 @@
+{
+  "marketAddress": "CXADPuEXEUPbieDwgjgXdWFZkaGjHbm6HN9xaGaNpR3Q",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "CXADPuEXEUPbieDwgjgXdWFZkaGjHbm6HN9xaGaNpR3Q",
+    "marketType": "majority",
+    "outcomeOptions": [
+      "credit the team",
+      "we fought",
+      "MVP",
+      "God bless",
+      "next season"
+    ],
+    "terms": [
+      {
+        "phrase": "credit the team",
+        "outcome": "credit the team"
+      },
+      {
+        "phrase": "we fought",
+        "outcome": "we fought"
+      },
+      {
+        "phrase": "MVP",
+        "outcome": "MVP"
+      },
+      {
+        "phrase": "God bless",
+        "outcome": "God bless"
+      },
+      {
+        "phrase": "next season",
+        "outcome": "next season"
+      }
+    ],
+    "source": {
+      "provider": "official-broadcast",
+      "sourceId": "https://example.com/sports/11",
+      "url": "https://example.com/sports/11"
+    },
+    "window": {
+      "startsAtMs": 1792036603000,
+      "endsAtMs": 1792036703000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "977cb61dcd3c920e10f5b85b0038e307aac52be8a179f9c9f2b7391f3678e969",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "credit the team",
+      "we fought",
+      "MVP",
+      "God bless",
+      "next season"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1792036605592
+}

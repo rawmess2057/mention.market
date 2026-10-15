@@ -364,6 +364,35 @@ export type Mention = {
           }
         },
         {
+          "name": "challenge",
+          "docs": [
+            "One open dispute per market: `init` fails while one is unsettled."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  108,
+                  108,
+                  101,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -1283,6 +1312,60 @@ export type Mention = {
           }
         },
         {
+          "name": "challenge",
+          "docs": [
+            "fixed by seeds) so the resolver can't skip settling an open dispute;",
+            "empty when there is none. Deserialized and closed in `settle_challenge`."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  108,
+                  108,
+                  101,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "challengerAccount",
+          "docs": [
+            "challenge, and must equal `challenge.challenger`."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "priorProposerAccount",
+          "docs": [
+            "rejected challenge, and must equal `challenge.proposer`."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "rejected challenge."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -1494,6 +1577,19 @@ export type Mention = {
   ],
   "accounts": [
     {
+      "name": "challenge",
+      "discriminator": [
+        119,
+        250,
+        161,
+        121,
+        119,
+        81,
+        22,
+        208
+      ]
+    },
+    {
       "name": "config",
       "discriminator": [
         155,
@@ -1573,6 +1669,19 @@ export type Mention = {
     }
   ],
   "events": [
+    {
+      "name": "challengeSettled",
+      "discriminator": [
+        96,
+        70,
+        232,
+        36,
+        45,
+        207,
+        169,
+        122
+      ]
+    },
     {
       "name": "evidencePosted",
       "discriminator": [
@@ -1823,9 +1932,94 @@ export type Mention = {
       "code": 6028,
       "name": "marketClosed",
       "msg": "Trading has ended for this market"
+    },
+    {
+      "code": 6029,
+      "name": "settlementAccountMismatch",
+      "msg": "Challenge settlement account is missing or does not match"
+    },
+    {
+      "code": 6030,
+      "name": "reservedWord",
+      "msg": "\\void\\ is reserved and cannot be used as a word"
     }
   ],
   "types": [
+    {
+      "name": "challenge",
+      "docs": [
+        "An open dispute against a market's proposal (at most one per market).",
+        "",
+        "Holds the escrow bookkeeping for both bonds until the resolver's next",
+        "proposal settles it: a different outcome upholds the challenge (challenger",
+        "takes both bonds), the same outcome rejects it (proposer is refunded, the",
+        "challenger's bond goes to the protocol treasury). Lives in its own PDA so the",
+        "`Market` layout — and every existing market account — is unchanged."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenger",
+            "type": "pubkey"
+          },
+          {
+            "name": "challengedOutcome",
+            "docs": [
+              "The outcome that was disputed."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "challengerBond",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "docs": [
+              "Proposer of the disputed outcome and the bond they had escrowed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "proposerBond",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "challengeSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenger",
+            "type": "pubkey"
+          },
+          {
+            "name": "challengedOutcome",
+            "type": "string"
+          },
+          {
+            "name": "upheld",
+            "type": "bool"
+          }
+        ]
+      }
+    },
     {
       "name": "config",
       "docs": [

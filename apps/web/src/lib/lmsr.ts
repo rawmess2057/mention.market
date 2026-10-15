@@ -69,8 +69,14 @@ export function lmsrPriceAfterBuy(
 }
 
 /**
- * Largest share count a fixed `amount` buys, inverting `lmsrBuyCost` via
- * binary search (40 iterations → sub-basis-point precision).
+ * Largest share count a fixed `amount` buys: the exact LMSR inverse, mirroring
+ * the program's `shares_for_cost` (`math/lmsr.rs`) term for term so on-chain
+ * fills match quotes to float precision.
+ *
+ * Solves `C(q') = C(q) + amount` as `x = (T - q_own) + b·ln(1 - e^{-u})`, with
+ * `u = (T - q_other) / b`. Both gaps are built from small terms (one exponential
+ * in `C(q)` is exactly 1, so `C(q) = max(q) + b·log1p(e_small)`) and
+ * `ln(1 - e^{-u})` uses `expm1`, so cheap sides of skewed markets stay exact.
  */
 export function lmsrSharesForCost(
   qYes: number,
@@ -80,16 +86,13 @@ export function lmsrSharesForCost(
   amount: number
 ): number {
   if (!Number.isFinite(amount) || amount <= 0) return 0;
-  const cost = (sh: number) => lmsrBuyCost(qYes, qNo, b, side, sh);
-  let lo = 0;
-  let hi = 1;
-  while (cost(hi) < amount && hi < Number.MAX_SAFE_INTEGER / 4) hi *= 2;
-  for (let i = 0; i < 40; i++) {
-    const mid = (lo + hi) / 2;
-    if (cost(mid) < amount) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
+  if (!Number.isFinite(b) || b <= 0) return 0;
+  const [own, other] = side === "yes" ? [qYes, qNo] : [qNo, qYes];
+  const m = Math.max(qYes, qNo);
+  const lse = b * Math.log1p(Math.exp((Math.min(qYes, qNo) - m) / b));
+  const gapOwn = m - own + lse + amount;
+  const gapOther = m - other + lse + amount;
+  return Math.max(0, gapOwn + b * Math.log(-Math.expm1(-gapOther / b)));
 }
 
 export interface BuyQuote {

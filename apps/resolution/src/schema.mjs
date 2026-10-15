@@ -6,6 +6,13 @@
  * client bundle. Hashing lives in `contracts.mjs`.
  */
 
+/**
+ * Reserved outcome for a voided market (every position refunded). It is valid
+ * evidence for any spec without being listed in `outcomeOptions`, so existing
+ * specs — and their on-chain hashes — are unchanged; no spec may list it.
+ */
+export const VOID_OUTCOME = "void";
+
 const SPEC_KEYS = [
   "schemaVersion",
   "marketAddress",
@@ -29,6 +36,9 @@ export function validateResolutionSpec(spec) {
   spec.outcomeOptions.forEach((outcome, index) => text(outcome, `outcomeOptions[${index}]`, 32));
   if (new Set(spec.outcomeOptions).size !== spec.outcomeOptions.length) {
     throw new TypeError("outcomeOptions must be unique");
+  }
+  if (spec.outcomeOptions.some((outcome) => outcome.toLowerCase() === VOID_OUTCOME)) {
+    throw new TypeError(`"${VOID_OUTCOME}" is reserved and cannot be an outcome option`);
   }
   if (spec.marketType === "binary" && !sameStrings(spec.outcomeOptions, ["yes", "no"])) {
     throw new TypeError('binary markets must use outcomeOptions ["yes", "no"]');

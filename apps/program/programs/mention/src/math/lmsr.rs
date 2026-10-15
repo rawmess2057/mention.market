@@ -54,26 +54,32 @@ pub fn sell_return(q_y: f64, q_n: f64, b: f64, side: u8, shares: f64) -> f64 {
     cost_units(q_y, q_n, b) - cost_units(by, bn, b)
 }
 
-/// Shares granted for a given `cost`, by monotonic binary search (mirrors the
-/// TS `lmsrSharesForCost`).
+/// Shares granted for a given `cost`, via the exact LMSR inverse.
+///
+/// Buying `x` of `own` must satisfy `C(q') = C0 + cost =: T`, which solves to
+/// `x = (T - q_own) + b * ln(1 - e^{-u})` with `u = (T - q_other) / b > 0`.
+/// Both `T - q` gaps are formed from small terms rather than by subtracting
+/// ~1e10-scale values: with `m = max(q)`, one exponential in `C0` is exactly 1,
+/// so `C0 = m + b * log1p(e_small)`; and `ln(1 - e^{-u})` is `ln(-expm1(-u))`,
+/// exact even for the tiny `u` of a cheap side in a skewed market.
+///
+/// This replaced a bisection (~115 rounds of soft-float `exp`/`log`) that blew
+/// the 1.4M CU budget on large or skewed buys; this is four transcendentals.
 pub fn shares_for_cost(q_y: f64, q_n: f64, b: f64, side: u8, cost: f64) -> f64 {
     if cost <= 0.0 {
         return 0.0;
     }
-    let mut lo = 0.0f64;
-    let mut hi = 1.0f64;
-    while cost_delta(q_y, q_n, b, side, hi) < cost {
-        hi *= 2.0;
-    }
-    for _ in 0..80 {
-        let mid = (lo + hi) / 2.0;
-        if cost_delta(q_y, q_n, b, side, mid) < cost {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-    (lo + hi) / 2.0
+    let (own, other) = match side {
+        0 => (q_y, q_n),
+        _ => (q_n, q_y),
+    };
+    let m = q_y.max(q_n);
+    // C0 - m, without forming C0 itself.
+    let lse = b * libm::log1p(libm::exp((q_y.min(q_n) - m) / b));
+    let gap_own = (m - own) + lse + cost; // T - q_own
+    let gap_other = (m - other) + lse + cost; // T - q_other
+    let shares = gap_own + b * libm::log(-libm::expm1(-gap_other / b));
+    shares.max(0.0)
 }
 
 /// Creator ante required to seed a market: the theoretical max AMM loss is
@@ -110,6 +116,47 @@ mod tests {
         for (qy, qn, b, side, cost, exp) in cases {
             let shares = shares_for_cost(*qy, *qn, *b, *side, *cost);
             close(shares, *exp, 1e-4, &format!("shares_for_cost({qy},{qn},{b},{side},{cost})"));
+        }
+    }
+
+    #[test]
+    fn shares_for_cost_matches_high_precision_reference() {
+        // Expected values computed with 60-digit Decimal arithmetic from the
+        // exact inverse; f64 bisection can't serve as ground truth at extreme
+        // skew (it loses digits subtracting ~1e10-scale costs).
+        let cases: &[(f64, f64, f64, u8, f64, f64)] = &[
+            // Extreme skew: NO costs ~e^-37, so 1 lamport buys ~16 SOL of shares.
+            (40e9, 3e9, 1e9, 1, 1.0, 16_276_734_248.884062),
+            (0.0, 0.0, 1e9, 0, 1e9, 1_489_880_125.644750),
+            (5e9, 0.0, 1e9, 1, 1e9, 5_551_927_720.246350),
+            // The buy that used to exhaust compute (1 SOL NO into a YES-heavy market).
+            (1.5e9, 0.0, 1e9, 1, 1e9, 2_343_639_385.538173),
+            (0.0, 0.0, 1e9, 0, 6e9, 6_691_907_035.809895),
+            // Near-certain side: shares ~= cost.
+            (40e9, 3e9, 1e9, 0, 50e9, 50_000_000_000.0),
+        ];
+        for (qy, qn, b, side, cost, exp) in cases {
+            let x = shares_for_cost(*qy, *qn, *b, *side, *cost);
+            close(x, *exp, exp * 1e-12 + 1e-3, &format!("shares_for_cost({qy},{qn},{b},{side},{cost})"));
+        }
+    }
+
+    #[test]
+    fn shares_for_cost_inverts_cost_delta() {
+        const SOL: f64 = 1e9;
+        for b in [1e5, SOL] {
+            for (qy, qn) in [(0.0, 0.0), (b, b), (5.0 * b, 0.0), (0.0, 5.0 * b), (40.0 * b, 3.0 * b)] {
+                for cost in [1.0, 1e3, 1e6, SOL / 10.0, SOL, 6.0 * SOL, 50.0 * SOL] {
+                    for side in [0u8, 1] {
+                        let x = shares_for_cost(qy, qn, b, side, cost);
+                        assert!(x > 0.0 && x.is_finite());
+                        // cost_delta subtracts two ~C(q)-sized values, so allow
+                        // its own f64 rounding (~1e-5 at C ~ 1e11) on top.
+                        let spent = cost_delta(qy, qn, b, side, x);
+                        close(spent, cost, cost * 1e-12 + 1e-4, &format!("b={b} q=({qy},{qn}) side={side} cost={cost}"));
+                    }
+                }
+            }
         }
     }
 

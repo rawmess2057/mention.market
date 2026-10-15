@@ -46,7 +46,7 @@ pnpm install
 pnpm dev        # http://localhost:3000
 pnpm build      # production build
 
-cd apps/program && cargo test   # on-chain program tests (32, LiteSVM)
+cd apps/program && cargo test   # on-chain program tests (37 LiteSVM + 13 unit)
 ```
 
 ## Where things stand

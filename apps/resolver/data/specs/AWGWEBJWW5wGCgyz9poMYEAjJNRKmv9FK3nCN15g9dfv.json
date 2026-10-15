@@ -1,0 +1,43 @@
+{
+  "marketAddress": "AWGWEBJWW5wGCgyz9poMYEAjJNRKmv9FK3nCN15g9dfv",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "AWGWEBJWW5wGCgyz9poMYEAjJNRKmv9FK3nCN15g9dfv",
+    "marketType": "binary",
+    "outcomeOptions": [
+      "yes",
+      "no"
+    ],
+    "terms": [
+      {
+        "phrase": "W in the chat",
+        "outcome": "yes"
+      }
+    ],
+    "source": {
+      "provider": "youtube-live",
+      "sourceId": "https://example.com/streams/13",
+      "url": "https://example.com/streams/13"
+    },
+    "window": {
+      "startsAtMs": 1792037651000,
+      "endsAtMs": 1792037741000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "8f3947b1f21763301ffdbb4691623c4347c680c4fb95c66216ace2e123f334b0",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "W in the chat"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1792037652447
+}

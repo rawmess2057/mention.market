@@ -1,0 +1,43 @@
+{
+  "marketAddress": "F6iNJ44oGfCzESEd13fNG1hKHYS4HzvmpFnKfrYYrYKQ",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "F6iNJ44oGfCzESEd13fNG1hKHYS4HzvmpFnKfrYYrYKQ",
+    "marketType": "binary",
+    "outcomeOptions": [
+      "yes",
+      "no"
+    ],
+    "terms": [
+      {
+        "phrase": "AI",
+        "outcome": "yes"
+      }
+    ],
+    "source": {
+      "provider": "youtube-live",
+      "sourceId": "https://example.com/streams/9",
+      "url": "https://example.com/streams/9"
+    },
+    "window": {
+      "startsAtMs": 1792034049000,
+      "endsAtMs": 1792034079000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "8f9aab011e780d2323ee28aa9c754a1fc014aeb83fb7aa960b126cec35f0bb05",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "AI"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1792034051103
+}

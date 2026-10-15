@@ -122,6 +122,21 @@ describe("lmsrSharesForCost / lmsrBuyQuote", () => {
     expect(Math.abs(cost - amount) / amount).toBeLessThan(1e-6);
   });
 
+  // Same 60-digit Decimal vectors as `math/lmsr.rs`
+  // (shares_for_cost_matches_high_precision_reference): web quotes must equal
+  // the program's fills, including at extreme skew where bisection lost digits.
+  it.each([
+    [40e9, 3e9, 1e9, "no", 1, 16_276_734_248.884062],
+    [0, 0, 1e9, "yes", 1e9, 1_489_880_125.64475],
+    [5e9, 0, 1e9, "no", 1e9, 5_551_927_720.24635],
+    [1.5e9, 0, 1e9, "no", 1e9, 2_343_639_385.538173],
+    [0, 0, 1e9, "yes", 6e9, 6_691_907_035.809895],
+    [40e9, 3e9, 1e9, "yes", 50e9, 50_000_000_000],
+  ] as const)("matches the program's closed form: q=(%d,%d) b=%d %s cost=%d", (qy, qn, b, side, cost, expected) => {
+    const shares = lmsrSharesForCost(qy, qn, b, side, cost);
+    expect(Math.abs(shares - expected)).toBeLessThanOrEqual(expected * 1e-12 + 1e-3);
+  });
+
   it("returns zero shares for a zero amount", () => {
     expect(lmsrSharesForCost(500, 400, 300, "yes", 0)).toBe(0);
     expect(lmsrBuyQuote(500, 400, 300, "yes", 0).shares).toBe(0);

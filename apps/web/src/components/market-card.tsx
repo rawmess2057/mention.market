@@ -13,6 +13,7 @@ import { useSim } from "@/lib/sim";
 import { useNow } from "@/hooks/useNow";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 import { lmsrProbYes } from "@/lib/lmsr";
+import { isVoided } from "@/lib/settle";
 
 const VERTICAL_CHIP: Record<Vertical, string> = {
   streams: "bg-blue-light",
@@ -86,6 +87,13 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
 
 function StatusPill({ m, now }: { m: Market; now: number }) {
   if (m.status === "resolved") {
+    if (isVoided(m)) {
+      return (
+        <span className="tnum ml-auto rounded-field bg-ink-100 px-1.5 py-0.5 font-mono font-semibold text-ink-600">
+          VOIDED · refunded
+        </span>
+      );
+    }
     const winner = (m.winningOutcome ?? "—").toUpperCase();
     return (
       <span className="tnum ml-auto rounded-field bg-yes-soft px-1.5 py-0.5 font-mono font-semibold text-yes">

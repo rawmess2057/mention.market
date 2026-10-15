@@ -72,6 +72,12 @@ describe("chainCreateProblems", () => {
     ).toEqual([]);
   });
 
+  it("rejects the reserved word \"void\" in any casing", () => {
+    const problems = chainCreateProblems(params({ type: "majority", words: ["alpha", " Void "] }));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("reserved");
+  });
+
   it("checks the event name separately for binary markets", () => {
     const problems = chainCreateProblems(params({ event: "y".repeat(70) }));
     expect(problems.some((p) => p.includes("event name"))).toBe(true);

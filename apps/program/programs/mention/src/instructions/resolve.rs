@@ -2,16 +2,22 @@
 //! outcome with a bond, anyone may challenge inside the window (resetting the
 //! proposal), and an undisputed proposal finalizes once the window elapses.
 //!
-//! Bonds escrow into the vault. Unknown to the AMM, bonds simply add depth:
-//! the proposer's bond is refunded at finalize; challenger bonds are forfeited.
+//! Bonds escrow into the vault. An undisputed proposer's bond is refunded at
+//! finalize. A challenge records both bonds in a `Challenge` PDA, and the
+//! resolver's next proposal settles it:
+//! - different outcome → challenge upheld: the challenger gets both bonds;
+//! - same outcome → challenge rejected: the proposer's bond is refunded and the
+//!   challenger's bond goes to the treasury (`config.authority`) — never to the
+//!   resolver, who is also the one ruling on the challenge.
 
 use anchor_lang::prelude::*;
 use anchor_lang::Bumps;
 
-use crate::constants::{bond_units, CHALLENGE_WINDOW_SECS, MAX_OUTCOME_LEN};
+use crate::constants::{bond_units, CHALLENGE_WINDOW_SECS, MAX_OUTCOME_LEN, VOID_OUTCOME};
 use crate::error::ErrorCode;
 use crate::state::{
-    Config, EvidenceManifest, Market, MarketStatus, MarketType, ResolutionSpecCommitment, Vault,
+    Challenge, Config, EvidenceManifest, Market, MarketStatus, MarketType,
+    ResolutionSpecCommitment, Vault,
 };
 
 #[derive(Accounts)]
@@ -53,6 +59,27 @@ pub struct ProposeResolution<'info> {
     )]
     pub evidence: Box<Account<'info, EvidenceManifest>>,
 
+    /// CHECK: The market's `Challenge` PDA. Always required (the address is
+    /// fixed by seeds) so the resolver can't skip settling an open dispute;
+    /// empty when there is none. Deserialized and closed in `settle_challenge`.
+    #[account(mut, seeds = [b"challenge", market.key().as_ref()], bump)]
+    pub challenge: UncheckedAccount<'info>,
+
+    /// CHECK: Challenger's system account; required only when settling a
+    /// challenge, and must equal `challenge.challenger`.
+    #[account(mut)]
+    pub challenger_account: Option<UncheckedAccount<'info>>,
+
+    /// CHECK: Disputed proposal's proposer; required only when settling a
+    /// rejected challenge, and must equal `challenge.proposer`.
+    #[account(mut)]
+    pub prior_proposer_account: Option<UncheckedAccount<'info>>,
+
+    /// CHECK: Treasury (`config.authority`); required only when settling a
+    /// rejected challenge.
+    #[account(mut)]
+    pub treasury: Option<UncheckedAccount<'info>>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -77,6 +104,16 @@ pub struct ChallengeResolution<'info> {
         bump = vault.bump
     )]
     pub vault: Box<Account<'info, Vault>>,
+
+    /// One open dispute per market: `init` fails while one is unsettled.
+    #[account(
+        init,
+        payer = challenger,
+        space = 8 + Challenge::INIT_SPACE,
+        seeds = [b"challenge", market.key().as_ref()],
+        bump
+    )]
+    pub challenge: Box<Account<'info, Challenge>>,
 
     pub system_program: Program<'info, System>,
 }
@@ -165,6 +202,9 @@ pub fn propose(
 
     let bond = bond_units();
     pay_bond(&ctx, bond)?;
+    // Settle after the bond CPI: settlement moves lamports directly, and a CPI
+    // after direct moves to accounts outside it fails as unbalanced.
+    settle_challenge(&ctx, &outcome)?;
 
     let now = Clock::get()?.unix_timestamp;
     let evidence_hash = ctx.accounts.evidence.sha256;
@@ -188,8 +228,79 @@ pub fn propose(
     Ok(())
 }
 
-/// Challenge a live proposal inside its window: escrow a bond, reset the market
-/// to `Locked` so the resolver must re-propose.
+/// Settle an open dispute, if any, against the resolver's new `outcome`, then
+/// close the `Challenge` account (its rent returns to the challenger).
+fn settle_challenge(ctx: &Context<ProposeResolution>, outcome: &str) -> Result<()> {
+    let info = ctx.accounts.challenge.to_account_info();
+    if info.data_is_empty() {
+        return Ok(());
+    }
+    // `try_deserialize` checks only the discriminator, so check the owner too.
+    require_keys_eq!(*info.owner, crate::ID, ErrorCode::InvalidMarket);
+    let challenge = {
+        let data = info.try_borrow_data()?;
+        Challenge::try_deserialize(&mut &data[..])?
+    };
+    require_keys_eq!(challenge.market, ctx.accounts.market.key(), ErrorCode::InvalidMarket);
+
+    let vault = ctx.accounts.vault.to_account_info();
+    let challenger = ctx
+        .accounts
+        .challenger_account
+        .as_ref()
+        .ok_or(ErrorCode::SettlementAccountMismatch)?
+        .to_account_info();
+    require_keys_eq!(challenger.key(), challenge.challenger, ErrorCode::SettlementAccountMismatch);
+
+    let upheld = outcome != challenge.challenged_outcome;
+    if upheld {
+        let payout = challenge
+            .challenger_bond
+            .checked_add(challenge.proposer_bond)
+            .ok_or(ErrorCode::InsufficientAmount)?;
+        crate::instructions::token_util::withdraw_sol(&vault, &challenger, payout)?;
+    } else {
+        let proposer = ctx
+            .accounts
+            .prior_proposer_account
+            .as_ref()
+            .ok_or(ErrorCode::SettlementAccountMismatch)?
+            .to_account_info();
+        require_keys_eq!(proposer.key(), challenge.proposer, ErrorCode::SettlementAccountMismatch);
+        let treasury = ctx
+            .accounts
+            .treasury
+            .as_ref()
+            .ok_or(ErrorCode::SettlementAccountMismatch)?
+            .to_account_info();
+        require_keys_eq!(treasury.key(), ctx.accounts.config.authority, ErrorCode::SettlementAccountMismatch);
+        crate::instructions::token_util::withdraw_sol(&vault, &proposer, challenge.proposer_bond)?;
+        crate::instructions::token_util::withdraw_sol(&vault, &treasury, challenge.challenger_bond)?;
+    }
+
+    emit!(ChallengeSettled {
+        market: challenge.market,
+        challenger: challenge.challenger,
+        challenged_outcome: challenge.challenged_outcome.clone(),
+        upheld,
+    });
+    close_account(&info, &challenger)
+}
+
+/// Close a program-owned account: move its rent to `dest` and hand it back to
+/// the System Program, so the PDA can be `init`ed again by a later challenge.
+fn close_account<'info>(info: &AccountInfo<'info>, dest: &AccountInfo<'info>) -> Result<()> {
+    let lamports = info.lamports();
+    **info.try_borrow_mut_lamports()? = 0;
+    **dest.try_borrow_mut_lamports()? += lamports;
+    info.assign(&anchor_lang::system_program::ID);
+    info.resize(0)?;
+    Ok(())
+}
+
+/// Challenge a live proposal inside its window: escrow a bond, record both
+/// bonds in the market's `Challenge` PDA, and reset the market to `Locked` so
+/// the resolver must re-propose (which settles the challenge).
 pub fn challenge(ctx: Context<ChallengeResolution>) -> Result<()> {
     require!(
         ctx.accounts.market.status == MarketStatus::Resolving,
@@ -208,7 +319,19 @@ pub fn challenge(ctx: Context<ChallengeResolution>) -> Result<()> {
     let bond = bond_units();
     pay_bond(&ctx, bond)?;
 
+    let market_key = ctx.accounts.market.key();
+    let challenge = &mut ctx.accounts.challenge;
+    challenge.market = market_key;
+    challenge.challenger = ctx.accounts.challenger.key();
+    challenge.challenged_outcome = ctx.accounts.market.winning_outcome.clone();
+    challenge.challenger_bond = bond;
+    challenge.proposer = ctx.accounts.market.proposer;
+    challenge.proposer_bond = ctx.accounts.market.bond;
+    challenge.bump = ctx.bumps.challenge;
+
+    // The proposer's bond is now tracked by the challenge, not the market.
     let market = &mut ctx.accounts.market;
+    market.bond = 0;
     market.challenge_deadline = 0;
     market.status = MarketStatus::Locked;
 
@@ -258,7 +381,11 @@ pub fn finalize(ctx: Context<FinalizeResolution>) -> Result<()> {
     Ok(())
 }
 
+/// `outcome` must be a market outcome, or `VOID_OUTCOME` (any market type).
 fn validate_outcome(market: &Market, outcome: &str) -> Result<()> {
+    if outcome == VOID_OUTCOME {
+        return Ok(());
+    }
     let ok = match market.market_type {
         MarketType::Binary => outcome == "yes" || outcome == "no",
         MarketType::Majority => market.words.iter().any(|w| w.word == outcome),
@@ -343,6 +470,14 @@ pub struct ProposalProposed {
 pub struct ProposalChallenged {
     pub market: Pubkey,
     pub challenger: Pubkey,
+}
+
+#[event]
+pub struct ChallengeSettled {
+    pub market: Pubkey,
+    pub challenger: Pubkey,
+    pub challenged_outcome: String,
+    pub upheld: bool,
 }
 
 #[event]

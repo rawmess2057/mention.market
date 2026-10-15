@@ -86,6 +86,28 @@ pub struct EvidenceManifest {
     pub bytes: Vec<u8>,
 }
 
+/// An open dispute against a market's proposal (at most one per market).
+///
+/// Holds the escrow bookkeeping for both bonds until the resolver's next
+/// proposal settles it: a different outcome upholds the challenge (challenger
+/// takes both bonds), the same outcome rejects it (proposer is refunded, the
+/// challenger's bond goes to the protocol treasury). Lives in its own PDA so the
+/// `Market` layout — and every existing market account — is unchanged.
+#[account]
+#[derive(InitSpace)]
+pub struct Challenge {
+    pub market: Pubkey,
+    pub challenger: Pubkey,
+    /// The outcome that was disputed.
+    #[max_len(32)]
+    pub challenged_outcome: String,
+    pub challenger_bond: u64,
+    /// Proposer of the disputed outcome and the bond they had escrowed.
+    pub proposer: Pubkey,
+    pub proposer_bond: u64,
+    pub bump: u8,
+}
+
 /// A prediction market. Binary markets price YES/NO with LMSR; majority markets
 /// are pari-mutuel word races.
 #[account]

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./canonical-json.mjs";
-import { evaluateTranscript, validateResolutionSpec } from "./schema.mjs";
+import { evaluateTranscript, validateResolutionSpec, VOID_OUTCOME } from "./schema.mjs";
 
-export { canonicalJson, evaluateTranscript, validateResolutionSpec };
+export { canonicalJson, evaluateTranscript, validateResolutionSpec, VOID_OUTCOME };
 
 const HEX_256 = /^[a-f0-9]{64}$/;
 const EVIDENCE_KEYS = [
@@ -65,12 +65,16 @@ export function validateEvidenceManifest(manifest, spec) {
   integer(manifest.review.approvedAt, "review.approvedAt", 0, Number.MAX_SAFE_INTEGER);
   text(manifest.review.rationale, "review.rationale", 2000);
   integer(manifest.createdAt, "createdAt", 0, Number.MAX_SAFE_INTEGER);
+  // The evaluator never rules "void"; it is always an operator's call.
+  if (manifest.outcome === VOID_OUTCOME && manifest.evaluator.method !== "manual") {
+    throw new TypeError(`a "${VOID_OUTCOME}" ruling requires evaluator.method "manual"`);
+  }
 
   if (spec !== undefined) {
     validateResolutionSpec(spec);
     if (manifest.marketAddress !== spec.marketAddress) throw new TypeError("manifest marketAddress does not match resolution spec");
     if (manifest.specSha256 !== hashResolutionSpec(spec)) throw new TypeError("manifest specSha256 does not match resolution spec");
-    if (!spec.outcomeOptions.includes(manifest.outcome)) throw new TypeError("manifest outcome is not allowed by resolution spec");
+    if (manifest.outcome !== VOID_OUTCOME && !spec.outcomeOptions.includes(manifest.outcome)) throw new TypeError("manifest outcome is not allowed by resolution spec");
     if (
       manifest.source.provider !== spec.source.provider ||
       manifest.source.sourceId !== spec.source.sourceId ||

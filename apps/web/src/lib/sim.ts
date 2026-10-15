@@ -12,7 +12,7 @@ import { persist } from "zustand/middleware";
 import { seededRandom, shortAddr } from "./format";
 import { mergePricePoints, mergeSeriesPoints } from "./history";
 import type { PricePoint } from "./history";
-import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn } from "./lmsr";
+import { lmsrProbYes, lmsrSellReturn, lmsrSharesForCost as sharesForCost } from "./lmsr";
 import { realizedOnSell as realizedPnlOnSell } from "./pnl";
 import { claimPayout } from "./settle";
 import { CHAIN_CREATE_B_UI, isChainId, reconcileChainMarkets } from "./chain";
@@ -1370,21 +1370,7 @@ function proposeResolution(m: Market, snippets: TranscriptSnippet[]): void {
 
 /** Shares received for spending `cost` SOL on `side` in an LMSR market. */
 export function lmsrSharesForCost(m: Market, side: "yes" | "no", cost: number): number {
-  // Solve for shares: C(q + shares) - C(q) = cost. LMSR is monotonic; binary
-  // search is robust and cheap at UI precision.
-  let lo = 0;
-  let hi = 1;
-  while (lmsrCostDelta(m, side, hi) < cost) hi *= 2;
-  for (let i = 0; i < 40; i++) {
-    const mid = (lo + hi) / 2;
-    if (lmsrCostDelta(m, side, mid) < cost) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
-}
-
-function lmsrCostDelta(m: Market, side: "yes" | "no", shares: number): number {
-  return lmsrBuyCost(m.yesShares, m.noShares, m.b, side, shares);
+  return sharesForCost(m.yesShares, m.noShares, m.b, side, cost);
 }
 
 /** SOL received for selling `shares` back into the LMSR pool. */

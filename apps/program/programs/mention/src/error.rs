@@ -60,4 +60,9 @@ pub enum ErrorCode {
     SlippageTooHigh,
     #[msg("Trading has ended for this market")]
     MarketClosed,
+    // New variants go last: codes are positional and clients map them.
+    #[msg("Challenge settlement account is missing or does not match")]
+    SettlementAccountMismatch,
+    #[msg("\"void\" is reserved and cannot be used as a word")]
+    ReservedWord,
 }

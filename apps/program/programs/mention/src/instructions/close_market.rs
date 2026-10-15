@@ -17,7 +17,9 @@
 use anchor_lang::prelude::*;
 
 use crate::error::ErrorCode;
-use crate::state::{Config, EvidenceManifest, Market, Position, ResolutionSpecCommitment, Vault};
+use crate::state::{
+    Challenge, Config, EvidenceManifest, Market, Position, ResolutionSpecCommitment, Vault,
+};
 
 #[derive(Accounts)]
 pub struct CloseMarket<'info> {
@@ -64,7 +66,7 @@ pub struct CloseMarket<'info> {
 /// Close `market`, returning the vault's full balance (traders' escrow, the
 /// reserve ante, the creator's rent) plus the rent locked in the market, vault
 /// and resolution-spec accounts to `recipient`. Any `Position` or
-/// `EvidenceManifest` account for this market passed in `remaining_accounts` is
+/// `EvidenceManifest` / `Challenge` account for this market passed in `remaining_accounts` is
 /// closed the same way. Foreign accounts are rejected so a stray meta can never
 /// sweep unrelated state.
 pub fn handler<'info>(ctx: Context<'info, CloseMarket<'info>>) -> Result<()> {
@@ -80,6 +82,9 @@ pub fn handler<'info>(ctx: Context<'info, CloseMarket<'info>>) -> Result<()> {
         } else if let Ok(evidence) = Account::<EvidenceManifest>::try_from(info) {
             require_keys_eq!(evidence.market, market_key, ErrorCode::InvalidMarket);
             evidence.close(recipient.clone())?;
+        } else if let Ok(challenge) = Account::<Challenge>::try_from(info) {
+            require_keys_eq!(challenge.market, market_key, ErrorCode::InvalidMarket);
+            challenge.close(recipient.clone())?;
         } else {
             return Err(ErrorCode::InvalidMarket.into());
         }

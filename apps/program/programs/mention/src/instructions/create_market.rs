@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::{MAX_FEE_BPS, MAX_TITLE_LEN, MAX_WORDS, MAX_WORD_LEN};
+use crate::constants::{MAX_FEE_BPS, MAX_TITLE_LEN, MAX_WORDS, MAX_WORD_LEN, VOID_OUTCOME};
 use crate::error::ErrorCode;
 use crate::math::reserve_ante;
 use crate::state::{
@@ -90,6 +90,8 @@ pub fn handler(
     let mut pools: Vec<WordPool> = Vec::with_capacity(words.len());
     for word in words.iter() {
         require!(word.len() <= MAX_WORD_LEN, ErrorCode::WordTooLong);
+        // Case-insensitive so a "Void" word can't be confused with a void ruling.
+        require!(!word.eq_ignore_ascii_case(VOID_OUTCOME), ErrorCode::ReservedWord);
         pools.push(WordPool {
             word: word.clone(),
             pool: 0,

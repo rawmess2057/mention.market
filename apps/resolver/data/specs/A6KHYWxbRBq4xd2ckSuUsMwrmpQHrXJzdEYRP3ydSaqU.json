@@ -1,0 +1,43 @@
+{
+  "marketAddress": "A6KHYWxbRBq4xd2ckSuUsMwrmpQHrXJzdEYRP3ydSaqU",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "A6KHYWxbRBq4xd2ckSuUsMwrmpQHrXJzdEYRP3ydSaqU",
+    "marketType": "binary",
+    "outcomeOptions": [
+      "yes",
+      "no"
+    ],
+    "terms": [
+      {
+        "phrase": "agenda",
+        "outcome": "yes"
+      }
+    ],
+    "source": {
+      "provider": "rss",
+      "sourceId": "https://example.com/podcasts/12",
+      "url": "https://example.com/podcasts/12"
+    },
+    "window": {
+      "startsAtMs": 1792036603000,
+      "endsAtMs": 1792036703000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "f1cfd94c90abb8ef38ab4425591a7922eba096bdccce19928fc9a8d44527c87b",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "agenda"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1792036606515
+}

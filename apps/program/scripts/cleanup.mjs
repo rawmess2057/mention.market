@@ -58,10 +58,11 @@ if (!config.authority.equals(keypair.publicKey)) {
 console.log(`authority = ${keypair.publicKey.toBase58()}`);
 console.log(`recipient = ${recipient.toBase58()}`);
 
-const [allMarkets, allPositions, allEvidence] = await Promise.all([
+const [allMarkets, allPositions, allEvidence, allChallenges] = await Promise.all([
   program.account.market.all(),
   program.account.position.all().catch(() => []),
   program.account.evidenceManifest.all().catch(() => []),
+  program.account.challenge.all().catch(() => []),
 ]);
 
 // Group the rent-bearing child accounts by the market they belong to.
@@ -74,6 +75,7 @@ const pushChild = (marketKey, pubkey) => {
 };
 for (const { account, publicKey } of allPositions) pushChild(account.market, publicKey);
 for (const { account, publicKey } of allEvidence) pushChild(account.market, publicKey);
+for (const { account, publicKey } of allChallenges) pushChild(account.market, publicKey);
 
 const targets = allMarkets
   .filter(({ account }) => !onlyIds || onlyIds.includes(account.id.toNumber()))

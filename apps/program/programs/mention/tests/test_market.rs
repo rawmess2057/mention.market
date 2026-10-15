@@ -49,6 +49,24 @@ fn send(svm: &mut LiteSVM, ixs: &[Instruction], payer: &Keypair) -> Result<(), S
         .map_err(|e| format!("{e:?}"))
 }
 
+/// Like `send`, but returns the compute units the transaction consumed.
+fn send_cu(svm: &mut LiteSVM, ixs: &[Instruction], payer: &Keypair) -> Result<u64, String> {
+    let mut data = vec![2u8];
+    data.extend_from_slice(&1_400_000u32.to_le_bytes());
+    let set_limit = Instruction {
+        program_id: Pubkey::from_str("ComputeBudget111111111111111111111111111111").unwrap(),
+        accounts: vec![],
+        data,
+    };
+    let mut all = vec![set_limit];
+    all.extend_from_slice(ixs);
+    let msg = Message::new_with_blockhash(&all, Some(&payer.pubkey()), &svm.latest_blockhash());
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[payer]).unwrap();
+    svm.send_transaction(tx)
+        .map(|meta| meta.compute_units_consumed)
+        .map_err(|e| format!("{e:?}"))
+}
+
 fn unix_now(svm: &LiteSVM) -> i64 {
     svm.get_sysvar::<Clock>().unix_timestamp
 }
@@ -542,6 +560,26 @@ fn propose_ix(
     confidence: u8,
     evidence_sha256: [u8; 32],
 ) -> Instruction {
+    propose_settle_ix(program_id, resolver, market, outcome, confidence, evidence_sha256, None)
+}
+
+/// Settlement accounts for a re-proposal after a challenge:
+/// `(challenger, prior proposer, treasury)`.
+type Settle = Option<(Pubkey, Pubkey, Pubkey)>;
+
+fn challenge_pda(program_id: Pubkey, market: Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"challenge", market.as_ref()], &program_id).0
+}
+
+fn propose_settle_ix(
+    program_id: Pubkey,
+    resolver: Pubkey,
+    market: Pubkey,
+    outcome: String,
+    confidence: u8,
+    evidence_sha256: [u8; 32],
+    settle: Settle,
+) -> Instruction {
     Instruction::new_with_bytes(
         program_id,
         &mention::instruction::ProposeResolution {
@@ -557,6 +595,10 @@ fn propose_ix(
             vault: vault_pda(program_id, market),
             resolution_spec: resolution_spec_pda(program_id, market),
             evidence: evidence_pda(program_id, market, evidence_sha256),
+            challenge: challenge_pda(program_id, market),
+            challenger_account: settle.map(|s| s.0),
+            prior_proposer_account: settle.map(|s| s.1),
+            treasury: settle.map(|s| s.2),
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -576,6 +618,7 @@ fn challenge_ix(
             config: config_pda(program_id),
             market,
             vault: vault_pda(program_id, market),
+            challenge: challenge_pda(program_id, market),
             system_program: anchor_lang::system_program::ID,
         }
         .to_account_metas(None),
@@ -1155,19 +1198,52 @@ fn test_resolution_state_machine() {
         .get_account(&evidence_pda(program_id, market, sha2))
         .unwrap()
         .lamports;
+    // An open challenge must be settled: skipping or faking the challenger fails.
+    assert!(
+        send(
+            &mut svm,
+            &[propose_ix(program_id, resolver.pubkey(), market, "no".into(), 90, sha2)],
+            &resolver,
+        )
+        .is_err(),
+        "re-propose without settlement accounts must fail"
+    );
+    assert!(
+        send(
+            &mut svm,
+            &[propose_settle_ix(
+                program_id,
+                resolver.pubkey(),
+                market,
+                "no".into(),
+                90,
+                sha2,
+                Some((attacker.pubkey(), resolver.pubkey(), payer.pubkey())),
+            )],
+            &resolver,
+        )
+        .is_err(),
+        "settlement must pay the recorded challenger"
+    );
     send(
         &mut svm,
-        &[propose_ix(
+        &[propose_settle_ix(
             program_id,
             resolver.pubkey(),
             market,
             "no".into(),
             90,
             sha2,
+            Some((challenger.pubkey(), resolver.pubkey(), payer.pubkey())),
         )],
         &resolver,
     )
     .unwrap();
+    assert!(
+        svm.get_account(&challenge_pda(program_id, market))
+            .map_or(true, |a| a.lamports == 0),
+        "settled challenge account must be closed"
+    );
     let m = read_market(&svm, market);
     assert_eq!(m.status, mention::MarketStatus::Resolving);
     assert_eq!(m.winning_outcome, "no");
@@ -1195,21 +1271,131 @@ fn test_resolution_state_machine() {
     assert_eq!(m.status, mention::MarketStatus::Resolved);
     assert_eq!(m.bond, 0);
     assert!(m.resolved_at > 0);
-    // The current (2nd) proposal's bond is refunded; the 1st proposer bond and
-    // challenger bond stay in the vault. Resolver nets exactly one bond out
-    // (plus the rent for the 2nd evidence manifest, which this wallet paid).
+    // Upheld challenge ("yes" -> "no"): the challenger takes back their bond plus
+    // the 1st proposer's bond; the 2nd proposal's bond is refunded at finalize.
+    // Resolver nets exactly one bond out (plus the 2nd evidence manifest rent).
     let resolver_after = svm.get_account(&resolver.pubkey()).unwrap().lamports;
     assert!(
         (resolver_before as i128 - resolver_after as i128 - bond as i128 - ev2_rent as i128)
             .abs()
             <= 10_000_000,
-        "resolver should pay exactly one forfeited bond"
+        "resolver should forfeit exactly one bond"
     );
     let challenger_after = svm.get_account(&challenger.pubkey()).unwrap().lamports;
     assert!(
-        challenger_after <= 100 * LAMPORTS - bond,
-        "challenger bond must be forfeited"
+        (challenger_after as i128 - (100 * LAMPORTS + bond) as i128).abs() <= 10_000_000,
+        "upheld challenger must win the proposer's bond (challenge rent refunded)"
     );
+}
+
+/// Rejected challenge (the resolver re-proposes the same outcome): the proposer's
+/// bond is refunded and the challenger's goes to the treasury. The challenge PDA
+/// then reopens for a second, upheld round — and once the market resolves no
+/// bond is left stranded in the vault.
+#[test]
+fn test_rejected_challenge_pays_treasury_and_reopens() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+    svm.airdrop(&resolver.pubkey(), 300 * LAMPORTS).unwrap();
+    let challenger = Keypair::new();
+    svm.airdrop(&challenger.pubkey(), 100 * LAMPORTS).unwrap();
+    let bond = mention::constants::bond_units();
+    let lamports = |svm: &LiteSVM, k: &Pubkey| svm.get_account(k).map_or(0, |a| a.lamports);
+    let near = |a: u64, b: u64| (a as i128 - b as i128).abs() <= 10_000_000;
+
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        41,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    advance(&mut svm, 6);
+    send(&mut svm, &[lock_market_ix(program_id, payer.pubkey(), market)], &payer).unwrap();
+    let vault = vault_pda(program_id, market);
+    let vault_start = lamports(&svm, &vault);
+
+    let post = |svm: &mut LiteSVM, bytes: &[u8]| -> [u8; 32] {
+        send(
+            svm,
+            &[post_evidence_ix(program_id, resolver.pubkey(), market, bytes.to_vec(), TEST_SPEC)],
+            &resolver,
+        )
+        .unwrap();
+        evidence_sha256(bytes)
+    };
+    let settle = Some((challenger.pubkey(), resolver.pubkey(), payer.pubkey()));
+
+    // Round 1: propose "yes", challenge, re-propose "yes" -> rejected.
+    let sha_yes = post(&mut svm, b"{\"outcome\":\"yes\"}");
+    send(
+        &mut svm,
+        &[propose_ix(program_id, resolver.pubkey(), market, "yes".into(), 100, sha_yes)],
+        &resolver,
+    )
+    .unwrap();
+    let challenger_before = lamports(&svm, &challenger.pubkey());
+    send(&mut svm, &[challenge_ix(program_id, challenger.pubkey(), market)], &challenger).unwrap();
+    let c = svm.get_account(&challenge_pda(program_id, market)).unwrap();
+    let c = mention::Challenge::try_deserialize(&mut c.data.as_slice()).unwrap();
+    assert_eq!(c.challenged_outcome, "yes");
+    assert_eq!(c.challenger, challenger.pubkey());
+    assert_eq!((c.challenger_bond, c.proposer_bond), (bond, bond));
+    assert_eq!(read_market(&svm, market).bond, 0);
+
+    let treasury_before = lamports(&svm, &payer.pubkey());
+    let resolver_before = lamports(&svm, &resolver.pubkey());
+    send(
+        &mut svm,
+        &[propose_settle_ix(program_id, resolver.pubkey(), market, "yes".into(), 100, sha_yes, settle)],
+        &resolver,
+    )
+    .unwrap();
+    assert_eq!(
+        lamports(&svm, &payer.pubkey()) - treasury_before,
+        bond,
+        "rejected challenger's bond goes to the treasury"
+    );
+    assert!(
+        near(lamports(&svm, &resolver.pubkey()), resolver_before),
+        "proposer's old bond refunded as the new one is posted"
+    );
+    assert!(
+        near(lamports(&svm, &challenger.pubkey()), challenger_before - bond),
+        "rejected challenger loses exactly the bond (challenge rent refunded)"
+    );
+
+    // Round 2: the PDA reopens; re-propose "no" -> upheld. (New blockhash, or
+    // LiteSVM dedupes the byte-identical challenge tx as AlreadyProcessed.)
+    svm.expire_blockhash();
+    let challenger_before = lamports(&svm, &challenger.pubkey());
+    send(&mut svm, &[challenge_ix(program_id, challenger.pubkey(), market)], &challenger).unwrap();
+    let sha_no = post(&mut svm, b"{\"outcome\":\"no\"}");
+    send(
+        &mut svm,
+        &[propose_settle_ix(program_id, resolver.pubkey(), market, "no".into(), 100, sha_no, settle)],
+        &resolver,
+    )
+    .unwrap();
+    assert!(
+        near(lamports(&svm, &challenger.pubkey()), challenger_before + bond),
+        "upheld challenger wins the proposer's bond"
+    );
+
+    advance(&mut svm, 121);
+    send(
+        &mut svm,
+        &[finalize_ix(program_id, payer.pubkey(), market, resolver.pubkey())],
+        &payer,
+    )
+    .unwrap();
+    let m = read_market(&svm, market);
+    assert_eq!(m.status, mention::MarketStatus::Resolved);
+    assert_eq!(m.winning_outcome, "no");
+    assert_eq!(lamports(&svm, &vault), vault_start, "no bond stranded in the vault");
 }
 
 // ---------------------------------------------------------------------------
@@ -2308,4 +2494,157 @@ fn test_close_market_rejects_foreign_remaining_account() {
         svm.get_account(&foreign).is_some(),
         "foreign position must be untouched"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Void resolution
+// ---------------------------------------------------------------------------
+
+/// A voided binary market redeems every YES and NO share at half value. Stress
+/// path: A exits at a profit after B pushes the price, so the remaining cost
+/// bases exceed what the vault could refund — but every 50/50 refund clears.
+#[test]
+fn test_void_binary_refunds_half_and_stays_solvent() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_with_b_ix(
+        program_id,
+        payer.pubkey(),
+        60,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+        LAMPORTS,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let (a, b, c) = (Keypair::new(), Keypair::new(), Keypair::new());
+    for kp in [&a, &b, &c] {
+        svm.airdrop(&kp.pubkey(), 20 * LAMPORTS).unwrap();
+    }
+    send(&mut svm, &[buy_binary_ix(program_id, a.pubkey(), market, 0, 2 * LAMPORTS, 0)], &a).unwrap();
+    send(&mut svm, &[buy_binary_ix(program_id, b.pubkey(), market, 0, 6 * LAMPORTS, 0)], &b).unwrap();
+    let a_shares = read_position(&svm, position_pda(program_id, market, a.pubkey())).yes_shares;
+    send(&mut svm, &[sell_binary_ix(program_id, a.pubkey(), market, 0, a_shares, 0)], &a).unwrap();
+    send(&mut svm, &[buy_binary_ix(program_id, c.pubkey(), market, 1, LAMPORTS, 0)], &c).unwrap();
+
+    resolve_market(&mut svm, program_id, market, &resolver, "void", &payer);
+    assert_eq!(read_market(&svm, market).winning_outcome, "void");
+
+    for kp in [&b, &c] {
+        let pos = read_position(&svm, position_pda(program_id, market, kp.pubkey()));
+        let expected = (pos.yes_shares + pos.no_shares) / 2;
+        let before = svm.get_account(&kp.pubkey()).unwrap().lamports;
+        send(&mut svm, &[claim_ix(program_id, kp.pubkey(), market)], kp).unwrap();
+        let delta = svm.get_account(&kp.pubkey()).unwrap().lamports as i128 - before as i128;
+        assert!(
+            (delta - expected as i128).abs() <= 10_000,
+            "void refund should be (yes + no) / 2 = {expected}, delta = {delta}"
+        );
+    }
+    // A fully exited, so there is nothing to refund.
+    assert!(send(&mut svm, &[claim_ix(program_id, a.pubkey(), market)], &a).is_err());
+}
+
+/// A voided word race returns every back in full, across words, with no rake.
+#[test]
+fn test_void_majority_refunds_backs_in_full() {
+    let (mut svm, payer, program_id) = setup();
+    let resolver = bootstrap(&mut svm, &payer, program_id);
+    let end = unix_now(&svm) + 5;
+    let (ix, market) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        61,
+        mention::MarketType::Majority,
+        vec!["AI".into(), "Solana".into()],
+        end,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+
+    let (a, b) = (Keypair::new(), Keypair::new());
+    for kp in [&a, &b] {
+        svm.airdrop(&kp.pubkey(), 10 * LAMPORTS).unwrap();
+    }
+    send(&mut svm, &[back_word_ix(program_id, a.pubkey(), market, "AI".into(), 3 * LAMPORTS)], &a).unwrap();
+    send(&mut svm, &[back_word_ix(program_id, a.pubkey(), market, "Solana".into(), LAMPORTS)], &a).unwrap();
+    send(&mut svm, &[back_word_ix(program_id, b.pubkey(), market, "Solana".into(), 2 * LAMPORTS)], &b).unwrap();
+
+    resolve_market(&mut svm, program_id, market, &resolver, "void", &payer);
+
+    for (kp, backed) in [(&a, 4 * LAMPORTS), (&b, 2 * LAMPORTS)] {
+        let before = svm.get_account(&kp.pubkey()).unwrap().lamports;
+        send(&mut svm, &[claim_ix(program_id, kp.pubkey(), market)], kp).unwrap();
+        let delta = svm.get_account(&kp.pubkey()).unwrap().lamports as i128 - before as i128;
+        assert!(
+            (delta - backed as i128).abs() <= 10_000,
+            "void should refund the full {backed} backed, delta = {delta}"
+        );
+    }
+}
+
+/// "void" is reserved: no market may list it as a word, in any casing.
+#[test]
+fn test_create_rejects_reserved_void_word() {
+    let (mut svm, payer, program_id) = setup();
+    bootstrap(&mut svm, &payer, program_id);
+    let end = unix_now(&svm) + 600;
+    let (ix, _) = create_market_ix(
+        program_id,
+        payer.pubkey(),
+        62,
+        mention::MarketType::Majority,
+        vec!["AI".into(), "Void".into()],
+        end,
+    );
+    let err = send(&mut svm, &[ix], &payer).unwrap_err();
+    assert!(err.contains("ReservedWord") || err.contains("Custom(6030)"), "{err}");
+}
+
+// ---------------------------------------------------------------------------
+// Compute budget
+// ---------------------------------------------------------------------------
+
+/// Regression: `shares_for_cost` used to bisect with ~115 rounds of soft-float
+/// exp/log and hit the 1.4M CU cap on large or skewed buys (a 6 SOL buy, or a
+/// 1 SOL NO into a YES-heavy market, at b = 1 SOL). Every buy must now be cheap.
+#[test]
+fn test_buy_compute_is_bounded() {
+    const MAX_CU: u64 = 100_000;
+    let (mut svm, payer, program_id) = setup();
+    bootstrap(&mut svm, &payer, program_id);
+    let end = unix_now(&svm) + 600;
+    let (ix, market) = create_market_with_b_ix(
+        program_id,
+        payer.pubkey(),
+        70,
+        mention::MarketType::Binary,
+        vec![],
+        end,
+        LAMPORTS,
+    );
+    send(&mut svm, &[ix], &payer).unwrap();
+    let trader = Keypair::new();
+    svm.airdrop(&trader.pubkey(), 200 * LAMPORTS).unwrap();
+
+    let steps: &[(&str, u8, u64)] = &[
+        ("1 lamport YES", 0, 1),
+        ("0.5 SOL YES", 0, LAMPORTS / 2),
+        ("2 SOL YES", 0, 2 * LAMPORTS),
+        ("1 SOL NO into a YES-heavy market", 1, LAMPORTS),
+        ("6 SOL YES", 0, 6 * LAMPORTS),
+        ("50 SOL NO", 1, 50 * LAMPORTS),
+    ];
+    for (label, side, cost) in steps {
+        svm.expire_blockhash();
+        let cu = send_cu(
+            &mut svm,
+            &[buy_binary_ix(program_id, trader.pubkey(), market, *side, *cost, 1)],
+            &trader,
+        )
+        .unwrap_or_else(|e| panic!("{label} failed: {e}"));
+        assert!(cu < MAX_CU, "{label} used {cu} CU (limit {MAX_CU})");
+        println!("{label}: {cu} CU");
+    }
 }

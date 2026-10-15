@@ -12,6 +12,7 @@ import { lmsrProbYes } from "@/lib/lmsr";
 import { useSim } from "@/lib/sim";
 import type { PricePoint } from "@/lib/history";
 import type { Market } from "@/lib/types";
+import { isVoided } from "@/lib/settle";
 
 const POLL_MS = 30_000;
 const JITTER_MS = 5_000;
@@ -163,7 +164,9 @@ export function ChainSync() {
               marketId: m.id,
               marketSlug: m.slug,
               marketTitle: m.title,
-              text: `\u201c${m.title}\u201d resolved on-chain ${(m.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
+              text: isVoided(m)
+                ? `\u201c${m.title}\u201d was voided on-chain — claim your refund or challenge`
+                : `\u201c${m.title}\u201d resolved on-chain ${(m.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
             });
           }
         }

@@ -54,6 +54,34 @@ export function evidencePda(market, sha256Bytes) {
   )[0];
 }
 
+export function challengePda(market) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("challenge"), market.toBuffer()],
+    PROGRAM_ID
+  )[0];
+}
+
+/**
+ * Accounts `propose_resolution` needs to settle the market's open challenge (if
+ * any). The program always takes the `challenge` PDA; the payout accounts are
+ * required only while a challenge is open, so they are null otherwise.
+ */
+export async function settlementAccounts(program, market) {
+  const challenge = challengePda(market);
+  const open = await fetchOrNull(program.account.challenge.fetch(challenge));
+  if (!open) {
+    return { challenge, challengerAccount: null, priorProposerAccount: null, treasury: null, open: null };
+  }
+  const config = await program.account.config.fetch(CONFIG_PDA);
+  return {
+    challenge,
+    challengerAccount: open.challenger,
+    priorProposerAccount: open.proposer,
+    treasury: config.authority,
+    open,
+  };
+}
+
 export function positionPda(market, owner) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("position"), market.toBuffer(), owner.toBuffer()],
@@ -149,15 +177,14 @@ export function lmsrSellValue(qYes, qNo, b, side, shares) {
   return before - after;
 }
 
+/** Shares bought for `cost`: the closed form of the program's `shares_for_cost`
+ * (`math/lmsr.rs`), mirrored in the web's `lmsrSharesForCost`. `side`: 0 = YES. */
 export function sharesForCost(qYes, qNo, b, side, cost) {
   if (cost <= 0) return 0;
-  let lo = 0;
-  let hi = 1;
-  while (lmsrBuyCost(qYes, qNo, b, side, hi) < cost) hi *= 2;
-  for (let i = 0; i < 80; i++) {
-    const mid = (lo + hi) / 2;
-    if (lmsrBuyCost(qYes, qNo, b, side, mid) < cost) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
+  const [own, other] = side === 0 ? [qYes, qNo] : [qNo, qYes];
+  const m = Math.max(qYes, qNo);
+  const lse = b * Math.log1p(Math.exp((Math.min(qYes, qNo) - m) / b));
+  const gapOwn = m - own + lse + cost;
+  const gapOther = m - other + lse + cost;
+  return Math.max(0, gapOwn + b * Math.log(-Math.expm1(-gapOther / b)));
 }

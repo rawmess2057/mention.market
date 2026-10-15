@@ -13,6 +13,7 @@ import {
   ensureResolverKeypair,
   marketPda,
   vaultPda,
+  challengePda,
   CONFIG_PDA,
   enumKey,
   budget,
@@ -210,6 +211,8 @@ const proposeTx = await program.methods
     vault: vaultPda(market),
     resolutionSpec: resolutionSpecPk,
     evidence: evidencePk,
+    // Fresh market, so no open challenge to settle.
+    challenge: challengePda(market),
     systemProgram: SystemProgram.programId,
   })
   .preInstructions(budget())

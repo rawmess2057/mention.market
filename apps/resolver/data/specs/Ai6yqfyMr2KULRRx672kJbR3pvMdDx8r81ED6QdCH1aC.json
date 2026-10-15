@@ -1,0 +1,66 @@
+{
+  "marketAddress": "Ai6yqfyMr2KULRRx672kJbR3pvMdDx8r81ED6QdCH1aC",
+  "spec": {
+    "schemaVersion": 1,
+    "marketAddress": "Ai6yqfyMr2KULRRx672kJbR3pvMdDx8r81ED6QdCH1aC",
+    "marketType": "majority",
+    "outcomeOptions": [
+      "data center",
+      "AI demand",
+      "guidance",
+      "supply",
+      "sovereign AI"
+    ],
+    "terms": [
+      {
+        "phrase": "data center",
+        "outcome": "data center"
+      },
+      {
+        "phrase": "AI demand",
+        "outcome": "AI demand"
+      },
+      {
+        "phrase": "guidance",
+        "outcome": "guidance"
+      },
+      {
+        "phrase": "supply",
+        "outcome": "supply"
+      },
+      {
+        "phrase": "sovereign AI",
+        "outcome": "sovereign AI"
+      }
+    ],
+    "source": {
+      "provider": "official-webcast",
+      "sourceId": "https://example.com/earnings/10",
+      "url": "https://example.com/earnings/10"
+    },
+    "window": {
+      "startsAtMs": 1792035421000,
+      "endsAtMs": 1792035441000
+    },
+    "matching": {
+      "mode": "exact_phrase",
+      "caseSensitive": false,
+      "punctuationSensitive": false,
+      "speaker": null
+    }
+  },
+  "specSha256": "4d4f34baacc2348876b3ff5eccf111584ba04b211dfc8a5e9b5494ea756547a3",
+  "ingest": {
+    "adapter": "operator-upload",
+    "mode": "manual",
+    "keywords": [
+      "data center",
+      "AI demand",
+      "guidance",
+      "supply",
+      "sovereign AI"
+    ],
+    "speaker": null
+  },
+  "createdAt": 1792035423371
+}

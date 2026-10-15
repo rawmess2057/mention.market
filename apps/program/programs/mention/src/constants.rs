@@ -8,6 +8,10 @@ pub const MAX_TITLE_LEN: usize = 64;
 pub const MAX_WORD_LEN: usize = 32;
 /// Maximum bytes for the winning outcome label ("yes"/"no"/a backed word).
 pub const MAX_OUTCOME_LEN: usize = 32;
+/// Reserved outcome: the market is voided and every position is refunded
+/// (binary shares redeem at 50/50; word-race backs are returned in full). No
+/// market may use it as a word.
+pub const VOID_OUTCOME: &str = "void";
 /// Maximum raw bytes for a posted evidence manifest payload.
 pub const MAX_EVIDENCE_LEN: usize = 4096;
 /// Minimum challenge window (seconds) for an optimistic resolution.

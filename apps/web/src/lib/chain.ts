@@ -20,10 +20,11 @@ import bs58 from "bs58";
 import mentionIdl from "@/lib/idl/mention.json";
 import { canonicalJson } from "@mention/resolution/canonical-json";
 import { buildResolutionSpec } from "@mention/resolution/spec-builder";
-import { lmsrBuyCost, lmsrProbYes, lmsrSellReturn, lmsrSharesForCost } from "@/lib/lmsr";
+import { lmsrProbYes, lmsrSellReturn, lmsrSharesForCost } from "@/lib/lmsr";
 import { resample } from "@/lib/history";
 import type { PricePoint } from "@/lib/history";
 import { fmtErr, shortAddr } from "@/lib/format";
+import { VOID_OUTCOME } from "@/lib/settle";
 import type {
   ActivityItem,
   Market,
@@ -191,6 +192,14 @@ export function resolutionSpecPda(market: PublicKey): PublicKey {
 export function evidencePda(market: PublicKey, sha256: Uint8Array | number[]): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("evidence"), market.toBuffer(), Buffer.from(sha256)],
+    PROGRAM_ID
+  )[0];
+}
+
+/** Challenge PDA: seeds `[b"challenge", market]` (one open dispute per market). */
+export function challengePda(market: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("challenge"), market.toBuffer()],
     PROGRAM_ID
   )[0];
 }
@@ -406,6 +415,10 @@ export function chainCreateProblems(params: ChainCreateParams): string[] {
     if (params.words.length < 2) problems.push("A word race needs at least two words.");
     if (params.words.length > MAX_WORDS_PER_MARKET) {
       problems.push(`A word race allows at most ${MAX_WORDS_PER_MARKET} words.`);
+    }
+    // Reserved by the program (`ReservedWord`): it would collide with a void ruling.
+    if (params.words.some((w) => w.trim().toLowerCase() === VOID_OUTCOME)) {
+      problems.push(`"${VOID_OUTCOME}" is reserved for voided markets and can't be a word.`);
     }
     const longWord = params.words.find((w) => byteLength(w) > MAX_WORD_BYTES);
     if (longWord) {
@@ -1397,6 +1410,7 @@ export async function chainChallenge(
     .accounts({
       challenger: signer.publicKey,
       ...tradeAccounts(market, signer.publicKey),
+      challenge: challengePda(market),
     } as never)
     .instruction();
   const sig = await sendAll(signer, [ix]);
@@ -1527,11 +1541,10 @@ async function persistLocalSpec(marketAddress: string, spec: unknown): Promise<v
 /**
  * Shares bought for `costUi`, in UI units.
  *
- * Solves `C(q + shares) - C(q) = cost` by monotonic binary search — the same
- * method the program's `shares_for_cost` uses, so the value agrees with the
- * on-chain result to float precision. (A closed-form inversion is not used:
- * the previous one was both dimensionally wrong and returned base units,
- * which made every buy revert with `SlippageTooHigh`.)
+ * `lmsrSharesForCost` is the same closed form as the program's
+ * `shares_for_cost`, evaluated in base units (as on-chain) and only then
+ * scaled to UI units. (An earlier closed form here was dimensionally wrong and
+ * returned base units, which made every buy revert with `SlippageTooHigh`.)
  */
 export function sharesForCostUi(
   m: ChainMarketAccount,
@@ -1539,21 +1552,12 @@ export function sharesForCostUi(
   costUi: number,
   scale: number = SOL_DECIMALS
 ): number {
-  const b = m.b.toNumber();
-  const ys = m.yesShares.toNumber();
-  const ns = m.noShares.toNumber();
   const cost = costUi * scale;
   if (!Number.isFinite(cost) || cost <= 0) return 0;
-
-  let lo = 0;
-  let hi = 1;
-  while (lmsrBuyCost(ys, ns, b, side, hi) < cost) hi *= 2;
-  for (let i = 0; i < 80; i++) {
-    const mid = (lo + hi) / 2;
-    if (lmsrBuyCost(ys, ns, b, side, mid) < cost) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2 / scale;
+  return (
+    lmsrSharesForCost(m.yesShares.toNumber(), m.noShares.toNumber(), m.b.toNumber(), side, cost) /
+    scale
+  );
 }
 
 /**

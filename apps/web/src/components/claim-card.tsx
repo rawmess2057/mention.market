@@ -5,7 +5,7 @@ import { PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/viz/confetti";
 import { cn, fmtErr, fmtSol } from "@/lib/format";
-import { settleMajority } from "@/lib/parimutuel";
+import { claimPayout, isVoided, positionCost } from "@/lib/settle";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
@@ -30,20 +30,9 @@ export function ClaimCard({ market }: { market: Market }) {
 
   if (!pos || m.status !== "resolved" || !m.winningOutcome) return null;
 
-  let payout = 0;
-  let cost = 0;
-  if (m.type === "binary") {
-    const yes = pos.yesShares ?? 0;
-    const no = pos.noShares ?? 0;
-    payout = m.winningOutcome === "yes" ? yes : no;
-    cost = (pos.avgYesPrice ?? 0) * yes + (pos.avgNoPrice ?? 0) * no;
-  } else if (pos.wordBacks) {
-    const settled = settleMajority(m.words ?? [], m.winningOutcome);
-    const backed = pos.wordBacks[m.winningOutcome] ?? 0;
-    payout = settled.yourShare(backed);
-    cost = Object.values(pos.wordBacks).reduce((s, v) => s + v, 0);
-  }
-
+  const voided = isVoided(m);
+  const payout = claimPayout(m, pos)?.payout ?? 0;
+  const cost = positionCost(pos);
   const profit = payout - cost;
   const won = payout > 0;
 
@@ -57,10 +46,12 @@ export function ClaimCard({ market }: { market: Market }) {
     >
       <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
         <PartyPopper className={cn("h-3.5 w-3.5", won ? "text-yes" : "text-gray-mid")} aria-hidden />
-        <span className="label-caps text-navy">{won ? "You called it" : "Resolved"}</span>
+        <span className="label-caps text-navy">
+          {voided ? "Market voided" : won ? "You called it" : "Resolved"}
+        </span>
         <span className="tnum ml-auto text-micro text-gray-mid">
-          winner{" "}
-          <span className="font-mono font-bold text-yes">
+          {voided ? "ruling" : "winner"}{" "}
+          <span className={cn("font-mono font-bold", voided ? "text-navy" : "text-yes")}>
             {m.winningOutcome.toUpperCase()}
           </span>
         </span>
@@ -68,7 +59,7 @@ export function ClaimCard({ market }: { market: Market }) {
 
       <div className="space-y-2.5 p-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-label text-gray-mid">Your payout</span>
+          <span className="text-label text-gray-mid">{voided ? "Your refund" : "Your payout"}</span>
           <span className="tnum font-mono text-2xl font-bold text-navy">{fmtSol(payout)}</span>
         </div>
         <div className="flex items-center justify-between text-label">
@@ -106,8 +97,17 @@ export function ClaimCard({ market }: { market: Market }) {
               }
             }}
           >
-            {pos.claimed ? "Claimed ✓" : claiming ? "Claiming…" : `Claim ${fmtSol(payout)}`}
+            {pos.claimed
+              ? "Claimed ✓"
+              : claiming
+                ? "Claiming…"
+                : `Claim ${voided ? "refund " : ""}${fmtSol(payout)}`}
           </Button>
+        ) : voided ? (
+          <p className="rounded-tile bg-ink-50 px-3 py-2 text-micro leading-relaxed text-gray-mid">
+            The market was voided, so every position is refunded. This one has nothing left to
+            refund.
+          </p>
         ) : (
           <p className="rounded-tile bg-ink-50 px-3 py-2 text-micro leading-relaxed text-gray-mid">
             The market resolved at {m.winningOutcome.toUpperCase()}

@@ -21,7 +21,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn, fmtBalance, fmtTimeLeft, shortAddr } from "@/lib/format";
 import { lmsrPositionValue, lmsrProbYes } from "@/lib/lmsr";
 import { pnlSeries, summarizePnl, verticalBreakdown } from "@/lib/pnl";
-import { claimableAmounts } from "@/lib/settle";
+import { claimableAmounts, isVoided } from "@/lib/settle";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
@@ -608,7 +608,8 @@ function PositionsTab({ className }: { className?: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-navy">{m.title}</div>
                     <div className="text-xs text-gray-mid">
-                      {m.event} · winner: {m.winningOutcome?.toUpperCase()}
+                      {m.event} ·{" "}
+                      {isVoided(m) ? "voided, refund" : `winner: ${m.winningOutcome?.toUpperCase()}`}
                     </div>
                   </div>
                   <span className="font-mono text-lg font-bold text-green">{fmtBalance(amt)}</span>

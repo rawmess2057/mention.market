@@ -5,9 +5,17 @@
 //! `payout = backed / win_pool * net_pot` where
 //! `net_pot = total_pool * (1 - creator_fee_bps / 10000)`. The rake stays in
 //! the vault. Claims are one-shot (`position.claimed`).
+//!
+//! A voided market (`winning_outcome == VOID_OUTCOME`) refunds instead:
+//! - binary: every YES and NO share redeems at half value. Always solvent — the
+//!   LMSR vault holds `C(q) >= max(yes, no) >= (yes + no) / 2`. Cost-basis
+//!   refunds would not be: profitable exits drain the vault below the sum of
+//!   the remaining cost bases. 50/50 also can't be gamed by pumping the price.
+//! - majority: every back is returned in full, with no rake (vault >= pot).
 
 use anchor_lang::prelude::*;
 
+use crate::constants::VOID_OUTCOME;
 use crate::error::ErrorCode;
 use crate::state::{Market, MarketStatus, MarketType, Position, Vault};
 
@@ -80,6 +88,9 @@ pub fn handler(ctx: Context<Claim>) -> Result<()> {
 /// Gross payout owed (base units) for this position; 0 when it holds nothing
 /// on the winning side.
 pub fn payout_for(market: &Market, position: &Position, outcome: &str) -> Result<u64> {
+    if outcome == VOID_OUTCOME {
+        return void_refund(market, position);
+    }
     match market.market_type {
         MarketType::Binary => {
             let shares = if outcome == "yes" {
@@ -114,6 +125,24 @@ pub fn payout_for(market: &Market, position: &Position, outcome: &str) -> Result
             Ok(payout.floor() as u64)
         }
     }
+}
+
+/// Refund owed for `position` in a voided market (see module docs).
+fn void_refund(market: &Market, position: &Position) -> Result<u64> {
+    Ok(match market.market_type {
+        MarketType::Binary => {
+            let shares = position
+                .yes_shares
+                .checked_add(position.no_shares)
+                .ok_or(ErrorCode::InsufficientAmount)?;
+            shares / 2
+        }
+        MarketType::Majority => position
+            .word_backs
+            .iter()
+            .try_fold(0u64, |sum, b| sum.checked_add(b.amount))
+            .ok_or(ErrorCode::InsufficientAmount)?,
+    })
 }
 
 #[event]
@@ -229,5 +258,31 @@ mod tests {
         let mut p = position();
         p.word_backs = vec![WordBack { word: "AI".into(), amount: 1_000 }];
         assert_eq!(payout_for(&m, &p, "AI").unwrap(), 990);
+    }
+
+    #[test]
+    fn void_binary_redeems_every_share_at_half() {
+        let m = market(MarketType::Binary);
+        let mut p = position();
+        p.yes_shares = 101;
+        p.no_shares = 40;
+        // (101 + 40) / 2 = 70.5 -> 70 (floor keeps the vault solvent).
+        assert_eq!(payout_for(&m, &p, VOID_OUTCOME).unwrap(), 70);
+    }
+
+    #[test]
+    fn void_majority_refunds_every_back_without_rake() {
+        let mut m = market(MarketType::Majority);
+        m.words = vec![
+            WordPool { word: "AI".into(), pool: 400, bettors: 1 },
+            WordPool { word: "Solana".into(), pool: 600, bettors: 1 },
+        ];
+        m.total_pool = 1_000;
+        let mut p = position();
+        p.word_backs = vec![
+            WordBack { word: "AI".into(), amount: 300 },
+            WordBack { word: "Solana".into(), amount: 50 },
+        ];
+        assert_eq!(payout_for(&m, &p, VOID_OUTCOME).unwrap(), 350);
     }
 }

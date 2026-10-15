@@ -10,6 +10,7 @@ import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Evidence, Market } from "@/lib/types";
+import { isVoided, VOID_OUTCOME } from "@/lib/settle";
 
 export function EvidenceSection({ market }: { market: Market }) {
   const m = useSim((s) => s.markets[market.id]) ?? market;
@@ -23,8 +24,10 @@ export function EvidenceSection({ market }: { market: Market }) {
   const label =
     m.status === "resolving"
       ? "AI resolver is preparing evidence…"
-      : m.winningOutcome
-        ? `Winner: ${m.winningOutcome.toUpperCase()}`
+      : isVoided(m)
+        ? "Voided: positions refunded"
+        : m.winningOutcome
+          ? `Winner: ${m.winningOutcome.toUpperCase()}`
         : "Evidence ready";
 
   return (
@@ -125,7 +128,9 @@ function EvidenceModal({
                 <Progress value={ev.confidence} indicatorClassName="bg-blue" />
               </div>
               <div className="text-right">
-                <div className="text-[10px] uppercase text-gray-mid">Winner</div>
+                <div className="text-[10px] uppercase text-gray-mid">
+                  {ev.winningOutcome === VOID_OUTCOME ? "Ruling" : "Winner"}
+                </div>
                 <div className="font-mono text-sm font-bold text-green">
                   {ev.winningOutcome.toUpperCase()}
                 </div>
@@ -172,27 +177,35 @@ function EvidenceModal({
             </div>
 
             {!ev.challenged && m.status === "resolving" && (
-              <Button
-                variant="destructive"
-                size="lg"
-                className="w-full"
-                disabled={challenging}
-                onClick={async () => {
-                  if (challenging) return;
-                  setChallenging(true);
-                  try {
-                    if (chainMarket) await chain.challenge(m.id);
-                    challenge(m.id);
-                    onOpenChange(false);
-                  } catch (err) {
-                    showToast(`Challenge failed: ${fmtErr(err)}`);
-                  } finally {
-                    setChallenging(false);
-                  }
-                }}
-              >
-                Challenge (bond {fmtBond(ev)})
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  className="w-full"
+                  disabled={challenging}
+                  onClick={async () => {
+                    if (challenging) return;
+                    setChallenging(true);
+                    try {
+                      if (chainMarket) await chain.challenge(m.id);
+                      challenge(m.id);
+                      onOpenChange(false);
+                    } catch (err) {
+                      showToast(`Challenge failed: ${fmtErr(err)}`);
+                    } finally {
+                      setChallenging(false);
+                    }
+                  }}
+                >
+                  Challenge (bond {fmtBond(ev)})
+                </Button>
+                {chainMarket && (
+                  <p className="text-center text-xs text-gray-mid">
+                    If the resolver changes the outcome, you get your bond back plus theirs. If it
+                    re-proposes the same outcome, your bond goes to the treasury.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -7,6 +7,7 @@ import {
   hashResolutionSpec,
   validateEvidenceManifest,
   validateResolutionSpec,
+  VOID_OUTCOME,
 } from "../src/contracts.mjs";
 
 const spec = {
@@ -95,6 +96,29 @@ test("evidence manifest is bound to its market spec, source, and outcome", () =>
     ...boundManifest,
     source: { ...boundManifest.source, sourceId: "other-event" },
   }, spec), /source does not match/);
+});
+
+test("void is valid manual evidence for any spec but never an outcome option", () => {
+  const voidManifest = {
+    ...manifest,
+    specSha256: hashResolutionSpec(spec),
+    outcome: VOID_OUTCOME,
+    excerpts: [],
+    evaluator: { method: "manual", version: "exact-phrase/1", matchedExcerptIndexes: [] },
+    review: { ...manifest.review, rationale: "Stream was cancelled; no source to evaluate." },
+  };
+  assert.equal(validateEvidenceManifest(voidManifest, spec), voidManifest);
+  assert.throws(
+    () => validateEvidenceManifest({ ...voidManifest, evaluator: { ...voidManifest.evaluator, method: "deterministic" } }, spec),
+    /requires evaluator.method "manual"/
+  );
+  const majority = {
+    ...spec,
+    marketType: "majority",
+    outcomeOptions: ["AI", "Void"],
+    terms: [{ phrase: "AI", outcome: "AI" }, { phrase: "Void", outcome: "Void" }],
+  };
+  assert.throws(() => validateResolutionSpec(majority), /reserved/);
 });
 
 test("canonical JSON rejects values that do not have portable JSON encodings", () => {

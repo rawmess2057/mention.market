@@ -24,6 +24,7 @@ import {
   marketPda,
   programFor,
   resolutionSpecPda,
+  settlementAccounts,
   sha256BytesHex,
   SYSTEM_PROGRAM,
   vaultPda,
@@ -274,6 +275,11 @@ async function submit(program, resolver, market, encoded, flags = {}) {
   console.log(`  post_evidence: ${postSig}`);
 
   console.log(`proposing outcome "${decoded.outcome}" confidence ${decoded.confidence}`);
+  const { open, ...settle } = await settlementAccounts(program, markets);
+  if (open) {
+    const verdict = open.challengedOutcome === decoded.outcome ? "rejected" : "upheld";
+    console.log(`  settles challenge on "${open.challengedOutcome}" by ${open.challenger.toBase58()}: ${verdict}`);
+  }
   const proposeSig = await program.methods
     .proposeResolution(decoded.outcome, decoded.confidence, Array.from(sha256))
     .accounts({
@@ -283,6 +289,7 @@ async function submit(program, resolver, market, encoded, flags = {}) {
       vault: vaultPda(markets),
       resolutionSpec: resolutionSpecPda(markets),
       evidence,
+      ...settle,
       systemProgram: SYSTEM_PROGRAM,
     })
     .preInstructions(budget())
@@ -425,6 +432,7 @@ function printUsage() {
       "  node resolver.mjs resolve  <market> --audio <file> [--approve --reviewer R --rationale T] [--dry]",
       "  node resolver.mjs resolve  <market> --audio-url <url> [--approve --reviewer R --rationale T] [--dry]",
       "  node resolver.mjs resolve  <market> --force <outcome> [--approve --reviewer R --rationale T] [--dry]",
+      "                             (--force void voids the market: binary shares refund 50/50, word backs in full)",
       "  node resolver.mjs post     <candidate.json> [--dry]",
       "  node resolver.mjs finalize <market>",
       "  node resolver.mjs watch    [--interval <sec>]",

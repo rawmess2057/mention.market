@@ -77,7 +77,7 @@ export function DiscoverHero({
           </div>
 
           <h1 className="mt-5 font-display text-[52px] leading-[0.95] tracking-[-0.015em] text-fg sm:text-[64px] md:text-[80px]">
-            What gets <span className="quote-hit">said</span>.
+            <span className="quote-hit">Words</span> move markets.
           </h1>
 
           <p className="mt-5 max-w-md text-[15px] leading-relaxed text-fg-muted md:text-base">

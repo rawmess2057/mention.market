@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSolBalance } from "@/hooks/useSolBalance";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 
 /**
  * Bridges the connected wallet into the per-wallet sim book:
@@ -14,8 +14,8 @@ import { useSim } from "@/lib/sim";
 export function WalletSync() {
   const { connected, publicKey } = useWallet();
   const { solBalance } = useSolBalance();
-  const setWallet = useSim((s) => s.setWallet);
-  const setBalance = useSim((s) => s.setBalance);
+  const setWallet = useStore((s) => s.setWallet);
+  const setBalance = useStore((s) => s.setBalance);
 
   useEffect(() => {
     setWallet(connected && publicKey ? publicKey.toBase58() : null);
@@ -24,7 +24,7 @@ export function WalletSync() {
   useEffect(() => {
     if (!connected || !publicKey || solBalance === null) return;
     const wallet = publicKey.toBase58();
-    const cur = useSim.getState().books[wallet]?.user;
+    const cur = useStore.getState().books[wallet]?.user;
     if (!cur || cur.balance !== solBalance) {
       setBalance(wallet, solBalance);
     }

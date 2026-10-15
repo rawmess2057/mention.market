@@ -18,9 +18,9 @@ import { MarketHero } from "@/components/market-hero";
 import { PositionCard } from "@/components/position-card";
 import { ClaimCard } from "@/components/claim-card";
 import { ActivityFeed } from "@/components/activity-feed";
-import { TheWhisper } from "@/components/the-whisper";
 import { fmtAgo, fmtSol } from "@/lib/format";
-import { useSim, WATCH_WORDS } from "@/lib/sim";
+import { useStore } from "@/lib/store";
+import { watchWordsFor } from "@/lib/watch-words";
 import { useNow } from "@/hooks/useNow";
 import { useChainActivity } from "@/hooks/useChainActivity";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
@@ -36,10 +36,10 @@ const PriceChartWithTimeframe = dynamic(
 
 export default function MarketPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const markets = useSim((s) => s.markets);
-  const history = useSim((s) => s.history);
-  const wordHistory = useSim((s) => s.wordHistory);
-  const showToast = useSim((s) => s.showToast);
+  const markets = useStore((s) => s.markets);
+  const history = useStore((s) => s.history);
+  const wordHistory = useStore((s) => s.wordHistory);
+  const showToast = useStore((s) => s.showToast);
   const now = useNow(1000);
   const isDesktop = useIsDesktop();
   const m = Object.values(markets).find((x) => x.slug === slug);
@@ -74,7 +74,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
     );
   }
 
-  const watch = WATCH_WORDS[m.slug] ?? [m.title.replace(/[^a-zA-Z ]/g, "").trim()];
+  const watch = watchWordsFor(m);
   const marketHistory = history[m.id] ?? [];
   const lastAt = marketHistory.length > 0 ? marketHistory[marketHistory.length - 1].t : 0;
   const chainYes =
@@ -193,7 +193,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
               </TabsList>
 
               <TabsContent value="transcript">
-                <PulseFeed slug={m.slug} watchWords={watch} className="h-[520px]" />
+                <PulseFeed market={m} watchWords={watch} />
               </TabsContent>
 
               <TabsContent value="activity">
@@ -290,7 +290,6 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
         </SheetContent>
       </Sheet>
 
-      <TheWhisper />
     </>
   );
 }

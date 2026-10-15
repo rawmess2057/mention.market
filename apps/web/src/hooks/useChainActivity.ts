@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { fetchChainActivity, isChainId, SOL_DECIMALS } from "@/lib/chain";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import type { Market } from "@/lib/types";
 
 const POLL_MS = 30_000;
@@ -16,10 +16,10 @@ const JITTER_MS = 5_000;
  * whose activity is generated locally.
  */
 export function useChainActivity(market: Market | undefined): void {
-  const ingest = useSim((s) => s.ingestChainActivity);
+  const ingest = useStore((s) => s.ingestChainActivity);
   const marketId = market?.id;
-  const volume = useSim((s) => (marketId ? (s.markets[marketId]?.volume ?? 0) : 0));
-  const nonce = useSim((s) =>
+  const volume = useStore((s) => (marketId ? (s.markets[marketId]?.volume ?? 0) : 0));
+  const nonce = useStore((s) =>
     marketId ? (s.chainActivityNonce[marketId] ?? 0) : 0
   );
 

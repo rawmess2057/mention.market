@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Activity } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn, fmtAgo, fmtSol, shortAddr } from "@/lib/format";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 
 /**
  * Live tape of fills. Replaces the old "OrderBook" panel, which showed a
@@ -21,15 +21,12 @@ export function RecentTrades({
   limit?: number;
   className?: string;
 }) {
-  const chainActivity = useSim((s) => s.chainActivity[marketId]);
-  const simActivity = useSim((s) => s.activity);
+  const chainActivity = useStore((s) => s.chainActivity[marketId]);
 
   const items = useMemo(
     () =>
-      [...(chainActivity ?? []), ...simActivity.filter((a) => a.marketId === marketId)]
-        .sort((a, b) => b.at - a.at)
-        .slice(0, limit),
-    [chainActivity, simActivity, marketId, limit]
+      [...(chainActivity ?? [])].sort((a, b) => b.at - a.at).slice(0, limit),
+    [chainActivity, limit]
   );
 
   return (

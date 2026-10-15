@@ -13,7 +13,7 @@ import {
   type ChainCreateParams,
   type ChainTradeResult,
 } from "@/lib/chain";
-import { lmsrSharesForCost, lmsrSellValue, useSim } from "@/lib/sim";
+import { lmsrSharesForCost, lmsrSellValue, useStore } from "@/lib/store";
 import type { Market } from "@/lib/types";
 
 /**
@@ -24,8 +24,8 @@ import type { Market } from "@/lib/types";
  */
 export function useChain() {
   const { connected, publicKey, signTransaction } = useWallet();
-  const setBalance = useSim((s) => s.setBalance);
-  const bumpChainActivity = useSim((s) => s.bumpChainActivity);
+  const setBalance = useStore((s) => s.setBalance);
+  const bumpChainActivity = useStore((s) => s.bumpChainActivity);
 
   const refreshBalance = useCallback(
     async (wallet: string, result: ChainTradeResult) => {

@@ -5,7 +5,7 @@ import {
   POINTS_PER_SOL,
   holdToResolvePoints,
   pointsForTrade,
-} from "../sim";
+} from "../store";
 import type { Position } from "../types";
 
 describe("points rules", () => {

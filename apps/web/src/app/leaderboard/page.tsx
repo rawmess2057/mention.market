@@ -1,113 +1,85 @@
 "use client";
 
 import { useMemo } from "react";
-import { Medal } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { cn, fmtBalance, fmtSol, shortAddr } from "@/lib/format";
-import { LEADERBOARD, useSim } from "@/lib/sim";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
-const MEDALS = ["text-warn", "text-fg-subtle", "text-orange-600"];
+import { Button } from "@/components/ui/button";
+import { cn, fmtBalance, fmtPct } from "@/lib/format";
+import { useStore } from "@/lib/store";
 
+/**
+ * A global ranking needs every wallet's trades, which arrive with the indexer.
+ * Until then this page shows the connected wallet's own record — real data,
+ * from this browser's trade history.
+ */
 export default function LeaderboardPage() {
-  const { connected, publicKey } = useWallet();
-  const user = useSim((s) => s.user);
-  const trades = useSim((s) => s.trades);
-  const leaderboard = LEADERBOARD;
+  const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
+  const user = useStore((s) => s.user);
+  const trades = useStore((s) => s.trades);
 
-  const me = useMemo(() => {
-    if (!connected || !publicKey) return null;
-    const realized = trades.reduce((s, t) => s + t.pnl, 0);
+  const stats = useMemo(() => {
     const closed = trades.filter((t) => t.kind === "sell" || t.kind === "claim");
-    const wins = closed.filter((t) => (t.pnl ?? 0) > 0).length;
+    const wins = closed.filter((t) => t.pnl > 0).length;
     return {
-      rank: 0, // recomputed below after sorting
-      handle: shortAddr(publicKey.toBase58()),
-      avatarSeed: "you",
       points: user.points,
-      profit: realized,
-      winRate: closed.length > 0 ? wins / closed.length : 0,
-      closedTrades: closed.length,
+      realized: closed.reduce((s, t) => s + t.pnl, 0),
+      winRate: closed.length > 0 ? wins / closed.length : null,
       trades: trades.length,
     };
-  }, [connected, publicKey, user.points, trades]);
-
-  const rows = useMemo(
-    () =>
-      [...leaderboard]
-        .concat(me ?? [])
-        .sort((a, b) => b.points - a.points)
-        .map((r, i) => ({ ...r, rank: i + 1 })),
-    [leaderboard, me]
-  );
+  }, [trades, user.points]);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-fg">Leaderboard</h1>
-        <p className="text-sm text-fg-muted">
-          Weekly points from trading, winning and holding through resolution.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Leaderboard</h1>
+        <p className="mt-1 text-sm text-fg-muted">Points for trading, holding to resolution and claiming.</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-        {rows.map((row, i) => (
-          <div
-            key={row.handle}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3",
-              i > 0 && "border-t border-line",
-              row.handle === user.handle && "bg-accent-soft"
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                i < 3 ? "bg-surface-2 " + MEDALS[i] : "text-fg-muted"
-              )}
-            >
-              {i < 3 ? <Medal className="h-4 w-4" /> : row.rank}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-                {row.handle}
-                {row.handle === user.handle && (
-                  <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
-                    YOU · #{row.rank}
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-fg-muted">
-                {row.trades} trades · {me && row.handle === me.handle && me.closedTrades === 0 ? "—" : `${(row.winRate * 100).toFixed(0)}% win rate`}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-mono text-sm font-bold text-accent">
-                {row.points.toLocaleString()} pts
-              </div>
-              <div
-                className={cn(
-                  "font-mono text-[11px]",
-                  row.profit >= 0 ? "text-yes" : "text-no"
-                )}
-              >
-                {me && row.handle === me.handle
-                  ? `${row.profit >= 0 ? "+" : ""}${fmtBalance(row.profit, { compact: true })}`
-                  : `${row.profit >= 0 ? "+" : ""}${fmtSol(row.profit, { compact: true })}`}
-              </div>
-            </div>
+      <section className="panel p-5">
+        <div className="label-caps">Your record</div>
+        {connected ? (
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat label="Points" value={stats.points.toLocaleString()} />
+            <Stat
+              label="Realized P&L"
+              value={`${stats.realized >= 0 ? "+" : ""}${fmtBalance(stats.realized)}`}
+              tone={stats.realized > 0 ? "yes" : stats.realized < 0 ? "no" : undefined}
+            />
+            <Stat label="Win rate" value={stats.winRate == null ? "—" : fmtPct(stats.winRate)} />
+            <Stat label="Trades" value={String(stats.trades)} />
           </div>
-        ))}
-      </div>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-fg-muted">Connect a wallet to see your points and record.</p>
+            <Button size="sm" onClick={() => setVisible(true)}>
+              Connect wallet
+            </Button>
+          </div>
+        )}
+      </section>
 
-      <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-muted">
-          How points work
-        </div>
-        <ul className="space-y-1 text-sm text-fg-muted">
-          <li>+2 pts per SOL traded</li>
-          <li>+25 pts per winning claim</li>
-          <li>+10 pts for holding through resolution</li>
-        </ul>
+      <section className="panel flex flex-col items-center gap-3 px-6 py-12 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-soft">
+          <Trophy className="h-5 w-5 text-accent" aria-hidden />
+        </span>
+        <h2 className="text-base font-semibold text-fg">Global rankings are coming</h2>
+        <p className="max-w-sm text-sm text-fg-muted">
+          Rankings across every wallet go live with the on-chain indexer. Points you earn now count toward them.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "yes" | "no" }) {
+  return (
+    <div>
+      <div className="text-xs text-fg-subtle">{label}</div>
+      <div className={cn("tnum mt-1 text-xl font-semibold text-fg", tone === "yes" && "text-yes", tone === "no" && "text-no")}>
+        {value}
       </div>
     </div>
   );

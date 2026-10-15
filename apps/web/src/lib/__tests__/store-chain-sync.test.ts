@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useSim } from "../sim";
+import { useStore } from "../store";
 import { reconcileChainMarkets } from "../chain";
 import type { Market } from "../types";
 
@@ -56,7 +56,7 @@ describe("reconcileChainMarkets", () => {
 
 describe("syncChainMarkets", () => {
   beforeEach(() => {
-    useSim.setState({
+    useStore.setState({
       markets: { c9: market("c9"), c7001: market("c7001"), m1: market("m1") },
       chainSynced: false,
       chainSyncError: false,
@@ -64,36 +64,36 @@ describe("syncChainMarkets", () => {
   });
 
   it("prunes a closed market left over from a previous session", () => {
-    useSim.getState().syncChainMarkets([market("c9")]);
-    expect(Object.keys(useSim.getState().markets).sort()).toEqual(["c9", "m1"]);
+    useStore.getState().syncChainMarkets([market("c9")]);
+    expect(Object.keys(useStore.getState().markets).sort()).toEqual(["c9", "m1"]);
   });
 
   it("empties the on-chain slate when devnet has no markets", () => {
-    useSim.getState().syncChainMarkets([]);
-    expect(Object.keys(useSim.getState().markets)).toEqual(["m1"]);
+    useStore.getState().syncChainMarkets([]);
+    expect(Object.keys(useStore.getState().markets)).toEqual(["m1"]);
   });
 
   it("flags the store as synced even when devnet has no markets", () => {
-    expect(useSim.getState().chainSynced).toBe(false);
-    useSim.getState().syncChainMarkets([]);
-    expect(useSim.getState().chainSynced).toBe(true);
-    expect(useSim.getState().chainSyncError).toBe(false);
+    expect(useStore.getState().chainSynced).toBe(false);
+    useStore.getState().syncChainMarkets([]);
+    expect(useStore.getState().chainSynced).toBe(true);
+    expect(useStore.getState().chainSyncError).toBe(false);
   });
 
   it("clears a previous sync error on the next successful poll", () => {
-    useSim.getState().setChainSyncError(true);
-    expect(useSim.getState().chainSyncError).toBe(true);
-    useSim.getState().syncChainMarkets([market("c9")]);
-    expect(useSim.getState().chainSyncError).toBe(false);
+    useStore.getState().setChainSyncError(true);
+    expect(useStore.getState().chainSyncError).toBe(true);
+    useStore.getState().syncChainMarkets([market("c9")]);
+    expect(useStore.getState().chainSyncError).toBe(false);
   });
 
   it("also drops the pruned market's chart history", () => {
-    useSim.setState({
+    useStore.setState({
       history: { c7001: [{ t: 1, v: 0.5 }] },
       wordHistory: { c7001: { agents: [{ t: 1, v: 0.5 }] } },
     });
-    useSim.getState().syncChainMarkets([]);
-    expect(useSim.getState().history).toEqual({});
-    expect(useSim.getState().wordHistory).toEqual({});
+    useStore.getState().syncChainMarkets([]);
+    expect(useStore.getState().history).toEqual({});
+    expect(useStore.getState().wordHistory).toEqual({});
   });
 });

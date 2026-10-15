@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/viz/confetti";
 import { cn, fmtErr, fmtSol } from "@/lib/format";
 import { claimPayout, isVoided, positionCost } from "@/lib/settle";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
@@ -18,10 +18,10 @@ import type { Market } from "@/lib/types";
  * and a losing position should be told plainly rather than hidden.
  */
 export function ClaimCard({ market }: { market: Market }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
-  const pos = useSim((s) => s.positions[m.id]);
-  const claim = useSim((s) => s.claim);
-  const showToast = useSim((s) => s.showToast);
+  const m = useStore((s) => s.markets[market.id]) ?? market;
+  const pos = useStore((s) => s.positions[m.id]);
+  const claim = useStore((s) => s.claim);
+  const showToast = useStore((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
   const [flash, setFlash] = useState(false);

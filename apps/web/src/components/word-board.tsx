@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Flame, ListFilter } from "lucide-react";
 import { OutcomeRow } from "@/components/ui/outcome-row";
 import { cn, fmtSol } from "@/lib/format";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useNow } from "@/hooks/useNow";
 import type { Market } from "@/lib/types";
 
@@ -29,7 +29,7 @@ export function WordBoard({
   onSelect: (word: string) => void;
   className?: string;
 }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
+  const m = useStore((s) => s.markets[market.id]) ?? market;
   const now = useNow(5000);
   const [sort, setSort] = useState<SortKey>("pool");
 

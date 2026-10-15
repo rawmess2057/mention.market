@@ -23,7 +23,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { cn, fmtAgo, fmtSol, shortAddr } from "@/lib/format";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import type { NotificationItem } from "@/lib/types";
 
 const WalletMultiButton = dynamic(
@@ -40,8 +40,8 @@ const NAV = [
 
 export function TopBar() {
   const { connected, publicKey, disconnect } = useWallet();
-  const user = useSim((s) => s.user);
-  const showToast = useSim((s) => s.showToast);
+  const user = useStore((s) => s.user);
+  const showToast = useStore((s) => s.showToast);
   const pathname = usePathname();
 
   return (
@@ -157,8 +157,8 @@ const NOTIF_ICON: Record<NotificationItem["kind"], React.ReactNode> = {
 };
 
 function NotifBell() {
-  const notifications = useSim((s) => s.notifications);
-  const markAllRead = useSim((s) => s.markAllRead);
+  const notifications = useStore((s) => s.notifications);
+  const markAllRead = useStore((s) => s.markAllRead);
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
@@ -260,7 +260,7 @@ export function BottomNav() {
 }
 
 export function UserBadge() {
-  const user = useSim((s) => s.user);
+  const user = useStore((s) => s.user);
   return (
     <div className="flex items-center gap-2 text-xs text-fg-muted">
       <User className="h-3.5 w-3.5" />

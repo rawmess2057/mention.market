@@ -5,16 +5,16 @@ import { Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
 import { lmsrPositionValue } from "@/lib/lmsr";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 export function PositionCard({ market }: { market: Market }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
-  const pos = useSim((s) => s.positions[m.id]);
-  const sellBinary = useSim((s) => s.sellBinary);
-  const showToast = useSim((s) => s.showToast);
+  const m = useStore((s) => s.markets[market.id]) ?? market;
+  const pos = useStore((s) => s.positions[m.id]);
+  const sellBinary = useStore((s) => s.sellBinary);
+  const showToast = useStore((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
   const [selling, setSelling] = useState<string | null>(null);

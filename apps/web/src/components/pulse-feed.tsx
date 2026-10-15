@@ -1,202 +1,106 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Radio, Search } from "lucide-react";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
-import { cn, fmtClock } from "@/lib/format";
-import { useSim } from "@/lib/sim";
-import { WaveformAvatar } from "@/components/waveform-avatar";
+import { AudioLines, FileCheck2, Radio } from "lucide-react";
+
+import { cn } from "@/lib/format";
+import type { Market } from "@/lib/types";
 
 /**
- * The live transcript — this product's oracle, so it gets a first-class panel.
- *
- * Two behaviours worth calling out, both from the field research on live data:
- * the feed stops auto-scrolling the moment someone scrolls up (nothing is more
- * hostile than a feed that yanks itself away), and watched words carry a hit
- * scoreboard so the transcript reads as a scoreboard rather than a log.
+ * The transcript panel. Markets resolve from a recording transcribed after the
+ * event (recordings first; live capture comes later), so before resolution
+ * this says what is being listened for, and after a proposal it shows the
+ * quote the decision rests on — the evidence committed on-chain.
  */
 export function PulseFeed({
-  slug,
+  market: m,
   watchWords,
   className,
 }: {
-  slug: string;
+  market: Market;
   watchWords: string[];
   className?: string;
 }) {
-  const lines = useSim((s) => s.transcript[slug]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [filter, setFilter] = useState("");
-  const [stick, setStick] = useState(true);
-
-  const all = useMemo(() => lines ?? [], [lines]);
-
-  const hits = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const w of watchWords) counts.set(w, 0);
-    if (all.length === 0) return counts;
-    const needles = [...counts.keys()].filter(Boolean).map((w) => w.toLowerCase());
-    if (needles.length === 0) return counts;
-    for (const line of all) {
-      const text = line.text.toLowerCase();
-      for (const w of counts.keys()) {
-        if (w && text.includes(w.toLowerCase())) counts.set(w, (counts.get(w) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [all, watchWords]);
-
-  const filtered = useMemo(
-    () =>
-      filter
-        ? all.filter(
-            (l) =>
-              l.text.toLowerCase().includes(filter.toLowerCase()) ||
-              l.speaker.toLowerCase().includes(filter.toLowerCase())
-          )
-        : all,
-    [all, filter]
-  );
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el && stick) el.scrollTop = el.scrollHeight;
-  }, [filtered, stick]);
-
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 64);
-  };
-
-  const jumpToLive = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    setStick(true);
-  };
+  const snippets = m.evidence?.snippets ?? [];
+  const decided = m.status === "resolving" || m.status === "resolved";
 
   return (
-    <div className={cn("panel flex min-h-0 flex-col overflow-hidden", className)}>
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <Radio className="live-dot text-no" aria-hidden />
-        <span className="label-caps text-fg">Live transcript</span>
-        <span className="tnum ml-auto text-micro text-fg-muted">
-          {all.length} lines
+    <section className={cn("panel flex flex-col overflow-hidden", className)}>
+      <header className="flex items-center gap-2 border-b border-line px-4 py-3">
+        {decided ? (
+          <FileCheck2 className="h-3.5 w-3.5 text-yes" aria-hidden />
+        ) : (
+          <Radio className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
+        )}
+        <span className="label-caps text-fg">Transcript</span>
+        <span className="ml-auto text-micro text-fg-subtle">
+          {decided ? "evidence on-chain" : m.status === "locked" ? "transcribing" : "after the event"}
         </span>
-      </div>
+      </header>
 
-      {watchWords.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2">
-          {watchWords.slice(0, 6).map((w) => {
-            const n = hits.get(w) ?? 0;
-            return (
-              <span
-                key={w}
-                title={`“${w}” said ${n} ${n === 1 ? "time" : "times"}`}
-                className={cn(
-                  "tnum inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-micro font-semibold",
-                  n > 0
-                    ? "border-yes-line bg-yes-soft text-yes"
-                    : "border-line bg-surface text-fg-muted"
-                )}
-              >
-                {w}
-                <span className="opacity-70">{n}×</span>
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="border-b border-line px-3 py-2">
-        <div className="relative">
-          <Search
-            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
-            aria-hidden
-          />
-          <Input
-            placeholder="Find a moment…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            aria-label="Filter transcript"
-            className="h-8 border-0 bg-surface-2 pl-8 text-label"
-          />
-        </div>
-      </div>
-
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="thin-scroll h-full min-h-0 space-y-0.5 overflow-y-auto p-2.5"
-        >
-          {filtered.slice(-40).map((l, i) => (
-            <div
-              key={`${l.t}-${i}`}
-              className="animate-fade-in flex items-start gap-2 rounded-tile px-2 py-1.5 text-label leading-relaxed transition-colors hover:bg-surface-2"
-            >
-              <WaveformAvatar speaking={i >= filtered.length - 3} size="sm" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-micro font-semibold text-accent">{l.speaker}</span>
-                  <span className="tnum font-mono text-[10px] text-fg-muted">
-                    {fmtClock(l.t)}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-fg">
-                  <Highlight text={l.text} watch={watchWords} fresh={i >= filtered.length - 1} />
-                </p>
-              </div>
+      <div className="flex-1 space-y-4 p-4">
+        {watchWords.length > 0 && (
+          <div>
+            <div className="text-xs text-fg-subtle">Listening for</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {watchWords.map((w) => (
+                <span key={w} className="rounded-md border border-accent/25 bg-accent-soft px-2 py-1 text-xs font-medium text-fg">
+                  “{w}”
+                </span>
+              ))}
             </div>
-          ))}
-          {filtered.length === 0 && (
-            <EmptyState
-              className="rounded-none border-0"
-              title={all.length === 0 ? "Waiting for audio…" : "No matching lines"}
-              body={
-                all.length === 0
-                  ? "The transcript lands here the moment the stream is indexed."
-                  : "Try a different word or speaker."
-              }
-            />
-          )}
-        </div>
+          </div>
+        )}
 
-        {!stick && (
-          <button
-            type="button"
-            onClick={jumpToLive}
-            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 py-1.5 text-micro font-semibold text-fg shadow-dropdown transition-colors hover:bg-surface-2"
-          >
-            <ArrowDown className="h-3 w-3" aria-hidden />
-            Jump to live
-          </button>
+        {snippets.length > 0 ? (
+          <ul className="space-y-3">
+            {snippets.map((s, i) => (
+              <li key={i} className="rounded-lg border border-line bg-surface-2 p-3">
+                <div className="flex items-center gap-2 text-micro text-fg-subtle">
+                  <span className="tnum font-mono">{new Date(s.t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
+                  <span>·</span>
+                  <span>Speaker {s.speaker}</span>
+                </div>
+                <p className="mt-1.5 text-sm leading-relaxed text-fg">
+                  <Highlight text={s.text} watch={watchWords} />
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : decided ? (
+          <p className="text-sm leading-relaxed text-fg-muted">
+            Resolved by operator review, without a transcript quote (for example a voided market or a source that
+            couldn&apos;t be transcribed).
+          </p>
+        ) : (
+          <div className="flex items-start gap-3 rounded-lg border border-dashed border-line p-4">
+            <AudioLines className="mt-0.5 h-4 w-4 shrink-0 text-fg-subtle" aria-hidden />
+            <p className="text-sm leading-relaxed text-fg-muted">
+              {m.status === "locked"
+                ? "The event has ended. The recording is being transcribed; the quote that decides this market will appear here."
+                : "When the event ends, the recording is transcribed and checked for these words. The deciding quote appears here and is committed on-chain."}
+            </p>
+          </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
-function Highlight({ text, watch, fresh }: { text: string; watch: string[]; fresh: boolean }) {
-  if (watch.length === 0) return <span>{text}</span>;
-
-  const escaped = watch.map((w) => w.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(re);
-
+function Highlight({ text, watch }: { text: string; watch: string[] }) {
+  const needles = watch.filter(Boolean).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (needles.length === 0) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${needles.join("|")})`, "gi"));
   return (
-    <span>
+    <>
       {parts.map((part, i) =>
-        re.test(part) && watch.some((w) => w.trim().toLowerCase() === part.toLowerCase()) ? (
-          <span key={i} className={cn("word-hit", fresh && "word-hit-live")}>
+        i % 2 === 1 ? (
+          <mark key={i} className="word-hit">
             {part}
-          </span>
+          </mark>
         ) : (
           <span key={i}>{part}</span>
         )
       )}
-    </span>
+    </>
   );
 }

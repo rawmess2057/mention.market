@@ -8,7 +8,7 @@ import { WaveformStrip } from "@/components/viz/waveform-strip";
 import { cn, fmtSol, fmtTimeLeft } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { lmsrProbYes } from "@/lib/lmsr";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useNow } from "@/hooks/useNow";
 import type { Market } from "@/lib/types";
 import { rgba } from "@/lib/theme";
@@ -29,8 +29,8 @@ export function MarketHero({
   onTrade: (opts: { side?: "yes" | "no"; word?: string }) => void;
   className?: string;
 }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
-  const history = useSim((s) => s.history[m.id]);
+  const m = useStore((s) => s.markets[market.id]) ?? market;
+  const history = useStore((s) => s.history[m.id]);
   const now = useNow(1000);
 
   const isBinary = m.type === "binary";

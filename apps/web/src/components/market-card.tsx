@@ -9,7 +9,7 @@ import { Probability, DeltaPill } from "@/components/ui/probability";
 import { SplitBar } from "@/components/viz/split-bar";
 import { cn, fmtSol, fmtTimeLeft } from "@/lib/format";
 import { sessionChange, type HistoryInput } from "@/lib/history";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useNow } from "@/hooks/useNow";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 import { lmsrProbYes } from "@/lib/lmsr";
@@ -48,8 +48,8 @@ function VerticalChip({ vertical, className }: { vertical: Vertical; className?:
  * from. Trading lives one tap away on the market page.
  */
 export const MarketCard = memo(function MarketCard({ market }: { market: Market }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
-  const history = useSim((s) => s.history[m.id]);
+  const m = useStore((s) => s.markets[market.id]) ?? market;
+  const history = useStore((s) => s.history[m.id]);
   const now = useNow(5000);
 
   return (
@@ -190,7 +190,7 @@ export function LiveCarousel({ markets }: { markets: Market[] }) {
 }
 
 function LiveCard({ m }: { m: Market }) {
-  const history = useSim((s) => s.history[m.id]);
+  const history = useStore((s) => s.history[m.id]);
   const now = useNow(1000);
   const change = sessionChange(history);
   const p = m.type === "binary" ? lmsrProbYes(m.yesShares, m.noShares, m.b) : null;

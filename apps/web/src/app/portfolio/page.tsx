@@ -22,7 +22,7 @@ import { cn, fmtBalance, fmtTimeLeft, shortAddr } from "@/lib/format";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { pnlSeries, positionMark, summarizePnl, verticalBreakdown } from "@/lib/pnl";
 import { claimableAmounts, isVoided } from "@/lib/settle";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import { STATUS_META, type Market, type TradeRecord } from "@/lib/types";
@@ -190,10 +190,10 @@ const TAB_CLASS =
   "rounded-xl border border-line bg-surface p-4 shadow-card";
 
 function OverviewTab({ className }: { className?: string }) {
-  const markets = useSim((s) => s.markets);
-  const positions = useSim((s) => s.positions);
-  const user = useSim((s) => s.user);
-  const trades = useSim((s) => s.trades);
+  const markets = useStore((s) => s.markets);
+  const positions = useStore((s) => s.positions);
+  const user = useStore((s) => s.user);
+  const trades = useStore((s) => s.trades);
   const claimable = useMemo(
     () => claimableAmounts(positions, markets),
     [positions, markets]
@@ -434,11 +434,11 @@ function tSideLabel(side: string): string {
 /* ------------------------------------------------------------------ */
 
 function PositionsTab({ className }: { className?: string }) {
-  const markets = useSim((s) => s.markets);
-  const positions = useSim((s) => s.positions);
-  const user = useSim((s) => s.user);
-  const sellBinary = useSim((s) => s.sellBinary);
-  const claim = useSim((s) => s.claim);
+  const markets = useStore((s) => s.markets);
+  const positions = useStore((s) => s.positions);
+  const user = useStore((s) => s.user);
+  const sellBinary = useStore((s) => s.sellBinary);
+  const claim = useStore((s) => s.claim);
   const chain = useChain();
   const claimable = useMemo(
     () => claimableAmounts(positions, markets),
@@ -678,8 +678,8 @@ function PositionsTab({ className }: { className?: string }) {
 type HistFilter = "all" | "buy" | "sell" | "back" | "claim";
 
 function HistoryTab({ className }: { className?: string }) {
-  const trades = useSim((s) => s.trades);
-  const markets = useSim((s) => s.markets);
+  const trades = useStore((s) => s.trades);
+  const markets = useStore((s) => s.markets);
   const [filter, setFilter] = useState<HistFilter>("all");
 
   const filtered = useMemo(() => {

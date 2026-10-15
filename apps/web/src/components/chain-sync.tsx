@@ -9,9 +9,9 @@ import {
   isStaleChainMarket,
 } from "@/lib/chain";
 import { lmsrProbYes } from "@/lib/lmsr";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import type { PricePoint } from "@/lib/history";
-import type { Market } from "@/lib/types";
+import type { Market, NotificationItem } from "@/lib/types";
 import { isVoided } from "@/lib/settle";
 
 const POLL_MS = 30_000;
@@ -69,9 +69,9 @@ export function ChainSync() {
       try {
         const { leader, words } = await fetchChainSeries(Number(marketId.slice(1)));
         if (!alive) return;
-        useSim.getState().ingestChainHistory(marketId, leader);
+        useStore.getState().ingestChainHistory(marketId, leader);
         if (Object.keys(words).length > 0) {
-          useSim.getState().ingestWordHistory(marketId, words);
+          useStore.getState().ingestWordHistory(marketId, words);
         }
         // Mark even on empty so a history-less market isn't refetched forever.
         backfilled.current.set(marketId, volume);
@@ -86,7 +86,7 @@ export function ChainSync() {
       if (inspecting) return; // a slow devnet cycle must never stack on the next tick
       inspecting = true;
       try {
-        const prev = useSim.getState().markets;
+        const prev = useStore.getState().markets;
         const allMarkets = await fetchChainMarketsAll();
         if (!alive) return;
         // The GPA is the source of truth for what exists on-chain, so reconcile
@@ -94,12 +94,14 @@ export function ChainSync() {
         // `scripts/cleanup.mjs`) drops out instead of lingering on the home page
         // forever. Everything fetched stays in the store — even the stale
         // markets the lists below hide — so detail/claim views still resolve.
-        useSim.getState().syncChainMarkets(allMarkets);
+        useStore.getState().syncChainMarkets(allMarkets);
         const markets = allMarkets.filter((m) => !isStaleChainMarket(m));
-        // Newly-resolved on-chain markets the wallet holds a stake in → notify.
-        const fresh = markets.filter(
-          (m) => prev[m.id] && prev[m.id].status !== "resolved" && m.status === "resolved"
-        );
+        // Status transitions since the last poll, for markets the wallet holds.
+        const moved = (to: Market["status"]) =>
+          markets.filter((m) => prev[m.id] && prev[m.id].status !== to && m.status === to);
+        const locked = moved("locked");
+        const proposed = moved("resolving");
+        const fresh = moved("resolved");
 
         // Live price imprint: append a point only when the price moved or the
         // last sample has gone stale. A flat on-chain market (the LMSR price is
@@ -111,7 +113,7 @@ export function ChainSync() {
           wordHistory: wordHistByMarket,
           ingestChainHistory,
           ingestWordHistory,
-        } = useSim.getState();
+        } = useStore.getState();
         for (const m of markets) {
           const v = marketPrice(m);
           if (v === null) continue;
@@ -155,25 +157,34 @@ export function ChainSync() {
             )
           ).filter((p): p is NonNullable<typeof p> => !!p);
           if (!alive) return;
-          useSim.getState().ingestChainPositions(positions);
+          useStore.getState().ingestChainPositions(positions);
           const held = new Set(positions.map((p) => p.marketId));
+          const notify = (m: Market, kind: NotificationItem["kind"], text: string) => {
+            if (!held.has(m.id)) return;
+            useStore.getState().pushNotification({ kind, marketId: m.id, marketSlug: m.slug, marketTitle: m.title, text });
+          };
+          for (const m of locked) notify(m, "locked", `“${m.title}” closed for trading — awaiting the transcript`);
+          for (const m of proposed) {
+            notify(
+              m,
+              "challenge",
+              `“${m.title}”: ${(m.winningOutcome ?? "—").toUpperCase()} proposed — the challenge window is open`
+            );
+          }
           for (const m of fresh) {
-            if (!held.has(m.id)) continue;
-            useSim.getState().pushNotification({
-              kind: "chain-resolved",
-              marketId: m.id,
-              marketSlug: m.slug,
-              marketTitle: m.title,
-              text: isVoided(m)
-                ? `\u201c${m.title}\u201d was voided on-chain — claim your refund or challenge`
-                : `\u201c${m.title}\u201d resolved on-chain ${(m.winningOutcome ?? "—").toUpperCase()} — collect or challenge`,
-            });
+            notify(
+              m,
+              "chain-resolved",
+              isVoided(m)
+                ? `“${m.title}” was voided — claim your refund`
+                : `“${m.title}” resolved ${(m.winningOutcome ?? "—").toUpperCase()} — claim if you won`
+            );
           }
         }
       } catch (err) {
         // Surfaced in the home page empty state: "checking devnet" must not be
         // indistinguishable from "we never reached it".
-        useSim.getState().setChainSyncError(true);
+        useStore.getState().setChainSyncError(true);
         console.warn("chain sync failed:", err);
       } finally {
         inspecting = false;

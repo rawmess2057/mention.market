@@ -8,7 +8,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/format";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import {
   CHAIN_CREATE_B_UI,
@@ -33,8 +33,8 @@ export default function CreateMarketPage() {
   const router = useRouter();
   const { connected } = useWallet();
   const { setVisible } = useWalletModal();
-  const createMarket = useSim((s) => s.createMarket);
-  const showToast = useSim((s) => s.showToast);
+  const addLaunchedMarket = useStore((s) => s.addLaunchedMarket);
+  const showToast = useStore((s) => s.showToast);
   const chain = useChain();
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,38 +84,27 @@ export default function CreateMarketPage() {
   // Everything the program would reject, computed before any wallet prompt.
   const problems = chainCreateProblems(buildParams());
 
-  const submit = async (local = false) => {
-    setSubmitting(true);
+  const submit = async () => {
     const params = buildParams();
-    if (!local && !connected) {
-      setSubmitting(false);
+    if (!connected) {
       setVisible(true);
       return;
     }
-    if (!local) {
-      try {
-        const launched = await chain.create(params);
-        if (launched == null) throw new Error("Wallet is not ready to create an on-chain market.");
-        const id = createMarket({ ...params, chainId: launched.id });
-        if (!launched.specSaved) {
-          showToast(
-            "Market is live, but its resolution rules couldn't be saved, so it can't be resolved yet. Ask an operator to register it."
-          );
-        }
-        const created = useSim.getState().markets[id];
-        router.push(`/market/${created.slug}`);
-        return;
-      } catch (err) {
-        // Never fake the on-chain moment: surface the failure and let the
-        // presenter retry or explicitly pick the offline mode below.
-        showToast(`On-chain create failed: ${chainErrorText(err)}`);
-        setSubmitting(false);
-        return;
+    setSubmitting(true);
+    try {
+      const launched = await chain.create(params);
+      if (launched == null) throw new Error("Wallet is not ready to create an on-chain market.");
+      const id = addLaunchedMarket({ ...params, chainId: launched.id });
+      if (!launched.specSaved) {
+        showToast(
+          "Market is live, but its resolution rules couldn't be saved, so it can't be resolved yet. Ask an operator to register it."
+        );
       }
+      router.push(`/market/${id}`);
+    } catch (err) {
+      showToast(`Create failed: ${chainErrorText(err)}`);
+      setSubmitting(false);
     }
-    const id = createMarket(params);
-    const created = useSim.getState().markets[id];
-    router.push(`/market/${created.slug}`);
   };
 
   return (
@@ -339,9 +328,7 @@ export default function CreateMarketPage() {
                   <li key={p}>{p}</li>
                 ))}
               </ul>
-              <div className="mt-1 text-fg-muted">
-                On-chain launch stays disabled until this is fixed; the demo launch below is unaffected.
-              </div>
+              <div className="mt-1 text-fg-muted">Launch stays disabled until this is fixed.</div>
             </div>
           )}
 
@@ -380,7 +367,7 @@ export default function CreateMarketPage() {
               size="lg"
               className="w-full"
               disabled={submitting || problems.length > 0}
-              onClick={() => connected ? submit(false) : setVisible(true)}
+              onClick={() => void submit()}
             >
               {submitting
                 ? "Launching…"
@@ -388,16 +375,6 @@ export default function CreateMarketPage() {
                   ? "Launch on-chain"
                   : "Connect wallet to launch"}
             </Button>
-            {connected && (
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => submit(true)}
-                className="text-[11px] text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-              >
-                Create a demo market instead
-              </button>
-            )}
           </div>
         )}
       </div>

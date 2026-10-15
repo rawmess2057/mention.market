@@ -5,14 +5,14 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { AnimatedNumber } from "./animated-number";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { toValues } from "@/lib/history";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { isChainId, isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META } from "@/lib/types";
 import Link from "next/link";
 
 export function TickerTape() {
-  const markets = useSim((s) => s.markets);
-  const history = useSim((s) => s.history);
+  const markets = useStore((s) => s.markets);
+  const history = useStore((s) => s.history);
 
   const items = useMemo(
     () =>

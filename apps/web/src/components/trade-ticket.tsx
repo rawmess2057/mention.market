@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
 import { lmsrBuyQuote, lmsrProbYes } from "@/lib/lmsr";
 import { quoteBack } from "@/lib/parimutuel";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import { DURATION, EASE } from "@/lib/motion";
@@ -67,11 +67,11 @@ export function TradeTicket({
 }: TradeTicketProps) {
   const { connected } = useWallet();
   const { setVisible } = useWalletModal();
-  const m = useSim((s) => s.markets[market.id]) ?? market;
-  const balance = useSim((s) => s.user.balance);
-  const buyBinary = useSim((s) => s.buyBinary);
-  const backWord = useSim((s) => s.backWord);
-  const showToast = useSim((s) => s.showToast);
+  const m = useStore((s) => s.markets[market.id]) ?? market;
+  const balance = useStore((s) => s.user.balance);
+  const buyBinary = useStore((s) => s.buyBinary);
+  const backWord = useStore((s) => s.backWord);
+  const showToast = useStore((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
 

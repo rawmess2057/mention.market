@@ -15,7 +15,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 /** The retired light "Parchment & Ink" palette. */
-const LEGACY = /(?<![\w-])(?:bg|text|border(?:-[trblxy])?|ring|from|via|to|fill|stroke|divide)-(?:cream|navy|gray-mid|gray-warm|gray-cool|red-brand|ink-\d+|blue(?:-[a-z]+)?|green(?:-[a-z]+)?|white(?!\/)|amber-\d+|slate-\d+|zinc-\d+)(?![\w-])/;
+const LEGACY = /(?<![\w-])(?:bg|text|border(?:-[trblxy])?|ring|from|via|to|fill|stroke|divide)-(?:cream|navy|gray-mid|gray-warm|gray-cool|red-brand|ink-\d+|blue(?:-[a-z]+)?|green(?:-[a-z]+)?|white(?!\/)|(?:amber|slate|zinc|orange|purple|indigo|pink|violet|teal|emerald|rose|sky|lime|yellow|cyan|gray|neutral|stone|red)-\d+)(?![\w-])/;
 const HEX = /["'`(\s]#[0-9a-fA-F]{6}\b/;
 /** Places a literal is unavoidable (the browser chrome color). */
 const ALLOW_HEX = new Set(["app/layout.tsx"]);

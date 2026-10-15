@@ -6,8 +6,6 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
-import { useEffect } from "react";
-import { startSim, stopSim } from "@/lib/sim";
 import { WalletSync } from "@/components/wallet-sync";
 import { ChainSync } from "@/components/chain-sync";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,11 +23,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () => [new PhantomWalletAdapter(), new SolflareWalletAdapter({ network })],
     [network]
   );
-
-  useEffect(() => {
-    startSim(1200);
-    return () => stopSim();
-  }, []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>

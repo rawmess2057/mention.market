@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { cn, fmtAgo, fmtClock, fmtErr } from "@/lib/format";
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import { isChainId } from "@/lib/chain";
 import type { Evidence, Market } from "@/lib/types";
 import { isVoided, VOID_OUTCOME } from "@/lib/settle";
 
 export function EvidenceSection({ market }: { market: Market }) {
-  const m = useSim((s) => s.markets[market.id]) ?? market;
+  const m = useStore((s) => s.markets[market.id]) ?? market;
   const [open, setOpen] = useState(false);
 
   const show =
@@ -97,8 +97,8 @@ function EvidenceModal({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const challenge = useSim((s) => s.challenge);
-  const showToast = useSim((s) => s.showToast);
+  const challenge = useStore((s) => s.challenge);
+  const showToast = useStore((s) => s.showToast);
   const chain = useChain();
   const chainMarket = isChainId(m.id);
   const ev = m.evidence;

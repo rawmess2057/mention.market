@@ -7,7 +7,7 @@ import { MarketCard, LiveCarousel } from "@/components/market-card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
-import { useSim, WATCH_WORDS } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { isChainId, isStaleChainMarket } from "@/lib/chain";
 import { VERTICAL_META, type Vertical } from "@/lib/types";
 
@@ -28,29 +28,24 @@ const SORTS = [
 type SortKey = (typeof SORTS)[number]["key"];
 
 export default function Home() {
-  const markets = useSim((s) => s.markets);
-  const history = useSim((s) => s.history);
-  const chainSynced = useSim((s) => s.chainSynced);
-  const chainSyncError = useSim((s) => s.chainSyncError);
+  const markets = useStore((s) => s.markets);
+  const history = useStore((s) => s.history);
+  const chainSynced = useStore((s) => s.chainSynced);
+  const chainSyncError = useStore((s) => s.chainSyncError);
   const [filter, setFilter] = useState<Vertical | "all">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("trending");
-  const [showDemoMarkets, setShowDemoMarkets] = useState(false);
 
   const all = useMemo(
     () =>
-      Object.values(markets).filter(
-        (m) =>
-          !isStaleChainMarket(m) &&
-          (showDemoMarkets ? !isChainId(m.id) : isChainId(m.id))
-      ),
-    [markets, showDemoMarkets]
+      Object.values(markets).filter((m) => isChainId(m.id) && !isStaleChainMarket(m)),
+    [markets]
   );
   const live = all.filter((m) => m.status === "open");
   // With nothing in the current view, search/filter/sort are all no-ops — mark
   // them inactive instead of letting them look usable and do nothing.
   const nothingToList = all.length === 0;
-  const inertHint = showDemoMarkets ? "No demo markets loaded" : "No on-chain markets listed";
+  const inertHint = "No markets listed yet";
   const listed = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = [...all].filter((m) => {
@@ -78,10 +73,11 @@ export default function Home() {
   }, [all, filter, query, sort, history]);
 
   const trending = useMemo(() => {
+    // The words with the most SOL behind them across open word races.
     const counts: Record<string, number> = {};
     for (const m of all) {
       if (m.status !== "open") continue;
-      for (const w of WATCH_WORDS[m.slug] ?? []) counts[w] = (counts[w] ?? 0) + m.volume / 1000;
+      for (const w of m.words ?? []) if (w.pool > 0) counts[w.word] = (counts[w.word] ?? 0) + w.pool;
     }
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
@@ -120,16 +116,16 @@ export default function Home() {
 
       {/* Trending words */}
       {trending.length > 0 && <section>
-        <SectionTitle icon={<TrendingUp className="h-4 w-4 text-orange-500" />}>
+        <SectionTitle icon={<TrendingUp className="h-4 w-4 text-accent" />}>
           Trending words right now
         </SectionTitle>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {trending.map(([word, vol]) => (
             <span
               key={word}
-              className="shrink-0 rounded-full border border-orange-200 bg-orange-50 px-3.5 py-1.5 text-xs font-semibold text-orange-700"
+              className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-3.5 py-1.5 text-xs font-semibold text-fg"
             >
-              {word} <span className="ml-1 font-mono text-orange-500">${Math.round(vol)}k</span>
+              {word} <span className="tnum ml-1 font-mono text-accent">◎{vol.toFixed(2)}</span>
             </span>
           ))}
         </div>
@@ -137,25 +133,6 @@ export default function Home() {
 
       {/* Filters + search + sort */}
       <div className="flex flex-col gap-2">
-        <div className="flex w-fit gap-1 rounded-lg border border-line bg-surface p-1">
-          {[
-            { demo: false, label: "On-chain" },
-            { demo: true, label: "Demo markets" },
-          ].map((mode) => (
-            <button
-              key={mode.label}
-              onClick={() => setShowDemoMarkets(mode.demo)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                showDemoMarkets === mode.demo
-                  ? "bg-accent-soft text-accent"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              )}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
@@ -212,9 +189,7 @@ export default function Home() {
       {/* Market list */}
       {all.length === 0 ? (
         <section className="rounded-xl border border-dashed border-line py-12 text-center">
-          {showDemoMarkets ? (
-            <p className="text-sm text-fg-muted">No demo markets are available.</p>
-          ) : chainSyncError ? (
+          {chainSyncError ? (
             <p className="text-sm text-fg-muted">
               Couldn&apos;t reach Solana devnet — retrying about every 30s.
             </p>

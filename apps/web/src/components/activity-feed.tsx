@@ -1,18 +1,12 @@
 "use client";
 
-import { useSim } from "@/lib/sim";
+import { useStore } from "@/lib/store";
 import { cn, fmtBalance } from "@/lib/format";
 
 export function ActivityFeed({ marketId, limit = 12 }: { marketId: string; limit?: number }) {
-  const chainActivity = useSim((s) => s.chainActivity[marketId]);
-  const simActivity = useSim((s) => s.activity);
+  const chainActivity = useStore((s) => s.chainActivity[marketId]);
 
-  const items = [
-    ...(chainActivity ?? []),
-    ...simActivity.filter((a) => a.marketId === marketId),
-  ]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, limit);
+  const items = [...(chainActivity ?? [])].sort((a, b) => b.at - a.at).slice(0, limit);
 
   if (items.length === 0) {
     return (

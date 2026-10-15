@@ -64,14 +64,14 @@ export function TheWhisper() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97 }}
             transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            className="rounded-2xl border border-gray-warm bg-white p-3 pr-8 shadow-dropdown"
+            className="rounded-2xl border border-line bg-surface p-3 pr-8 shadow-dropdown"
           >
             <button
               onClick={() => {
                 setVisible(false);
                 setDismissed(true);
               }}
-              className="absolute right-2 top-2 rounded-full p-0.5 text-gray-mid transition-colors hover:bg-cream-dark"
+              className="absolute right-2 top-2 rounded-full p-0.5 text-fg-muted transition-colors hover:bg-surface-2"
               aria-label="Dismiss"
             >
               <X className="h-3 w-3" />
@@ -79,10 +79,10 @@ export function TheWhisper() {
             <div className="flex items-start gap-2">
               <span className="mt-0.5 text-sm">{current.icon}</span>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-blue">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-accent">
                   The Whisper
                 </div>
-                <p className="mt-0.5 text-xs leading-relaxed text-navy">
+                <p className="mt-0.5 text-xs leading-relaxed text-fg">
                   {current.text}
                 </p>
               </div>
@@ -97,7 +97,7 @@ export function TheWhisper() {
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           onClick={showRandom}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-warm bg-white text-gray-mid shadow-card transition-all hover:bg-cream-dark hover:text-blue hover:shadow-card-hover"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-fg-muted shadow-card transition-all hover:bg-surface-2 hover:text-accent hover:shadow-card-hover"
           aria-label="Show whisper"
         >
           <MessageCircle className="h-4 w-4" />

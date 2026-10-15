@@ -166,6 +166,6 @@ export const STATUS_META: Record<
 > = {
   open: { label: "Live", className: "bg-no-soft text-no border-no-line" },
   locked: { label: "Locked", className: "bg-warn-soft text-warn border-warn-line" },
-  resolving: { label: "Resolving", className: "bg-blue-light text-blue border-blue/25" },
+  resolving: { label: "Resolving", className: "bg-accent-soft text-accent border-accent/25" },
   resolved: { label: "Resolved", className: "bg-yes-soft text-yes border-yes-line" },
 };

@@ -13,9 +13,9 @@ export function LeaderBar({
   barClassName?: string;
 }) {
   return (
-    <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-cream-dark", className)}>
+    <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-surface-2", className)}>
       <motion.div
-        className={cn("absolute inset-y-0 left-0 rounded-full", barClassName ?? "bg-blue")}
+        className={cn("absolute inset-y-0 left-0 rounded-full", barClassName ?? "bg-accent-strong")}
         initial={false}
         animate={{ width: `${Math.min(100, Math.max(0, value))}%` }}
         transition={{ type: "spring", stiffness: 120, damping: 20 }}

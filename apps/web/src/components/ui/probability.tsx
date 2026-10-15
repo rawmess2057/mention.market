@@ -19,7 +19,7 @@ const UNIT: Record<ProbabilitySize, string> = {
 };
 
 const TONE: Record<NonNullable<ProbabilityProps["tone"]>, string> = {
-  neutral: "text-navy",
+  neutral: "text-fg",
   yes: "text-yes",
   no: "text-no",
 };
@@ -88,7 +88,7 @@ export function Probability({
           <span
             aria-hidden
             className={cn(
-              "tnum rounded-field bg-ink-100 px-1.5 py-0.5 font-mono font-semibold text-ink-500",
+              "tnum rounded-field bg-surface-2 px-1.5 py-0.5 font-mono font-semibold text-fg-muted",
               size === "hero" ? "text-sm" : size === "card" ? "text-[11px]" : "text-[10px]"
             )}
           >
@@ -131,7 +131,7 @@ export function DeltaPill({
       className={cn(
         "tnum inline-flex items-center gap-0.5 rounded-field px-1.5 py-0.5 font-mono text-[11px] font-semibold",
         flat
-          ? "bg-ink-100 text-ink-400"
+          ? "bg-surface-2 text-fg-muted"
           : up
             ? "bg-yes-soft text-yes"
             : "bg-no-soft text-no",

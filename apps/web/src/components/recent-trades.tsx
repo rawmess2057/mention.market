@@ -34,10 +34,10 @@ export function RecentTrades({
 
   return (
     <div className={cn("panel overflow-hidden", className)}>
-      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
-        <Activity className="h-3.5 w-3.5 text-gray-mid" aria-hidden />
-        <span className="label-caps text-navy">Recent trades</span>
-        <span className="ml-auto text-micro text-gray-mid">live tape</span>
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <Activity className="h-3.5 w-3.5 text-fg-muted" aria-hidden />
+        <span className="label-caps text-fg">Recent trades</span>
+        <span className="ml-auto text-micro text-fg-muted">live tape</span>
       </div>
 
       {items.length === 0 ? (
@@ -47,7 +47,7 @@ export function RecentTrades({
           body="Be the first to take a side."
         />
       ) : (
-        <ul className="divide-y divide-ink-100">
+        <ul className="divide-y divide-line">
           {items.map((t) => {
             const resolved = t.kind === "resolve";
             const claimed = t.kind === "claim";
@@ -59,7 +59,7 @@ export function RecentTrades({
                   className={cn(
                     "shrink-0 rounded-field px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
                     resolved || claimed
-                      ? "bg-blue-light text-blue"
+                      ? "bg-accent-soft text-accent"
                       : isYes
                         ? "bg-yes-soft text-yes"
                         : "bg-no-soft text-no"
@@ -67,13 +67,13 @@ export function RecentTrades({
                 >
                   {resolved ? "resolved" : claimed ? "claimed" : backed ? "back" : t.side}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono text-ink-600">
+                <span className="min-w-0 flex-1 truncate font-mono text-fg-muted">
                   {shortAddr(t.user)}
                 </span>
-                <span className="tnum shrink-0 font-mono font-semibold text-navy">
+                <span className="tnum shrink-0 font-mono font-semibold text-fg">
                   {t.amount > 0 ? fmtSol(t.amount) : ""}
                 </span>
-                <span className="w-14 shrink-0 text-right text-micro text-gray-mid">
+                <span className="w-14 shrink-0 text-right text-micro text-fg-muted">
                   {fmtAgo(t.at)}
                 </span>
               </li>

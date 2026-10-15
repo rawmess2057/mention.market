@@ -121,8 +121,8 @@ export default function CreateMarketPage() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="font-serif text-xl font-bold tracking-tight text-navy">Create a market</h1>
-        <p className="text-sm text-gray-mid">
+        <h1 className="text-xl font-bold tracking-tight text-fg">Create a market</h1>
+        <p className="text-sm text-fg-muted">
           Pick an event, define the words, and launch a market on Solana.
         </p>
       </div>
@@ -136,10 +136,10 @@ export default function CreateMarketPage() {
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 rounded-full border py-1.5 text-[11px] font-medium transition-colors",
               i === step
-                ? "border-blue bg-blue-light text-blue"
+                ? "border-accent bg-accent-soft text-accent"
                 : i < step
-                  ? "border-green/40 bg-green-light text-green"
-                  : "border-gray-warm text-gray-mid"
+                  ? "border-yes/40 bg-yes-soft text-yes"
+                  : "border-line text-fg-muted"
             )}
           >
             {i < step ? <Check className="h-3 w-3" /> : <span>{i + 1}</span>}
@@ -160,8 +160,8 @@ export default function CreateMarketPage() {
                 className={cn(
                   "rounded-xl border p-3 text-sm font-medium transition-all",
                   category === c.label
-                    ? "border-blue bg-blue-light text-blue"
-                    : "border-gray-warm text-navy hover:border-blue/40"
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-line text-fg hover:border-accent/40"
                 )}
               >
                 <span className="mr-1.5">{c.emoji}</span>
@@ -169,7 +169,7 @@ export default function CreateMarketPage() {
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-gray-mid">
+          <p className="text-[11px] text-fg-muted">
             {PICKER_CATEGORIES.find((c) => c.label === category)?.hint ?? ""}
           </p>
           <Label>Event name</Label>
@@ -216,11 +216,11 @@ export default function CreateMarketPage() {
               onClick={() => setType(t.key)}
               className={cn(
                 "rounded-xl border p-4 text-left transition-all",
-                type === t.key ? "border-blue bg-blue-light text-navy" : "border-gray-warm text-navy hover:border-blue/40"
+                type === t.key ? "border-accent bg-accent-soft text-fg" : "border-line text-fg hover:border-accent/40"
               )}
             >
               <div className="font-semibold">{t.title}</div>
-              <div className="mt-1 text-xs text-gray-mid">{t.desc}</div>
+              <div className="mt-1 text-xs text-fg-muted">{t.desc}</div>
             </button>
           ))}
         </div>
@@ -244,7 +244,7 @@ export default function CreateMarketPage() {
                 value={binaryPhrase}
                 onChange={(e) => setBinaryPhrase(e.target.value)}
               />
-              <p className="text-xs text-gray-mid">
+              <p className="text-xs text-fg-muted">
                 Keep it simple: &ldquo;Will they say &lsquo;X&rsquo;?&rdquo; works best.
               </p>
             </>
@@ -280,19 +280,19 @@ export default function CreateMarketPage() {
                 {words.map((w) => (
                   <span
                     key={w}
-                    className="flex items-center gap-1 rounded-full border border-blue/20 bg-blue-light px-2.5 py-1 text-xs font-medium text-blue"
+                    className="flex items-center gap-1 rounded-full border border-accent/20 bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent"
                   >
                     {w}
                     <button
                       onClick={() => setWords(words.filter((x) => x !== w))}
-                      className="text-blue/60 hover:text-blue"
+                      className="text-accent/60 hover:text-accent"
                     >
                       ×
                     </button>
                   </span>
                 ))}
                 {words.length === 0 && (
-                  <span className="text-xs text-gray-mid">
+                  <span className="text-xs text-fg-muted">
                     e.g. &ldquo;AI&rdquo;, &ldquo;open source&rdquo;, &ldquo;agents&rdquo;
                   </span>
                 )}
@@ -314,14 +314,14 @@ export default function CreateMarketPage() {
           />
           <Label>Resolution rules (shown to traders)</Label>
           <textarea
-            className="min-h-24 w-full rounded-lg border border-gray-warm bg-white p-3 text-sm text-navy placeholder:text-gray-mid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue"
+            className="min-h-24 w-full rounded-lg border border-line bg-surface p-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             placeholder="Exact phrases, case sensitivity, which audio sources count…"
             value={rules}
             onChange={(e) => setRules(e.target.value)}
           />
 
           {connected && (
-            <p className="rounded-lg bg-cream-dark p-2.5 text-[11px] leading-relaxed text-gray-mid">
+            <p className="rounded-lg bg-surface-2 p-2.5 text-[11px] leading-relaxed text-fg-muted">
               On-chain launch escrows the LMSR reserve ante (≈0.69 SOL at b = {CHAIN_CREATE_B_UI} SOL) plus
               rent for the market + vault accounts from your wallet.
             </p>
@@ -330,32 +330,32 @@ export default function CreateMarketPage() {
           {/* What the program would reject — shown before the wallet prompt
               instead of as a failed devnet transaction. */}
           {problems.length > 0 && (
-            <div className="rounded-xl border border-red-brand/30 bg-live/5 p-3 text-[11px] leading-relaxed">
-              <div className="font-semibold text-red-brand">
+            <div className="rounded-xl border border-no/30 bg-live/5 p-3 text-[11px] leading-relaxed">
+              <div className="font-semibold text-no">
                 The program will reject this market
               </div>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-navy">
+              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-fg">
                 {problems.map((p) => (
                   <li key={p}>{p}</li>
                 ))}
               </ul>
-              <div className="mt-1 text-gray-mid">
+              <div className="mt-1 text-fg-muted">
                 On-chain launch stays disabled until this is fixed; the demo launch below is unaffected.
               </div>
             </div>
           )}
 
           {/* Preview */}
-          <div className="rounded-xl border border-blue/15 bg-blue-light/30 p-4 text-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue">
+          <div className="rounded-xl border border-accent/15 bg-accent-soft p-4 text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-accent">
               Preview
             </div>
-            <div className="font-semibold text-navy">
+            <div className="font-semibold text-fg">
               {type === "binary"
                 ? question || "Your question here"
                 : `Word race with ${words.length} words`}
             </div>
-            <div className="text-xs text-gray-mid">
+            <div className="text-xs text-fg-muted">
               {event || "Event"} · {VERTICAL_META[resolveCategory(category)].label} · {minutes || "?"} min
             </div>
           </div>
@@ -393,7 +393,7 @@ export default function CreateMarketPage() {
                 type="button"
                 disabled={submitting}
                 onClick={() => submit(true)}
-                className="text-[11px] text-gray-mid underline-offset-2 hover:text-navy hover:underline"
+                className="text-[11px] text-fg-muted underline-offset-2 hover:text-fg hover:underline"
               >
                 Create a demo market instead
               </button>
@@ -406,7 +406,7 @@ export default function CreateMarketPage() {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-xs font-semibold uppercase tracking-wider text-gray-mid">{children}</div>;
+  return <div className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{children}</div>;
 }
 
 /**
@@ -428,7 +428,7 @@ function ByteHint({
   const used = byteLength(prefix + value);
   const over = used > limit;
   return (
-    <p className={cn("text-[11px]", over ? "font-medium text-red-brand" : "text-gray-mid")}>
+    <p className={cn("text-[11px]", over ? "font-medium text-no" : "text-fg-muted")}>
       {label}: {used}/{limit} bytes
       {over ? ` — the program rejects anything longer than ${limit}` : ""}
     </p>

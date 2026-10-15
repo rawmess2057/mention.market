@@ -3,63 +3,39 @@
 @tailwind utilities;
 
 :root {
-  /* Colors — "Parchment & Ink" Palette */
-  --color-cream: #F9F7F4;
-  --color-cream-dark: #F0EDE8;
-  --color-navy: #0F172A;
-  --color-navy-light: #1E293B;
-  --color-blue: #2D5CFF;
-  --color-blue-light: #EDF1FF;
-  --color-blue-dark: #1B3FCC;
-  --color-green: #2B7550;
-  --color-green-light: #E8F5F0;
-  --color-red: #C75B3A;
-  --color-red-light: #FDF0EB;
-  --color-gray-warm: #E5E1DB;
-  --color-gray-mid: #78716C;
-  --color-gray-cool: #8291A6;
-  --color-warn: #9A6512;
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #5A5A5A;
+  /*
+   * Dark-first palette. Channels only (R G B) so Tailwind opacity modifiers
+   * work: `rgb(var(--accent) / 0.12)`. Text tokens are checked against
+   * `--surface`: fg 15.9:1, fg-muted 7.2:1, fg-subtle 5.2:1 (WCAG AA). White
+   * text sits on `--accent-strong` (5.1:1), never on `--accent` (3.3:1).
+   */
+  --bg: 10 13 19;            /* #0A0D13 page */
+  --surface: 17 21 29;       /* #11151D cards */
+  --surface-2: 24 29 39;     /* #181D27 raised, inputs */
+  --surface-3: 33 39 52;     /* #212734 hover, pressed */
+  --line: 36 43 57;          /* #242B39 hairlines */
+  --line-strong: 52 61 79;   /* #343D4F emphasized borders */
+  --fg: 236 239 245;         /* #ECEFF5 */
+  --fg-muted: 152 163 184;   /* #98A3B8 */
+  --fg-subtle: 126 138 160;  /* #7E8AA0 */
+  --accent: 92 136 255;      /* #5C88FF brand blue, lifted for dark */
+  --accent-strong: 45 92 255;/* #2D5CFF the logo blue */
+  --on-accent: 255 255 255;
+  --yes: 46 204 138;         /* #2ECC8A */
+  --yes-strong: 32 168 112;
+  --no: 244 92 112;          /* #F45C70 */
+  --no-strong: 214 62 84;
+  --warn: 232 170 66;        /* #E8AA42 */
+  --live: 255 94 82;         /* #FF5E52 */
 
-  /* Ink ramp — the only greys UI text should use. */
-  --color-ink-900: #0B1220;
-  --color-ink-700: #1E293B;
-  --color-ink-500: #5A5A5A;
-  --color-ink-400: #78716C;
-  --color-ink-300: #A29C96;
-  --color-ink-200: #E5E1DB;
-  --color-ink-100: #F0EDE8;
-  --color-ink-50: #F9F7F4;
+  --radius: 0.875rem;
 
-  /* Shadcn-style tokens */
-  --background: 40 20% 97%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --muted: 30 10% 93%;
-  --muted-foreground: 20 5% 45%;
-  --border: 30 10% 89%;
-  --input: 30 10% 89%;
-  /* hue 227 = the brand blue (#2D5CFF) */
-  --ring: 227 100% 59%;
-  --primary: 227 100% 59%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 30 10% 95%;
-  --secondary-foreground: 222 47% 11%;
-  --accent: 227 100% 59%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 14 62% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 152 40% 38%;
-  --success-foreground: 0 0% 100%;
-  --radius: 1rem;
-
-  /* Elevation */
-  --shadow-card: 0px 10px 30px -10px rgba(0,0,0,0.08);
-  --shadow-card-hover: 0px 20px 40px -10px rgba(0,0,0,0.12);
-  --shadow-dropdown: 0px 20px 60px -10px rgba(0,0,0,0.15);
-  --shadow-cta: 0 6px 18px -8px rgba(45, 92, 255, 0.5);
+  /* Elevation: in the dark, depth comes from borders and luminance;
+     shadows only separate floating layers (menus, sheets, dialogs). */
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset;
+  --shadow-card-hover: 0 1px 0 0 rgb(255 255 255 / 0.05) inset, 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  --shadow-dropdown: 0 16px 48px -12px rgb(0 0 0 / 0.75);
+  --shadow-cta: 0 8px 24px -10px rgb(var(--accent) / 0.6);
 
   /* Motion — one spec for the whole app (see src/lib/motion.ts). */
   --motion-press: 120ms;
@@ -68,30 +44,30 @@
   --motion-panel: 400ms;
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-slow: 400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
-  border-color: hsl(var(--border));
+  border-color: rgb(var(--line));
 }
 
 html {
-  color-scheme: light;
+  color-scheme: dark;
+  background: rgb(var(--bg));
 }
 
 body {
-  background: var(--color-cream);
-  color: var(--color-text-primary);
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
 
 ::selection {
-  background: rgba(45, 92, 255, 0.2);
+  background: rgb(var(--accent) / 0.35);
 }
 
 /* ---------- Utilities ---------- */
@@ -108,7 +84,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-gray-mid);
+  color: rgb(var(--fg-subtle));
 }
 
 /* Live/on-air dot that never uses colour alone. */
@@ -128,17 +104,17 @@ body {
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.4;
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgb(var(--accent) / 0.1), transparent 70%),
+    linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 64px 64px, 64px 64px;
   mask-image: radial-gradient(ellipse 90% 50% at 50% 0%, black 10%, transparent 70%);
 }
 
 /* ---------- Card styles ---------- */
 .card-elevated {
-  background: white;
-  border: 1px solid var(--color-gray-warm);
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
   border-radius: var(--radius-md, 12px);
   box-shadow: var(--shadow-card);
   transition:
@@ -148,6 +124,7 @@ body {
 }
 .card-elevated:hover {
   box-shadow: var(--shadow-card-hover);
+  border-color: rgb(var(--line-strong));
 }
 
 /*
@@ -157,9 +134,9 @@ body {
  */
 .grad-border {
   position: relative;
-  border: 1px solid var(--color-ink-200);
-  border-top-color: rgba(45, 92, 255, 0.28);
-  background: white;
+  border: 1px solid rgb(var(--line));
+  border-top-color: rgb(var(--accent) / 0.35);
+  background: rgb(var(--surface));
   border-radius: var(--radius-md, 12px);
   box-shadow: var(--shadow-card);
   transition:
@@ -170,14 +147,14 @@ body {
 
 /* Shared surface for the redesigned panels. */
 .panel {
-  background: white;
-  border: 1px solid var(--color-ink-200);
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
   border-radius: 1rem;
   box-shadow: var(--shadow-card);
 }
 
 .surface-sunken {
-  background: var(--color-ink-100);
+  background: rgb(var(--surface-2));
 }
 
 /* Hover lift */
@@ -190,11 +167,12 @@ body {
 .lift:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
+  border-color: rgb(var(--line-strong));
 }
 
 /* ---------- Gradient text ---------- */
 .text-gradient {
-  background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-blue-dark) 100%);
+  background: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-strong)) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -203,7 +181,7 @@ body {
 /* ---------- Number flash on change ---------- */
 @keyframes num-up {
   0% {
-    color: var(--color-green);
+    color: rgb(var(--yes));
     transform: translateY(-2px);
   }
   100% {
@@ -212,7 +190,7 @@ body {
 }
 @keyframes num-down {
   0% {
-    color: var(--color-red);
+    color: rgb(var(--no));
     transform: translateY(2px);
   }
   100% {
@@ -256,28 +234,28 @@ body {
   width: 4px;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-gray-warm);
+  background: rgb(var(--line-strong));
   border-radius: 4px;
 }
 
 /* Highlighted watched word in transcript */
 .word-hit {
-  background: linear-gradient(90deg, rgba(45, 92, 255, 0.15), rgba(45, 92, 255, 0.08));
+  background: rgb(var(--accent) / 0.16);
   border-radius: 4px;
   padding: 0 3px;
   font-weight: 600;
-  color: var(--color-blue-dark);
+  color: rgb(var(--fg));
 }
 .word-hit-live {
   animation: hit-flash 0.6s ease-out;
 }
 @keyframes hit-flash {
   0% {
-    background: rgba(45, 92, 255, 0.3);
-    box-shadow: 0 0 12px rgba(45, 92, 255, 0.3);
+    background: rgb(var(--accent) / 0.35);
+    box-shadow: 0 0 12px rgb(var(--accent) / 0.35);
   }
   100% {
-    background: rgba(45, 92, 255, 0.1);
+    background: rgb(var(--accent) / 0.12);
   }
 }
 
@@ -287,16 +265,16 @@ body {
 }
 @keyframes win-flash {
   0% {
-    box-shadow: 0 0 0 0 rgba(43, 117, 80, 0.4);
+    box-shadow: 0 0 0 0 rgb(var(--yes) / 0.4);
   }
   100% {
-    box-shadow: 0 0 0 24px rgba(43, 117, 80, 0);
+    box-shadow: 0 0 0 24px rgb(var(--yes) / 0);
   }
 }
 
 /* Shimmer skeleton */
 .shimmer {
-  background: linear-gradient(100deg, transparent 30%, rgba(0, 0, 0, 0.04) 50%, transparent 70%);
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.05) 50%, transparent 70%);
   background-size: 200% 100%;
   animation: shimmer 2.5s linear infinite;
 }
@@ -309,11 +287,11 @@ body {
 .on-air-shimmer {
   background: linear-gradient(
     90deg,
-    var(--color-red) 0%,
-    #e85d3a 25%,
-    var(--color-red) 50%,
-    #e85d3a 75%,
-    var(--color-red) 100%
+    rgb(var(--live)) 0%,
+    rgb(var(--live) / 0.75) 25%,
+    rgb(var(--live)) 50%,
+    rgb(var(--live) / 0.75) 75%,
+    rgb(var(--live)) 100%
   );
   background-size: 200% 100%;
   animation: on-air-shimmer 2s ease-in-out infinite;
@@ -396,7 +374,83 @@ body {
 
 /* ---------- Focus visible ---------- */
 *:focus-visible {
-  outline: 2px solid var(--color-blue);
+  outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ---------- Wallet adapter (react-ui) ---------- */
+/* The library ships its own purple theme; bring it onto our tokens. */
+.wallet-adapter-button {
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 0.625rem;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.wallet-adapter-button-trigger {
+  background: rgb(var(--accent-strong));
+  color: rgb(var(--on-accent));
+  box-shadow: var(--shadow-cta);
+}
+.wallet-adapter-button:not([disabled]):hover {
+  background: rgb(var(--accent-strong));
+  filter: brightness(1.1);
+}
+.wallet-adapter-button-start-icon,
+.wallet-adapter-button-start-icon img {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+.wallet-adapter-dropdown-list {
+  background: rgb(var(--surface-2));
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-dropdown);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+.wallet-adapter-dropdown-list-item {
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  height: 2.25rem;
+  color: rgb(var(--fg));
+}
+.wallet-adapter-dropdown-list-item:not([disabled]):hover {
+  background: rgb(var(--surface-3));
+}
+.wallet-adapter-modal-wrapper {
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line));
+  border-radius: 1rem;
+  box-shadow: var(--shadow-dropdown);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+.wallet-adapter-modal-overlay {
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(6px);
+}
+.wallet-adapter-modal-title {
+  color: rgb(var(--fg));
+  font-weight: 600;
+}
+.wallet-adapter-modal-button-close {
+  background: rgb(var(--surface-2));
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  height: 3rem;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  color: rgb(var(--fg));
+}
+.wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
+  background: rgb(var(--surface-2));
+  filter: none;
+}
+.wallet-adapter-modal-list-more {
+  color: rgb(var(--fg-muted));
 }

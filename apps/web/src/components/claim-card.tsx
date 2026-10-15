@@ -44,14 +44,14 @@ export function ClaimCard({ market }: { market: Market }) {
         flash && "win-flash"
       )}
     >
-      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
-        <PartyPopper className={cn("h-3.5 w-3.5", won ? "text-yes" : "text-gray-mid")} aria-hidden />
-        <span className="label-caps text-navy">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <PartyPopper className={cn("h-3.5 w-3.5", won ? "text-yes" : "text-fg-muted")} aria-hidden />
+        <span className="label-caps text-fg">
           {voided ? "Market voided" : won ? "You called it" : "Resolved"}
         </span>
-        <span className="tnum ml-auto text-micro text-gray-mid">
+        <span className="tnum ml-auto text-micro text-fg-muted">
           {voided ? "ruling" : "winner"}{" "}
-          <span className={cn("font-mono font-bold", voided ? "text-navy" : "text-yes")}>
+          <span className={cn("font-mono font-bold", voided ? "text-fg" : "text-yes")}>
             {m.winningOutcome.toUpperCase()}
           </span>
         </span>
@@ -59,11 +59,11 @@ export function ClaimCard({ market }: { market: Market }) {
 
       <div className="space-y-2.5 p-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-label text-gray-mid">{voided ? "Your refund" : "Your payout"}</span>
-          <span className="tnum font-mono text-2xl font-bold text-navy">{fmtSol(payout)}</span>
+          <span className="text-label text-fg-muted">{voided ? "Your refund" : "Your payout"}</span>
+          <span className="tnum font-mono text-2xl font-bold text-fg">{fmtSol(payout)}</span>
         </div>
         <div className="flex items-center justify-between text-label">
-          <span className="text-gray-mid">P&amp;L</span>
+          <span className="text-fg-muted">P&amp;L</span>
           <span
             className={cn(
               "tnum font-mono font-bold",
@@ -104,12 +104,12 @@ export function ClaimCard({ market }: { market: Market }) {
                 : `Claim ${voided ? "refund " : ""}${fmtSol(payout)}`}
           </Button>
         ) : voided ? (
-          <p className="rounded-tile bg-ink-50 px-3 py-2 text-micro leading-relaxed text-gray-mid">
+          <p className="rounded-tile bg-surface-2 px-3 py-2 text-micro leading-relaxed text-fg-muted">
             The market was voided, so every position is refunded. This one has nothing left to
             refund.
           </p>
         ) : (
-          <p className="rounded-tile bg-ink-50 px-3 py-2 text-micro leading-relaxed text-gray-mid">
+          <p className="rounded-tile bg-surface-2 px-3 py-2 text-micro leading-relaxed text-fg-muted">
             The market resolved at {m.winningOutcome.toUpperCase()}
             {m.confidence !== undefined ? ` (${m.confidence}% confidence)` : ""}. The transcript
             excerpt behind it is in the resolution panel — worth a look before the next one.

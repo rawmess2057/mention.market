@@ -91,17 +91,17 @@ export default function Home() {
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl md:rounded-3xl border border-gray-100/80 bg-gradient-to-b from-white to-cream-dark p-8 md:p-10">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue/8 blur-3xl" />
+      <section className="relative overflow-hidden rounded-2xl md:rounded-3xl border border-line/80 bg-gradient-to-b from-surface to-surface-2 p-8 md:p-10">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue/20 bg-blue-light px-3 py-1 text-[11px] font-medium text-blue">
-            <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-blue" />
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent-soft px-3 py-1 text-[11px] font-medium text-accent">
+            <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-accent-strong" />
             On-chain markets · Solana devnet · SOL
           </div>
-          <h1 className="font-serif max-w-xl text-3xl font-bold leading-tight tracking-tight text-navy md:text-4xl lg:text-5xl">
+          <h1 className="max-w-xl text-3xl font-bold leading-tight tracking-tight text-fg md:text-4xl lg:text-5xl">
             Trade on what gets <span className="text-gradient">said</span>.
           </h1>
-          <p className="mt-2 max-w-md text-body text-ink-500 md:text-body-lg">
+          <p className="mt-2 max-w-md text-body text-fg-muted md:text-body-lg">
             Trade markets deployed to Solana devnet. Trades, positions, and claims use the Anchor
             program; outcomes are submitted by the configured resolver.
           </p>
@@ -111,7 +111,7 @@ export default function Home() {
       {/* Live carousel */}
       {live.length > 0 && (
         <section>
-          <SectionTitle icon={<span className="h-2 w-2 animate-pulse-live rounded-full bg-red-brand" />}>
+          <SectionTitle icon={<span className="h-2 w-2 animate-pulse-live rounded-full bg-no" />}>
             Live now
           </SectionTitle>
           <LiveCarousel markets={all} />
@@ -137,7 +137,7 @@ export default function Home() {
 
       {/* Filters + search + sort */}
       <div className="flex flex-col gap-2">
-        <div className="flex w-fit gap-1 rounded-lg border border-gray-warm bg-white p-1">
+        <div className="flex w-fit gap-1 rounded-lg border border-line bg-surface p-1">
           {[
             { demo: false, label: "On-chain" },
             { demo: true, label: "Demo markets" },
@@ -148,8 +148,8 @@ export default function Home() {
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 showDemoMarkets === mode.demo
-                  ? "bg-blue-light text-blue"
-                  : "text-gray-mid hover:bg-cream-dark hover:text-navy"
+                  ? "bg-accent-soft text-accent"
+                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
               )}
             >
               {mode.label}
@@ -158,17 +158,17 @@ export default function Home() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-mid" />
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search markets, events…"
               disabled={nothingToList}
               title={nothingToList ? `Nothing to search — ${inertHint.toLowerCase()}` : undefined}
-              className="h-9 bg-white pl-9 text-sm"
+              className="h-9 bg-surface pl-9 text-sm"
             />
           </div>
-          <div className="flex gap-1 rounded-lg border border-gray-warm bg-white p-1">
+          <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
             {SORTS.map((s) => (
               <button
                 key={s.key}
@@ -178,8 +178,8 @@ export default function Home() {
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                   sort === s.key
-                    ? "bg-blue-light text-blue"
-                    : "text-gray-mid hover:text-navy hover:bg-cream-dark",
+                    ? "bg-accent-soft text-accent"
+                    : "text-fg-muted hover:text-fg hover:bg-surface-2",
                   nothingToList && "cursor-not-allowed opacity-50 hover:bg-transparent"
                 )}
               >
@@ -198,9 +198,9 @@ export default function Home() {
               className={cn(
                 "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
                 filter === f.key
-                  ? "border-blue bg-blue-light text-blue"
-                  : "border-gray-warm text-gray-mid hover:border-blue/40 hover:text-navy",
-                nothingToList && "cursor-not-allowed opacity-50 hover:border-gray-warm hover:text-gray-mid"
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line text-fg-muted hover:border-accent/40 hover:text-fg",
+                nothingToList && "cursor-not-allowed opacity-50 hover:border-line hover:text-fg-muted"
               )}
             >
               {f.label}
@@ -211,22 +211,22 @@ export default function Home() {
 
       {/* Market list */}
       {all.length === 0 ? (
-        <section className="rounded-xl border border-dashed border-gray-warm py-12 text-center">
+        <section className="rounded-xl border border-dashed border-line py-12 text-center">
           {showDemoMarkets ? (
-            <p className="text-sm text-gray-mid">No demo markets are available.</p>
+            <p className="text-sm text-fg-muted">No demo markets are available.</p>
           ) : chainSyncError ? (
-            <p className="text-sm text-gray-mid">
+            <p className="text-sm text-fg-muted">
               Couldn&apos;t reach Solana devnet — retrying about every 30s.
             </p>
           ) : !chainSynced ? (
-            <p className="flex items-center justify-center gap-2 text-sm text-gray-mid">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue" />
+            <p className="flex items-center justify-center gap-2 text-sm text-fg-muted">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-strong" />
               Checking Solana devnet for markets…
             </p>
           ) : (
             <>
-              <p className="text-sm text-gray-mid">No on-chain markets found on Solana devnet.</p>
-              <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">
+              <p className="text-sm text-fg-muted">No on-chain markets found on Solana devnet.</p>
+              <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-accent hover:underline">
                 Create an on-chain market
               </Link>
             </>
@@ -241,7 +241,7 @@ export default function Home() {
       )}
 
       {all.length > 0 && listed.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-warm py-16 text-center text-sm text-gray-mid">
+        <div className="rounded-xl border border-dashed border-line py-16 text-center text-sm text-fg-muted">
           {query.trim()
             ? `No markets match “${query.trim()}”.`
             : "No markets in this category yet."}
@@ -253,7 +253,7 @@ export default function Home() {
 
 function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-gray-mid">
+    <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">
       {icon}
       {children}
     </h2>

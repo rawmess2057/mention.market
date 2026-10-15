@@ -1,12 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Source_Serif_4, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { TopBar, BottomNav } from "@/components/shell";
 import { TickerTape } from "@/components/viz/ticker-tape";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const sourceSerif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
@@ -16,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F9F7F4",
+  themeColor: "#0A0D13",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -24,7 +23,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${sourceSerif.variable} ${mono.variable}`}>
+    <html lang="en" className={`dark ${inter.variable} ${mono.variable}`}>
       <body className="min-h-dvh font-sans antialiased">
         <Providers>
           <div className="grid-backdrop" aria-hidden />

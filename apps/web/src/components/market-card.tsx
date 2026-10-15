@@ -16,11 +16,11 @@ import { lmsrProbYes } from "@/lib/lmsr";
 import { isVoided } from "@/lib/settle";
 
 const VERTICAL_CHIP: Record<Vertical, string> = {
-  streams: "bg-blue-light",
+  streams: "bg-accent-soft",
   sports: "bg-yes-soft",
   earnings: "bg-warn-soft",
   politics: "bg-no-soft",
-  podcasts: "bg-ink-100",
+  podcasts: "bg-surface-2",
 };
 
 function VerticalChip({ vertical, className }: { vertical: Vertical; className?: string }) {
@@ -60,8 +60,8 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
       <div className="flex items-start gap-3">
         <VerticalChip vertical={m.vertical} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-micro text-gray-mid">{m.event}</div>
-          <h3 className="mt-0.5 line-clamp-2 text-body-lg font-semibold leading-snug text-navy transition-colors group-hover:text-blue">
+          <div className="truncate text-micro text-fg-muted">{m.event}</div>
+          <h3 className="mt-0.5 line-clamp-2 text-body-lg font-semibold leading-snug text-fg transition-colors group-hover:text-accent">
             {m.title}
           </h3>
         </div>
@@ -70,7 +70,7 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
 
       {m.type === "binary" ? <BinaryOutcome m={m} history={history} /> : <MajorityOutcome m={m} />}
 
-      <div className="mt-auto flex items-center gap-3 border-t border-ink-100 pt-3 text-micro text-gray-mid">
+      <div className="mt-auto flex items-center gap-3 border-t border-line pt-3 text-micro text-fg-muted">
         <span className="tnum flex items-center gap-1">
           <Volume2 className="h-3 w-3" aria-hidden />
           {fmtSol(m.volume, { compact: true })}
@@ -89,7 +89,7 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
   if (m.status === "resolved") {
     if (isVoided(m)) {
       return (
-        <span className="tnum ml-auto rounded-field bg-ink-100 px-1.5 py-0.5 font-mono font-semibold text-ink-600">
+        <span className="tnum ml-auto rounded-field bg-surface-2 px-1.5 py-0.5 font-mono font-semibold text-fg-muted">
           VOIDED · refunded
         </span>
       );
@@ -110,7 +110,7 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
   }
   if (m.status === "resolving") {
     return (
-      <span className="ml-auto rounded-field bg-blue-light px-1.5 py-0.5 font-mono font-semibold text-blue">
+      <span className="ml-auto rounded-field bg-accent-soft px-1.5 py-0.5 font-mono font-semibold text-accent">
         Resolving…
       </span>
     );
@@ -122,7 +122,7 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
       suppressHydrationWarning
       className={cn(
         "tnum ml-auto rounded-field px-1.5 py-0.5 font-mono font-semibold",
-        urgent ? "bg-no-soft text-no" : "bg-ink-100 text-ink-500"
+        urgent ? "bg-no-soft text-no" : "bg-surface-2 text-fg-muted"
       )}
     >
       {urgent ? "Ends in " : "Closes in "}
@@ -169,7 +169,7 @@ function MajorityOutcome({ m }: { m: Market }) {
           className="px-1.5"
         />
       ))}
-      <div className="px-1.5 pt-1 text-micro text-gray-mid">
+      <div className="px-1.5 pt-1 text-micro text-fg-muted">
         {words.length} words · {fmtSol(pot, { compact: true })} in play
       </div>
     </div>
@@ -204,7 +204,7 @@ function LiveCard({ m }: { m: Market }) {
           <span className="live-dot" aria-hidden />
           On air
         </span>
-        <span suppressHydrationWarning className="tnum font-mono text-micro text-gray-mid">
+        <span suppressHydrationWarning className="tnum font-mono text-micro text-fg-muted">
           {fmtTimeLeft(m.endTime - now)}
         </span>
       </div>
@@ -212,10 +212,10 @@ function LiveCard({ m }: { m: Market }) {
       <div className="flex items-start gap-2.5">
         <VerticalChip vertical={m.vertical} className="h-8 w-8 text-sm" />
         <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 text-body font-semibold leading-snug text-navy">
+          <h3 className="line-clamp-2 text-body font-semibold leading-snug text-fg">
             {m.title}
           </h3>
-          <div className="mt-0.5 truncate text-micro text-gray-mid">{m.event}</div>
+          <div className="mt-0.5 truncate text-micro text-fg-muted">{m.event}</div>
         </div>
       </div>
 

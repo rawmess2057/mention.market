@@ -5,7 +5,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("shimmer rounded-field bg-ink-100", className)}
+      className={cn("shimmer rounded-field bg-surface-2", className)}
     />
   );
 }
@@ -43,7 +43,7 @@ export function PanelSkeleton({ rows = 3, className }: { rows?: number; classNam
 export function ChartSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn("panel overflow-hidden", className)}>
-      <div className="flex items-center gap-2 border-b border-ink-200 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <Skeleton className="h-5 w-9" />
         <Skeleton className="h-5 w-9" />
         <Skeleton className="h-5 w-9" />

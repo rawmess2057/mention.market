@@ -10,6 +10,8 @@ import { useEffect } from "react";
 import { startSim, stopSim } from "@/lib/sim";
 import { WalletSync } from "@/components/wallet-sync";
 import { ChainSync } from "@/components/chain-sync";
+import { Toaster } from "@/components/ui/toaster";
+import { MotionConfig } from "framer-motion";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -33,9 +35,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <WalletSync />
-          <ChainSync />
-          {children}
+          {/* Respect the OS "reduce motion" setting in every framer animation. */}
+          <MotionConfig reducedMotion="user">
+            <WalletSync />
+            <ChainSync />
+            {children}
+            <Toaster />
+          </MotionConfig>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

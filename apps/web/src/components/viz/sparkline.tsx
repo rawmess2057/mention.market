@@ -2,12 +2,13 @@
 
 import { useId, useMemo } from "react";
 import { cn } from "@/lib/format";
+import { rgba } from "@/lib/theme";
 
 export function Sparkline({
   data,
   width = 120,
   height = 36,
-  stroke = "#2E7DF6",
+  stroke = rgba("accent"),
   className,
   domain,
 }: {

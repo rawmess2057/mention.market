@@ -7,6 +7,7 @@
  * moving through the resolution pipeline (evidence -> challenge window -> resolved).
  */
 
+import { toastFromMessage } from "./toast";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { seededRandom, shortAddr } from "./format";
@@ -1046,7 +1047,10 @@ export const useSim = create<SimState>()(persist((set, get) => {
       })),
 
     setPendingTrade: (t) => set({ pendingTrade: t }),
-    showToast: (msg) => set({ toast: msg }),
+    // Routed to the app toaster (`lib/toast.ts`); tone is inferred from the wording.
+    showToast: (msg) => {
+      if (msg) toastFromMessage(msg);
+    },
     pushNotification: (n) =>
       set((s) => ({ notifications: addNotification(s.notifications, n) })),
     markAllRead: () =>

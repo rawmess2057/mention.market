@@ -79,16 +79,16 @@ export function PulseFeed({
 
   return (
     <div className={cn("panel flex min-h-0 flex-col overflow-hidden", className)}>
-      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <Radio className="live-dot text-no" aria-hidden />
-        <span className="label-caps text-navy">Live transcript</span>
-        <span className="tnum ml-auto text-micro text-gray-mid">
+        <span className="label-caps text-fg">Live transcript</span>
+        <span className="tnum ml-auto text-micro text-fg-muted">
           {all.length} lines
         </span>
       </div>
 
       {watchWords.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-ink-100 px-3 py-2">
+        <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2">
           {watchWords.slice(0, 6).map((w) => {
             const n = hits.get(w) ?? 0;
             return (
@@ -99,7 +99,7 @@ export function PulseFeed({
                   "tnum inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-micro font-semibold",
                   n > 0
                     ? "border-yes-line bg-yes-soft text-yes"
-                    : "border-ink-200 bg-white text-ink-400"
+                    : "border-line bg-surface text-fg-muted"
                 )}
               >
                 {w}
@@ -110,10 +110,10 @@ export function PulseFeed({
         </div>
       )}
 
-      <div className="border-b border-ink-100 px-3 py-2">
+      <div className="border-b border-line px-3 py-2">
         <div className="relative">
           <Search
-            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-mid"
+            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
             aria-hidden
           />
           <Input
@@ -121,7 +121,7 @@ export function PulseFeed({
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             aria-label="Filter transcript"
-            className="h-8 border-0 bg-ink-100 pl-8 text-label"
+            className="h-8 border-0 bg-surface-2 pl-8 text-label"
           />
         </div>
       </div>
@@ -135,17 +135,17 @@ export function PulseFeed({
           {filtered.slice(-40).map((l, i) => (
             <div
               key={`${l.t}-${i}`}
-              className="animate-fade-in flex items-start gap-2 rounded-tile px-2 py-1.5 text-label leading-relaxed transition-colors hover:bg-ink-50"
+              className="animate-fade-in flex items-start gap-2 rounded-tile px-2 py-1.5 text-label leading-relaxed transition-colors hover:bg-surface-2"
             >
               <WaveformAvatar speaking={i >= filtered.length - 3} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-micro font-semibold text-blue">{l.speaker}</span>
-                  <span className="tnum font-mono text-[10px] text-gray-mid">
+                  <span className="text-micro font-semibold text-accent">{l.speaker}</span>
+                  <span className="tnum font-mono text-[10px] text-fg-muted">
                     {fmtClock(l.t)}
                   </span>
                 </div>
-                <p className="mt-0.5 text-navy">
+                <p className="mt-0.5 text-fg">
                   <Highlight text={l.text} watch={watchWords} fresh={i >= filtered.length - 1} />
                 </p>
               </div>
@@ -168,7 +168,7 @@ export function PulseFeed({
           <button
             type="button"
             onClick={jumpToLive}
-            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-pill border border-ink-200 bg-white px-3 py-1.5 text-micro font-semibold text-navy shadow-dropdown transition-colors hover:bg-ink-50"
+            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 py-1.5 text-micro font-semibold text-fg shadow-dropdown transition-colors hover:bg-surface-2"
           >
             <ArrowDown className="h-3 w-3" aria-hidden />
             Jump to live

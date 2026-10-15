@@ -21,10 +21,10 @@ export function Stat({
         {icon}
         {label}
       </div>
-      <div className="tnum mt-0.5 truncate font-mono text-sm font-semibold text-navy">
+      <div className="tnum mt-0.5 truncate font-mono text-sm font-semibold text-fg">
         {value}
       </div>
-      {hint && <div className="text-micro text-gray-mid">{hint}</div>}
+      {hint && <div className="text-micro text-fg-muted">{hint}</div>}
     </div>
   );
 }
@@ -41,7 +41,7 @@ export function StatRow({
     <div
       className={cn(
         "flex flex-wrap items-center gap-x-6 gap-y-3",
-        "[&>*+*]:border-l [&>*+*]:border-ink-200 [&>*+*]:pl-6",
+        "[&>*+*]:border-l [&>*+*]:border-line [&>*+*]:pl-6",
         className
       )}
     >

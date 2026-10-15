@@ -6,17 +6,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/format";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:pointer-events-none disabled:opacity-40 active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default: "bg-blue text-white hover:bg-blue-dark shadow-sm",
-        secondary: "bg-cream-dark text-navy hover:bg-gray-warm border border-gray-warm/60",
-        outline: "border border-gray-warm bg-white hover:bg-cream-dark text-navy",
-        ghost: "hover:bg-cream-dark text-navy",
-        destructive: "bg-red-brand text-white hover:bg-red-brand/90 shadow-sm",
-        yes: "bg-yes text-white hover:bg-yes-strong shadow-[0_2px_12px_rgba(43,117,80,0.25)]",
-        no: "bg-no text-white hover:bg-no-strong shadow-[0_2px_12px_rgba(199,91,58,0.25)]",
+        // White text only on the darker logo blue (5.1:1). YES/NO fills are
+        // bright, so they carry dark text (9.4:1 / 6.1:1), exchange-style.
+        default: "bg-accent-strong text-accent-foreground hover:brightness-110 shadow-cta",
+        secondary: "bg-surface-2 text-fg hover:bg-surface-3 border border-line",
+        outline: "border border-line-strong bg-transparent hover:bg-surface-2 text-fg",
+        ghost: "hover:bg-surface-2 text-fg-muted hover:text-fg",
+        destructive: "bg-no text-bg hover:brightness-110",
+        yes: "bg-yes text-bg hover:brightness-110 shadow-[0_8px_24px_-12px_rgb(var(--yes)/0.7)]",
+        no: "bg-no text-bg hover:brightness-110 shadow-[0_8px_24px_-12px_rgb(var(--no)/0.7)]",
       },
       size: {
         default: "h-10 px-4",

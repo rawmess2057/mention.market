@@ -6,105 +6,86 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: {
-          DEFAULT: "#F9F7F4",
-          dark: "#F0EDE8",
+        // Dark-first semantic tokens (values in `globals.css`, as RGB channels
+        // so opacity modifiers like `bg-accent/10` work). Use only these:
+        // a guard test rejects the old light palette names and raw hex.
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        surface: {
+          DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+          2: "rgb(var(--surface-2) / <alpha-value>)",
+          3: "rgb(var(--surface-3) / <alpha-value>)",
         },
-        navy: {
-          DEFAULT: "#0F172A",
-          light: "#1E293B",
+        line: {
+          DEFAULT: "rgb(var(--line) / <alpha-value>)",
+          strong: "rgb(var(--line-strong) / <alpha-value>)",
         },
-        blue: {
-          // Brand blue, matched to the mark in `public/mention-logo.svg`.
-          DEFAULT: "#2D5CFF",
-          light: "#EDF1FF",
-          dark: "#1B3FCC",
-          ink: "#14225C",
-        },
-        green: {
-          DEFAULT: "#2B7550",
-          light: "#E8F5F0",
-        },
-        "red-brand": {
-          DEFAULT: "#C75B3A",
-          light: "#FDF0EB",
-        },
-        /** Warm neutral ramp — the only greys UI text should use. */
-        ink: {
-          900: "#0B1220",
-          800: "#0F172A",
-          700: "#1E293B",
-          600: "#3B4657",
-          500: "#5A5A5A",
-          400: "#78716C",
-          300: "#A29C96",
-          200: "#E5E1DB",
-          100: "#F0EDE8",
-          50: "#F9F7F4",
-        },
-        "gray-warm": "#E5E1DB",
-        // 4.9:1 on white / 4.6:1 on cream — was #A8A29E (2.4:1), which failed AA.
-        "gray-mid": "#78716C",
-        "gray-cool": "#8291A6",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+        fg: {
+          DEFAULT: "rgb(var(--fg) / <alpha-value>)",
+          muted: "rgb(var(--fg-muted) / <alpha-value>)",
+          subtle: "rgb(var(--fg-subtle) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
-        },
-        live: {
-          DEFAULT: "#C75B3A",
-          soft: "rgba(199, 91, 58, 0.1)",
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          strong: "rgb(var(--accent-strong) / <alpha-value>)",
+          soft: "rgb(var(--accent) / 0.12)",
+          foreground: "rgb(var(--on-accent) / <alpha-value>)",
         },
         yes: {
-          DEFAULT: "#2B7550",
-          strong: "#1F5C3D",
-          soft: "rgba(43, 117, 80, 0.1)",
-          line: "rgba(43, 117, 80, 0.24)",
+          DEFAULT: "rgb(var(--yes) / <alpha-value>)",
+          strong: "rgb(var(--yes-strong) / <alpha-value>)",
+          soft: "rgb(var(--yes) / 0.12)",
+          line: "rgb(var(--yes) / 0.32)",
         },
         no: {
-          DEFAULT: "#C75B3A",
-          strong: "#A34427",
-          soft: "rgba(199, 91, 58, 0.1)",
-          line: "rgba(199, 91, 58, 0.24)",
+          DEFAULT: "rgb(var(--no) / <alpha-value>)",
+          strong: "rgb(var(--no-strong) / <alpha-value>)",
+          soft: "rgb(var(--no) / 0.12)",
+          line: "rgb(var(--no) / 0.32)",
         },
         /** Locked / challenge-window states. The only place amber may appear. */
         warn: {
-          DEFAULT: "#9A6512",
-          soft: "rgba(154, 101, 18, 0.1)",
-          line: "rgba(154, 101, 18, 0.28)",
+          DEFAULT: "rgb(var(--warn) / <alpha-value>)",
+          soft: "rgb(var(--warn) / 0.12)",
+          line: "rgb(var(--warn) / 0.32)",
+        },
+        live: {
+          DEFAULT: "rgb(var(--live) / <alpha-value>)",
+          soft: "rgb(var(--live) / 0.12)",
+        },
+        // shadcn-style aliases used by `components/ui/*`.
+        background: "rgb(var(--bg) / <alpha-value>)",
+        foreground: "rgb(var(--fg) / <alpha-value>)",
+        card: {
+          DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+          foreground: "rgb(var(--fg) / <alpha-value>)",
+        },
+        muted: {
+          DEFAULT: "rgb(var(--surface-2) / <alpha-value>)",
+          foreground: "rgb(var(--fg-muted) / <alpha-value>)",
+        },
+        border: "rgb(var(--line) / <alpha-value>)",
+        input: "rgb(var(--line-strong) / <alpha-value>)",
+        ring: "rgb(var(--accent) / <alpha-value>)",
+        // Solid fills carrying white text use the darker logo blue (5.1:1).
+        primary: {
+          DEFAULT: "rgb(var(--accent-strong) / <alpha-value>)",
+          foreground: "rgb(var(--on-accent) / <alpha-value>)",
+        },
+        secondary: {
+          DEFAULT: "rgb(var(--surface-2) / <alpha-value>)",
+          foreground: "rgb(var(--fg) / <alpha-value>)",
+        },
+        destructive: {
+          DEFAULT: "rgb(var(--no) / <alpha-value>)",
+          foreground: "rgb(var(--on-accent) / <alpha-value>)",
+        },
+        success: {
+          DEFAULT: "rgb(var(--yes) / <alpha-value>)",
+          foreground: "rgb(var(--on-accent) / <alpha-value>)",
         },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "Georgia", "serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
       fontSize: {
@@ -129,7 +110,7 @@ const config: Config = {
         card: "var(--shadow-card)",
         "card-hover": "var(--shadow-card-hover)",
         dropdown: "var(--shadow-dropdown)",
-        sheet: "0 -16px 48px -16px rgba(15, 23, 42, 0.22)",
+        sheet: "0 -16px 48px -16px rgb(0 0 0 / 0.6)",
         cta: "var(--shadow-cta)",
       },
       animation: {

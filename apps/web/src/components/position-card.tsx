@@ -63,9 +63,9 @@ export function PositionCard({ market }: { market: Market }) {
 
   return (
     <section className="panel overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
-        <Briefcase className="h-3.5 w-3.5 text-blue" aria-hidden />
-        <span className="label-caps text-navy">Your position</span>
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <Briefcase className="h-3.5 w-3.5 text-accent" aria-hidden />
+        <span className="label-caps text-fg">Your position</span>
       </div>
 
       <div className="space-y-2.5 p-4">
@@ -120,7 +120,7 @@ export function PositionCard({ market }: { market: Market }) {
             <Row
               label="Total backed"
               value={fmtSol(summary.total)}
-              className="border-t border-ink-100 pt-2"
+              className="border-t border-line pt-2"
             />
           </>
         )}
@@ -146,11 +146,11 @@ function Holding({
       )}
     >
       <div className={cn("label-caps", side === "yes" ? "text-yes" : "text-no")}>{side}</div>
-      <div className="tnum mt-0.5 font-mono text-sm font-bold text-navy">
+      <div className="tnum mt-0.5 font-mono text-sm font-bold text-fg">
         {shares.toFixed(1)} sh
       </div>
       {avg !== undefined && (
-        <div className="tnum text-micro text-gray-mid">avg {Math.round(avg * 100)}¢</div>
+        <div className="tnum text-micro text-fg-muted">avg {Math.round(avg * 100)}¢</div>
       )}
     </div>
   );
@@ -169,11 +169,11 @@ function Row({
 }) {
   return (
     <div className={cn("flex items-center justify-between gap-3 text-label", className)}>
-      <span className="min-w-0 truncate text-gray-mid">{label}</span>
+      <span className="min-w-0 truncate text-fg-muted">{label}</span>
       <span
         className={cn(
           "tnum shrink-0 font-mono font-semibold",
-          tone === "yes" ? "text-yes" : tone === "no" ? "text-no" : "text-navy"
+          tone === "yes" ? "text-yes" : tone === "no" ? "text-no" : "text-fg"
         )}
       >
         {value}

@@ -140,8 +140,8 @@ export default function PortfolioPage() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-bold tracking-tight text-navy">Portfolio</h1>
-          <p className="mt-1 text-sm text-gray-mid">
+          <h1 className="text-2xl font-bold tracking-tight text-fg">Portfolio</h1>
+          <p className="mt-1 text-sm text-fg-muted">
             Your book — P&L, positions, and every trade you&apos;ve made
           </p>
         </div>
@@ -166,16 +166,16 @@ export default function PortfolioPage() {
           <HistoryTab />
         </Tabs>
       ) : (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-gray-warm bg-white p-12 text-center shadow-card">
-          <Wallet className="h-8 w-8 text-gray-mid" />
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-line bg-surface p-12 text-center shadow-card">
+          <Wallet className="h-8 w-8 text-fg-muted" />
           <div>
-            <p className="font-serif text-lg font-semibold text-navy">Connect your wallet</p>
-            <p className="mt-1 max-w-md text-sm text-gray-mid">
+            <p className="text-lg font-semibold text-fg">Connect your wallet</p>
+            <p className="mt-1 max-w-md text-sm text-fg-muted">
               Your portfolio is per-wallet: positions, trade history, and P&L are all
               tied to the connected account.
             </p>
           </div>
-          <WalletMultiButton className="!bg-navy hover:opacity-90" />
+          <WalletMultiButton />
         </div>
       )}
     </div>
@@ -187,7 +187,7 @@ export default function PortfolioPage() {
 /* ------------------------------------------------------------------ */
 
 const TAB_CLASS =
-  "rounded-xl border border-gray-warm bg-white p-4 shadow-card";
+  "rounded-xl border border-line bg-surface p-4 shadow-card";
 
 function OverviewTab({ className }: { className?: string }) {
   const markets = useSim((s) => s.markets);
@@ -268,27 +268,27 @@ function OverviewTab({ className }: { className?: string }) {
       {settled.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {best && (
-            <div className="flex items-center gap-3 rounded-xl border border-green/20 bg-green-light/40 p-3">
-              <Trophy className="h-4 w-4 flex-none text-green" />
+            <div className="flex items-center gap-3 rounded-xl border border-yes/20 bg-yes-soft p-3">
+              <Trophy className="h-4 w-4 flex-none text-yes" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-navy">{best.marketTitle}</div>
-                <div className="text-[10px] text-gray-mid">
+                <div className="truncate text-xs font-semibold text-fg">{best.marketTitle}</div>
+                <div className="text-[10px] text-fg-muted">
                   {best.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(best.side)} · {fmtWhen(best.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-green">+{fmtBalance(best.pnl)}</span>
+              <span className="font-mono text-sm font-bold text-yes">+{fmtBalance(best.pnl)}</span>
             </div>
           )}
           {worst && (
-            <div className="flex items-center gap-3 rounded-xl border border-red-brand/20 bg-red-50/60 p-3">
-              <TrendingDown className="h-4 w-4 flex-none text-red-brand" />
+            <div className="flex items-center gap-3 rounded-xl border border-no/20 bg-no-soft p-3">
+              <TrendingDown className="h-4 w-4 flex-none text-no" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-navy">{worst.marketTitle}</div>
-                <div className="text-[10px] text-gray-mid">
+                <div className="truncate text-xs font-semibold text-fg">{worst.marketTitle}</div>
+                <div className="text-[10px] text-fg-muted">
                   {worst.kind === "sell" ? "Sold" : "Claimed"} {tSideLabel(worst.side)} · {fmtWhen(worst.at)}
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-red-brand">−{fmtBalance(Math.abs(worst.pnl))}</span>
+              <span className="font-mono text-sm font-bold text-no">−{fmtBalance(Math.abs(worst.pnl))}</span>
             </div>
           )}
         </div>
@@ -298,18 +298,18 @@ function OverviewTab({ className }: { className?: string }) {
         {/* P&L trend */}
         <div className={cn(TAB_CLASS, "lg:col-span-3")}>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-mid">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
               Realized P&L trend
             </h2>
-            <span className="text-xs text-gray-mid">
-              cumulative <span className={cn("font-mono font-semibold", overview.realizedPnl >= 0 ? "text-green" : "text-red-brand")}>
+            <span className="text-xs text-fg-muted">
+              cumulative <span className={cn("font-mono font-semibold", overview.realizedPnl >= 0 ? "text-yes" : "text-no")}>
                 {fmtSigned(overview.realizedPnl)}
               </span>
             </span>
           </div>
           {series.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm text-gray-mid">
+              <p className="text-sm text-fg-muted">
                 No settled trades yet. Sell a position or claim a win and it shows up here.
               </p>
             </div>
@@ -323,18 +323,18 @@ function OverviewTab({ className }: { className?: string }) {
                     <span
                       className={cn(
                         "font-mono text-[9px]",
-                        b.realizedPnl >= 0 ? "text-green/80" : "text-red-brand/80"
+                        b.realizedPnl >= 0 ? "text-yes/80" : "text-no/80"
                       )}
                     >
                       {b.realizedPnl >= 0 ? "+" : ""}
                       {fmtBalance(b.realizedPnl, { compact: true })}
                     </span>
                     <div
-                      className={cn("w-full rounded-t", b.realizedPnl >= 0 ? "bg-green/80" : "bg-red-brand/80")}
+                      className={cn("w-full rounded-t", b.realizedPnl >= 0 ? "bg-yes/80" : "bg-no/80")}
                       style={{ height: `${Math.max(3, h)}%` }}
                       title={`${b.label}: ${fmtSigned(b.realizedPnl)}`}
                     />
-                    <span className="text-[9px] text-gray-mid">{b.label}</span>
+                    <span className="text-[9px] text-fg-muted">{b.label}</span>
                   </div>
                 );
               })}
@@ -344,23 +344,23 @@ function OverviewTab({ className }: { className?: string }) {
 
         {/* By vertical */}
         <div className={cn(TAB_CLASS, "lg:col-span-2")}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-mid">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-muted">
             By market type
           </h2>
           {byVertical.length === 0 ? (
-            <p className="py-10 text-center text-sm text-gray-mid">No trades yet.</p>
+            <p className="py-10 text-center text-sm text-fg-muted">No trades yet.</p>
           ) : (
             <div className="space-y-3">
               {byVertical.map((v) => (
                 <div key={v.vertical}>
                   <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium capitalize text-navy">{v.vertical}</span>
-                    <span className="text-gray-mid">
+                    <span className="font-medium capitalize text-fg">{v.vertical}</span>
+                    <span className="text-fg-muted">
                       {v.tradeCount} trades ·{" "}
                       <span
                         className={cn(
                           "font-mono font-semibold",
-                          v.realizedPnl >= 0 ? "text-green" : "text-red-brand"
+                          v.realizedPnl >= 0 ? "text-yes" : "text-no"
                         )}
                       >
                         {v.realizedPnl >= 0 ? "+" : ""}
@@ -368,9 +368,9 @@ function OverviewTab({ className }: { className?: string }) {
                       </span>
                     </span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-cream-dark">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
                     <div
-                      className="h-full rounded-full bg-blue/70"
+                      className="h-full rounded-full bg-accent-strong/70"
                       style={{ width: `${(v.buyVolume / maxVertical) * 100}%` }}
                     />
                   </div>
@@ -398,20 +398,20 @@ function PnlCard({
   tone?: "pos" | "neg" | "neutral";
 }) {
   return (
-    <div className="rounded-xl border border-gray-warm bg-white p-3 shadow-card">
-      <div className="flex items-center gap-1.5 text-[11px] text-gray-mid">
+    <div className="rounded-xl border border-line bg-surface p-3 shadow-card">
+      <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
         {icon}
         {label}
       </div>
       <div
         className={cn(
           "mt-1 font-mono text-lg font-bold",
-          tone === "pos" ? "text-green" : tone === "neg" ? "text-red-brand" : "text-navy"
+          tone === "pos" ? "text-yes" : tone === "neg" ? "text-no" : "text-fg"
         )}
       >
         {value}
       </div>
-      {sub && <div className="mt-0.5 text-[10px] text-gray-mid">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[10px] text-fg-muted">{sub}</div>}
     </div>
   );
 }
@@ -504,7 +504,7 @@ function PositionsTab({ className }: { className?: string }) {
         <SummaryCard
           label="Unrealized P&L"
           value={
-            <span className={cn(totals.pnl >= 0 ? "text-green" : "text-red-brand")}>
+            <span className={cn(totals.pnl >= 0 ? "text-yes" : "text-no")}>
               {totals.pnl >= 0 ? "+" : ""}
               {fmtBalance(totals.pnl)}
             </span>
@@ -514,7 +514,7 @@ function PositionsTab({ className }: { className?: string }) {
               <span
                 className={cn(
                   "text-[10px] font-mono",
-                  totals.pnl >= 0 ? "text-green" : "text-red-brand"
+                  totals.pnl >= 0 ? "text-yes" : "text-no"
                 )}
               >
                 {totals.pnl >= 0 ? "+" : ""}
@@ -533,14 +533,14 @@ function PositionsTab({ className }: { className?: string }) {
         <SummaryCard
           label="Account Balance"
           value={fmtBalance(user.balance)}
-          accent="text-green"
+          accent="text-yes"
           icon={<Trophy className="h-3.5 w-3.5" />}
         />
       </div>
 
       {/* Filters & Sort */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-lg border border-gray-warm bg-white p-1">
+        <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
           {(["all", "open", "resolving", "resolved"] as FilterStatus[]).map((f) => (
             <button
               key={f}
@@ -548,8 +548,8 @@ function PositionsTab({ className }: { className?: string }) {
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                 filter === f
-                  ? "bg-blue-light text-blue"
-                  : "text-gray-mid hover:text-navy hover:bg-cream-dark"
+                  ? "bg-accent-soft text-accent"
+                  : "text-fg-muted hover:text-fg hover:bg-surface-2"
               )}
             >
               {f}
@@ -560,12 +560,12 @@ function PositionsTab({ className }: { className?: string }) {
         <div className="relative">
           <button
             onClick={() => setSortOpen(!sortOpen)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-warm bg-white px-3 py-1.5 text-xs font-medium text-navy transition-colors hover:border-blue/40"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:border-accent/40"
           >
             Sort: {sort === "pnl" ? "P&L" : sort === "value" ? "Value" : "Name"}
           </button>
           {sortOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-gray-warm bg-white shadow-dropdown">
+            <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-surface shadow-dropdown">
               {([
                 ["pnl", "P&L (best)"],
                 ["value", "Value (highest)"],
@@ -580,8 +580,8 @@ function PositionsTab({ className }: { className?: string }) {
                   className={cn(
                     "flex w-full items-center px-3 py-2 text-left text-xs transition-colors",
                     sort === k
-                      ? "bg-blue-light font-semibold text-blue"
-                      : "text-navy hover:bg-cream-dark"
+                      ? "bg-accent-soft font-semibold text-accent"
+                      : "text-fg hover:bg-surface-2"
                   )}
                 >
                   {label}
@@ -595,7 +595,7 @@ function PositionsTab({ className }: { className?: string }) {
       {/* Claimable Winnings */}
       {claimableTotal > 0 && (
         <section>
-          <h2 className="mb-2.5 text-sm font-semibold uppercase tracking-wider text-gray-mid">
+          <h2 className="mb-2.5 text-sm font-semibold uppercase tracking-wider text-fg-muted">
             Claimable Winnings
           </h2>
           <div className="space-y-2">
@@ -605,16 +605,16 @@ function PositionsTab({ className }: { className?: string }) {
               return (
                 <div
                   key={mid}
-                  className="flex items-center gap-4 rounded-xl border border-green/20 bg-green-light/50 p-4"
+                  className="flex items-center gap-4 rounded-xl border border-yes/20 bg-yes-soft p-4"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-navy">{m.title}</div>
-                    <div className="text-xs text-gray-mid">
+                    <div className="truncate text-sm font-semibold text-fg">{m.title}</div>
+                    <div className="text-xs text-fg-muted">
                       {m.event} ·{" "}
                       {isVoided(m) ? "voided, refund" : `winner: ${m.winningOutcome?.toUpperCase()}`}
                     </div>
                   </div>
-                  <span className="font-mono text-lg font-bold text-green">{fmtBalance(amt)}</span>
+                  <span className="font-mono text-lg font-bold text-yes">{fmtBalance(amt)}</span>
                   <Button
                     variant="yes"
                     size="sm"
@@ -634,12 +634,12 @@ function PositionsTab({ className }: { className?: string }) {
 
       {/* Position List */}
       <section>
-        <h2 className="mb-2.5 text-sm font-semibold uppercase tracking-wider text-gray-mid">
+        <h2 className="mb-2.5 text-sm font-semibold uppercase tracking-wider text-fg-muted">
           All Positions
         </h2>
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-warm py-16 text-center">
-            <p className="text-sm text-gray-mid">
+          <div className="rounded-xl border border-dashed border-line py-16 text-center">
+            <p className="text-sm text-fg-muted">
               {rows.length === 0 ? "No positions yet." : "No positions match this filter."}
             </p>
             {rows.length === 0 && (
@@ -704,10 +704,10 @@ function HistoryTab({ className }: { className?: string }) {
   return (
     <TabsContent value="history" className={className}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-mid">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
           {filtered.length} trade{filtered.length === 1 ? "" : "s"}
         </h2>
-        <div className="flex gap-1 rounded-lg border border-gray-warm bg-white p-1">
+        <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
           {(["all", "buy", "sell", "back", "claim"] as HistFilter[]).map((f) => (
             <button
               key={f}
@@ -715,8 +715,8 @@ function HistoryTab({ className }: { className?: string }) {
               className={cn(
                 "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
                 filter === f
-                  ? "bg-blue-light text-blue"
-                  : "text-gray-mid hover:text-navy hover:bg-cream-dark"
+                  ? "bg-accent-soft text-accent"
+                  : "text-fg-muted hover:text-fg hover:bg-surface-2"
               )}
             >
               {f}
@@ -726,8 +726,8 @@ function HistoryTab({ className }: { className?: string }) {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-warm py-16 text-center">
-          <p className="text-sm text-gray-mid">
+        <div className="rounded-xl border border-dashed border-line py-16 text-center">
+          <p className="text-sm text-fg-muted">
             No trades yet — buy YES on a market and it&apos;ll appear here.
           </p>
           <Button variant="outline" size="sm" asChild className="mt-3">
@@ -735,11 +735,11 @@ function HistoryTab({ className }: { className?: string }) {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-warm bg-white shadow-card">
+        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-warm/70 bg-cream/60 text-[10px] uppercase tracking-wider text-gray-mid">
+                <tr className="border-b border-line/70 bg-bg/60 text-[10px] uppercase tracking-wider text-fg-muted">
                   <th className="px-4 py-2.5 font-semibold">When</th>
                   <th className="px-4 py-2.5 font-semibold">Market</th>
                   <th className="px-4 py-2.5 font-semibold">Side</th>
@@ -749,36 +749,36 @@ function HistoryTab({ className }: { className?: string }) {
                   <th className="px-4 py-2.5 text-right font-semibold">On-chain</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-warm/50">
+              <tbody className="divide-y divide-line/50">
                 {filtered.map((t) => (
                   <HistoryRow key={t.id} t={t} slug={markets[t.marketId]?.slug} />
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-gray-warm/70 bg-cream/60 text-[11px]">
+                <tr className="border-t border-line/70 bg-bg/60 text-[11px]">
                   <td className="px-4 py-2.5" colSpan={4}>
-                    <span className="font-semibold uppercase tracking-wider text-gray-mid">Cash flow</span>{" "}
-                    <span className="text-gray-mid">
+                    <span className="font-semibold uppercase tracking-wider text-fg-muted">Cash flow</span>{" "}
+                    <span className="text-fg-muted">
                       {tradesCompacted && `(filtered: ${filtered.length} of ${trades.length})`}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
-                    <span className="text-red-brand">−{fmtBalance(footer.inflow)}</span>
-                    <span className="text-gray-mid"> / </span>
-                    <span className="text-green">+{fmtBalance(footer.outflow)}</span>
+                    <span className="text-no">−{fmtBalance(footer.inflow)}</span>
+                    <span className="text-fg-muted"> / </span>
+                    <span className="text-yes">+{fmtBalance(footer.outflow)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <span
                       className={cn(
                         "font-mono font-bold",
-                        footer.net >= 0 ? "text-green" : "text-red-brand"
+                        footer.net >= 0 ? "text-yes" : "text-no"
                       )}
                     >
                       {fmtSigned(footer.net)}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
-                    <span className={cn("font-bold", footer.realized >= 0 ? "text-green" : "text-red-brand")}>
+                    <span className={cn("font-bold", footer.realized >= 0 ? "text-yes" : "text-no")}>
                       {fmtSigned(footer.realized)}
                     </span>
                   </td>
@@ -797,91 +797,91 @@ function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
   const kindLabel = t.kind === "buy" ? "Buy" : t.kind === "sell" ? "Sell" : t.kind === "back" ? "Back" : "Claim";
   const kindColor =
     t.kind === "buy" || t.kind === "back"
-      ? "bg-blue-light text-blue"
+      ? "bg-accent-soft text-accent"
       : t.kind === "sell"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-green-light text-green";
+        ? "bg-warn-soft text-warn"
+        : "bg-yes-soft text-yes";
 
   return (
-    <tr className="transition-colors hover:bg-cream/50">
-      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-gray-mid">
+    <tr className="transition-colors hover:bg-bg/50">
+      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-fg-muted">
         {fmtWhen(t.at)}
       </td>
       <td className="max-w-[260px] px-4 py-3">
         {slug ? (
           <Link
             href={`/market/${slug}`}
-            className="flex items-center gap-1.5 truncate font-medium text-navy hover:text-blue"
+            className="flex items-center gap-1.5 truncate font-medium text-fg hover:text-accent"
           >
             <span className="truncate">{t.marketTitle}</span>
-            <ArrowUpRight className="h-3 w-3 flex-none text-gray-cool" />
+            <ArrowUpRight className="h-3 w-3 flex-none text-fg-subtle" />
           </Link>
         ) : (
-          <span className="truncate font-medium text-navy">{t.marketTitle}</span>
+          <span className="truncate font-medium text-fg">{t.marketTitle}</span>
         )}
       </td>
       <td className="px-4 py-3">
         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase", kindColor)}>
           {kindLabel}
         </span>
-        <span className="ml-1.5 font-mono text-xs text-navy">
+        <span className="ml-1.5 font-mono text-xs text-fg">
           {t.kind === "back" || t.kind === "claim" ? `\u201c${t.side}\u201d` : t.side.toUpperCase()}
         </span>
       </td>
       <td className="px-4 py-3">
         {t.kind === "buy" ? (
           <div>
-            <div className="font-mono text-xs text-navy">{(t.price * 100).toFixed(0)}¢</div>
-            <div className="text-[10px] text-gray-mid">entry</div>
+            <div className="font-mono text-xs text-fg">{(t.price * 100).toFixed(0)}¢</div>
+            <div className="text-[10px] text-fg-muted">entry</div>
           </div>
         ) : t.kind === "sell" ? (
           <div>
             <div
               className={cn(
                 "font-mono text-xs font-semibold",
-                (t.avgEntry ?? 0) > 0 && t.price > (t.avgEntry ?? 0) ? "text-green" : t.price < (t.avgEntry ?? 0) ? "text-red-brand" : "text-navy"
+                (t.avgEntry ?? 0) > 0 && t.price > (t.avgEntry ?? 0) ? "text-yes" : t.price < (t.avgEntry ?? 0) ? "text-no" : "text-fg"
               )}
             >
               {(t.price * 100).toFixed(0)}¢
             </div>
             {(t.avgEntry ?? 0) > 0 && (
-              <div className="text-[10px] text-gray-mid">
+              <div className="text-[10px] text-fg-muted">
                 vs <span className="font-mono">{(t.avgEntry! * 100).toFixed(0)}¢</span>
               </div>
             )}
           </div>
         ) : t.kind === "back" ? (
           <div>
-            <div className="font-mono text-xs text-navy">
+            <div className="font-mono text-xs text-fg">
               {t.price > 0 ? `${Math.max(1, Math.round(t.price * 100))}% pot` : "—"}
             </div>
-            <div className="text-[10px] text-gray-mid">at back</div>
+            <div className="text-[10px] text-fg-muted">at back</div>
           </div>
         ) : (
-          <span className="text-xs text-gray-mid">—</span>
+          <span className="text-xs text-fg-muted">—</span>
         )}
       </td>
       <td className="px-4 py-3">
-        <div className="font-mono text-xs font-semibold text-navy">
+        <div className="font-mono text-xs font-semibold text-fg">
           {t.kind === "buy" || t.kind === "sell" ? `${t.shares.toFixed(1)} sh` : ""}
         </div>
-        <div className={cn("font-mono text-[11px]", isOut ? "text-red-brand" : "text-green")}>
+        <div className={cn("font-mono text-[11px]", isOut ? "text-no" : "text-yes")}>
           {isOut ? "−" : "+"}
           {fmtBalance(t.amount)}
         </div>
         {t.kind === "back" && t.price > 0 && (
-          <div className="mt-0.5 font-mono text-[11px] font-semibold text-navy">
+          <div className="mt-0.5 font-mono text-[11px] font-semibold text-fg">
             → ≈ {fmtBalance(t.amount / t.price, { compact: true })} if it lands
           </div>
         )}
       </td>
       <td className="px-4 py-3">
         {t.pnl !== 0 ? (
-          <span className={cn("font-mono text-xs font-bold", t.pnl > 0 ? "text-green" : "text-red-brand")}>
+          <span className={cn("font-mono text-xs font-bold", t.pnl > 0 ? "text-yes" : "text-no")}>
             {fmtSigned(t.pnl)}
           </span>
         ) : (
-          <span className="font-mono text-xs text-gray-mid">—</span>
+          <span className="font-mono text-xs text-fg-muted">—</span>
         )}
       </td>
       <td className="px-4 py-3 text-right">
@@ -890,12 +890,12 @@ function HistoryRow({ t, slug }: { t: TradeRecord; slug?: string }) {
             href={`https://explorer.solana.com/tx/${t.txSig}?cluster=devnet`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded bg-blue-light px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue transition-colors hover:bg-blue hover:text-white"
+            className="inline-flex items-center gap-1 rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent transition-colors hover:bg-accent-strong hover:text-accent-foreground"
           >
             {shortAddr(t.txSig)}
           </a>
         ) : (
-          <span className={cn("text-[10px] font-semibold uppercase", isOut ? "text-amber-600" : "text-gray-mid")}>
+          <span className={cn("text-[10px] font-semibold uppercase", isOut ? "text-warn" : "text-fg-muted")}>
             Sim
           </span>
         )}
@@ -931,14 +931,14 @@ function SummaryCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-warm bg-white p-3.5 shadow-card">
-      <div className="flex items-center gap-1.5 text-[11px] text-gray-mid">
+    <div className="rounded-xl border border-line bg-surface p-3.5 shadow-card">
+      <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
         {icon}
         {label}
       </div>
       <div
         className={cn(
-          "mt-1 font-mono text-lg font-bold text-navy",
+          "mt-1 font-mono text-lg font-bold text-fg",
           accent
         )}
       >
@@ -962,7 +962,7 @@ function PositionRowCard({
   return (
     <Link
       href={`/market/${m.slug}`}
-      className="group block rounded-xl border border-gray-warm bg-white p-4 shadow-card transition-all hover:border-blue/30 hover:shadow-md"
+      className="group block rounded-xl border border-line bg-surface p-4 shadow-card transition-all hover:border-accent/30 hover:shadow-md"
     >
       {/* Top row: status + title + time */}
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -975,28 +975,28 @@ function PositionRowCard({
               )}
             >
               {m.status === "open" && (
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-yes animate-pulse" />
               )}
               {status.label}
             </span>
-            <span className="text-[11px] text-gray-mid">
+            <span className="text-[11px] text-fg-muted">
               {m.vertical} · {m.type}
             </span>
           </div>
-          <h3 className="truncate text-[15px] font-semibold text-navy group-hover:text-blue">
+          <h3 className="truncate text-[15px] font-semibold text-fg group-hover:text-accent">
             {m.title}
           </h3>
-          <p className="mt-0.5 truncate text-xs text-gray-mid">{m.event}</p>
+          <p className="mt-0.5 truncate text-xs text-fg-muted">{m.event}</p>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-gray-mid">
+        <div className="flex items-center gap-1.5 text-xs text-fg-muted">
           {m.status === "open" && row.timeLeft > 0 && (
             <>
               <Clock className="h-3 w-3" />
               <span className="font-mono">{fmtTimeLeft(row.timeLeft)}</span>
             </>
           )}
-          <ArrowUpRight className="h-4 w-4 text-gray-cool opacity-0 transition-opacity group-hover:opacity-100" />
+          <ArrowUpRight className="h-4 w-4 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" />
         </div>
       </div>
 
@@ -1004,16 +1004,16 @@ function PositionRowCard({
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
         {/* Side */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-mid">Side</div>
-          <div className="mt-0.5 font-mono text-sm font-semibold text-navy">{row.side}</div>
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted">Side</div>
+          <div className="mt-0.5 font-mono text-sm font-semibold text-fg">{row.side}</div>
         </div>
 
         {/* Shares / Backed */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-mid">
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted">
             {m.type === "binary" ? "Shares" : "Backed"}
           </div>
-          <div className="mt-0.5 font-mono text-sm font-semibold text-navy">
+          <div className="mt-0.5 font-mono text-sm font-semibold text-fg">
             {m.type === "binary"
               ? row.shares.toFixed(1)
               : row.wordBacks
@@ -1026,35 +1026,35 @@ function PositionRowCard({
 
         {/* Entry vs Current */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-mid">Entry → Now</div>
-          <div className="mt-0.5 font-mono text-sm font-semibold text-navy">
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted">Entry → Now</div>
+          <div className="mt-0.5 font-mono text-sm font-semibold text-fg">
             {m.type === "binary" ? (
               <>
                 <span>{(row.avgEntry * 100).toFixed(0)}¢</span>
-                <span className="text-gray-mid"> → </span>
+                <span className="text-fg-muted"> → </span>
                 <span
                   className={cn(
-                    row.currentPrice >= row.avgEntry ? "text-green" : "text-red-brand"
+                    row.currentPrice >= row.avgEntry ? "text-yes" : "text-no"
                   )}
                 >
                   {(row.currentPrice * 100).toFixed(0)}¢
                 </span>
               </>
             ) : (
-              <span className="text-gray-mid">{(row.currentPrice * 100).toFixed(0)}% pot share</span>
+              <span className="text-fg-muted">{(row.currentPrice * 100).toFixed(0)}% pot share</span>
             )}
           </div>
         </div>
 
         {/* P&L */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-mid">P&L</div>
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted">P&L</div>
           {m.type === "binary" ? (
             <div className="mt-0.5 flex items-baseline gap-1.5">
               <span
                 className={cn(
                   "font-mono text-sm font-bold",
-                  row.pnl >= 0 ? "text-green" : "text-red-brand"
+                  row.pnl >= 0 ? "text-yes" : "text-no"
                 )}
               >
                 {fmtSigned(row.pnl)}
@@ -1062,7 +1062,7 @@ function PositionRowCard({
               <span
                 className={cn(
                   "text-[10px] font-mono",
-                  row.pnl >= 0 ? "text-green/70" : "text-red-brand/70"
+                  row.pnl >= 0 ? "text-yes/70" : "text-no/70"
                 )}
               >
                 {row.pnl >= 0 ? "+" : ""}
@@ -1070,31 +1070,31 @@ function PositionRowCard({
               </span>
             </div>
           ) : (
-            <div className="mt-0.5 font-mono text-sm text-gray-mid">—</div>
+            <div className="mt-0.5 font-mono text-sm text-fg-muted">—</div>
           )}
         </div>
       </div>
 
       {/* Value + Actions */}
-      <div className="mt-3 flex items-center justify-between border-t border-gray-warm/60 pt-3">
+      <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-3">
         <div className="flex items-baseline gap-3">
           <div>
-            <span className="text-[10px] uppercase tracking-wider text-gray-mid">
+            <span className="text-[10px] uppercase tracking-wider text-fg-muted">
               {row.markBasis === "proposed" ? "Value if confirmed" : "Value"}
             </span>{" "}
-            <span className="font-mono text-sm font-bold text-navy">{fmtBalance(row.marketValue)}</span>
+            <span className="font-mono text-sm font-bold text-fg">{fmtBalance(row.marketValue)}</span>
           </div>
           {m.type === "binary" && (
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-gray-mid">Cost</span>{" "}
-              <span className="font-mono text-sm text-gray-mid">{fmtBalance(row.costBasis)}</span>
+              <span className="text-[10px] uppercase tracking-wider text-fg-muted">Cost</span>{" "}
+              <span className="font-mono text-sm text-fg-muted">{fmtBalance(row.costBasis)}</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {row.isClaimable && (
-            <span className="rounded-full bg-green/10 px-2 py-0.5 text-[10px] font-bold text-green">
+            <span className="rounded-full bg-yes/10 px-2 py-0.5 text-[10px] font-bold text-yes">
               CLAIMABLE
             </span>
           )}

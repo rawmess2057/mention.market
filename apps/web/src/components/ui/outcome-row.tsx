@@ -41,7 +41,7 @@ export function OutcomeRow({
       className={cn(
         "group w-full text-left",
         dense ? "px-3 py-2" : "px-3.5 py-3",
-        onSelect && "rounded-tile transition-colors hover:bg-ink-50",
+        onSelect && "rounded-tile transition-colors hover:bg-surface-2",
         className
       )}
     >
@@ -51,13 +51,13 @@ export function OutcomeRow({
           className={cn(
             "min-w-0 flex-1 truncate font-semibold",
             dense ? "text-[13px]" : "text-sm",
-            leading ? "text-navy" : "text-ink-600"
+            leading ? "text-fg" : "text-fg-muted"
           )}
         >
           {label}
         </span>
         {multiplier !== undefined && multiplier > 0 && (
-          <span className="tnum shrink-0 rounded-field bg-ink-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-500">
+          <span className="tnum shrink-0 rounded-field bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-fg-muted">
             {multiplier.toFixed(2)}×
           </span>
         )}
@@ -65,7 +65,7 @@ export function OutcomeRow({
           className={cn(
             "tnum w-10 shrink-0 text-right font-mono font-bold",
             dense ? "text-[12px]" : "text-sm",
-            leading ? "text-navy" : "text-ink-600"
+            leading ? "text-fg" : "text-fg-muted"
           )}
         >
           {Math.round(pct)}%
@@ -77,12 +77,12 @@ export function OutcomeRow({
         className={cn(dense ? "mt-1.5" : "mt-2", "h-1.5")}
         barClassName={
           leading
-            ? "bg-gradient-to-r from-blue to-blue-dark"
-            : "bg-blue/35 group-hover:bg-blue/50"
+            ? "bg-gradient-to-r from-accent-strong to-accent-strong"
+            : "bg-accent-strong/35 group-hover:bg-accent-strong/50"
         }
       />
 
-      {sub && <div className="mt-1.5 text-micro text-gray-mid">{sub}</div>}
+      {sub && <div className="mt-1.5 text-micro text-fg-muted">{sub}</div>}
     </Wrapper>
   );
 }

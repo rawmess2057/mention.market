@@ -24,7 +24,7 @@ export function SplitBar({
   return (
     <div
       className={cn(
-        "relative flex w-full overflow-hidden rounded-full bg-cream-dark",
+        "relative flex w-full overflow-hidden rounded-full bg-surface-2",
         className
       )}
       style={{ height }}
@@ -32,12 +32,12 @@ export function SplitBar({
       aria-label={`YES ${Math.round(pct)}%, NO ${Math.round(100 - pct)}%`}
     >
       <motion.div
-        className="h-full rounded-full bg-gradient-to-r from-green to-green/85"
+        className="h-full rounded-full bg-gradient-to-r from-yes to-yes/85"
         initial={false}
         animate={{ width: `${pct}%` }}
         transition={animate ? { type: "spring", stiffness: 140, damping: 22 } : { duration: 0 }}
       />
-      <div className="h-full flex-1 rounded-full bg-gradient-to-r from-red-brand/85 to-red-brand" />
+      <div className="h-full flex-1 rounded-full bg-gradient-to-r from-no/85 to-no" />
     </div>
   );
 }

@@ -14,18 +14,16 @@ import {
   type PricePoint,
   type PriceSeries,
 } from "@/lib/history";
+import { rgba, SERIES_COLORS } from "@/lib/theme";
 
 /** Distinct line colors for word-race options; overflow gets generated hues. */
-export const WORD_CHART_COLORS = [
-  "#2D5CFF", "#C75B3A", "#2B7550", "#B8860B", "#7B4FBF", "#0F8B8D",
-  "#D14D72", "#4A6FA5", "#8C6D1F", "#5C8A3A", "#A64AC9", "#B5651D",
-];
+export const WORD_CHART_COLORS: readonly string[] = SERIES_COLORS;
 
 /** Stable color per option index (matches the legend swatch). */
 export function wordChartColor(index: number): string {
   if (index >= 0 && index < WORD_CHART_COLORS.length) return WORD_CHART_COLORS[index];
   const hue = (index * 137.508) % 360;
-  return `hsl(${hue.toFixed(0)} 55% 45%)`;
+  return `hsl(${hue.toFixed(0)} 70% 65%)`;
 }
 
 function toLineData(
@@ -45,34 +43,34 @@ function createPriceChart(container: HTMLElement) {
   return createChart(container, {
     layout: {
       background: { type: ColorType.Solid, color: "transparent" },
-      textColor: "#5A5A5A",
+      textColor: rgba("fg-subtle"),
       fontFamily: "var(--font-mono)",
       fontSize: 11,
     },
     grid: {
-      vertLines: { color: "rgba(229, 225, 219, 0.4)" },
-      horzLines: { color: "rgba(229, 225, 219, 0.4)" },
+      vertLines: { visible: false },
+      horzLines: { color: rgba("line", 0.6) },
     },
     crosshair: {
       vertLine: {
-        color: "rgba(45, 92, 255, 0.3)",
+        color: rgba("fg-subtle", 0.5),
         width: 1,
         style: 2,
-        labelBackgroundColor: "#2D5CFF",
+        labelBackgroundColor: rgba("surface-3"),
       },
       horzLine: {
-        color: "rgba(45, 92, 255, 0.3)",
+        color: rgba("fg-subtle", 0.5),
         width: 1,
         style: 2,
-        labelBackgroundColor: "#2D5CFF",
+        labelBackgroundColor: rgba("surface-3"),
       },
     },
     rightPriceScale: {
-      borderColor: "rgba(229, 225, 219, 0.6)",
+      borderVisible: false,
       scaleMargins: { top: 0.1, bottom: 0.25 },
     },
     timeScale: {
-      borderColor: "rgba(229, 225, 219, 0.6)",
+      borderVisible: false,
       timeVisible: true,
       secondsVisible: false,
     },
@@ -109,10 +107,10 @@ export function PriceChart({
     const chart = createPriceChart(containerRef.current);
 
     const lineSeries = chart.addSeries(LineSeries, {
-      color: "#2E7DF6",
+      color: rgba("accent"),
       lineWidth: 2,
-      crosshairMarkerBackgroundColor: "#2E7DF6",
-      crosshairMarkerBorderColor: "#ffffff",
+      crosshairMarkerBackgroundColor: rgba("accent"),
+      crosshairMarkerBorderColor: rgba("bg"),
       crosshairMarkerRadius: 4,
       priceFormat: PRICE_FORMAT,
     });
@@ -129,7 +127,7 @@ export function PriceChart({
       try {
         lineSeries.createPriceLine({
           price: 50,
-          color: "rgba(90, 90, 90, 0.5)",
+          color: rgba("fg-subtle", 0.5),
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
@@ -201,7 +199,7 @@ export function PriceChart({
       <div ref={containerRef} className="h-full w-full" />
       {data.length < 2 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="rounded-full border border-gray-warm bg-white/90 px-3 py-1 text-[11px] text-gray-mid">
+          <span className="rounded-full border border-line bg-surface/90 px-3 py-1 text-[11px] text-fg-muted">
             {emptyLabel}
           </span>
         </div>
@@ -211,7 +209,7 @@ export function PriceChart({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(43, 117, 80, 0.06) 0%, transparent 40%, transparent 60%, rgba(199, 91, 58, 0.06) 100%)",
+            "linear-gradient(to bottom, rgb(var(--yes) / 0.06) 0%, transparent 40%, transparent 60%, rgb(var(--no) / 0.06) 100%)",
         }}
       />
     </div>
@@ -281,7 +279,7 @@ export function PriceChartMulti({
           color: s.color,
           lineWidth: 2,
           crosshairMarkerBackgroundColor: s.color,
-          crosshairMarkerBorderColor: "#ffffff",
+          crosshairMarkerBorderColor: rgba("bg"),
           crosshairMarkerRadius: 4,
           priceFormat: PRICE_FORMAT,
         });
@@ -303,7 +301,7 @@ export function PriceChartMulti({
       <div ref={containerRef} className="h-full w-full" />
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="rounded-full border border-gray-warm bg-white/90 px-3 py-1 text-[11px] text-gray-mid">
+          <span className="rounded-full border border-line bg-surface/90 px-3 py-1 text-[11px] text-fg-muted">
             {emptyLabel}
           </span>
         </div>
@@ -312,7 +310,7 @@ export function PriceChartMulti({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(43, 117, 80, 0.06) 0%, transparent 40%, transparent 60%, rgba(199, 91, 58, 0.06) 100%)",
+            "linear-gradient(to bottom, rgb(var(--yes) / 0.06) 0%, transparent 40%, transparent 60%, rgb(var(--no) / 0.06) 100%)",
         }}
       />
     </div>
@@ -373,7 +371,7 @@ export function PriceChartWithTimeframe({
 
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className="flex items-center gap-1 border-b border-ink-200 px-3 py-2">
+      <div className="flex items-center gap-1 border-b border-line px-3 py-2">
         {CHART_TIMEFRAMES.map((tf) => (
           <button
             key={tf}
@@ -382,21 +380,21 @@ export function PriceChartWithTimeframe({
             className={cn(
               "rounded-field px-2.5 py-1 text-micro font-semibold transition-colors",
               timeframe === tf
-                ? "bg-blue-light text-blue"
-                : "text-gray-mid hover:bg-ink-100 hover:text-navy"
+                ? "bg-accent-soft text-accent"
+                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
             )}
           >
             {tf === "all" ? "All" : tf}
           </button>
         ))}
-        <span className="tnum ml-auto font-mono text-[10px] text-gray-mid">
+        <span className="tnum ml-auto font-mono text-[10px] text-fg-muted">
           {isMulti
             ? `${visible.length}/${multi.length} words`
             : `${pointCount} prints`}
         </span>
       </div>
       {isMulti && multi.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-ink-200 px-3 py-2">
+        <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2">
           {multi.map((s) => {
             const off = hidden.has(s.name);
             return (
@@ -407,8 +405,8 @@ export function PriceChartWithTimeframe({
                 className={cn(
                   "flex items-center gap-1.5 rounded-field border px-2 py-1 text-micro font-medium transition-colors",
                   off
-                    ? "border-ink-200 text-gray-mid opacity-50"
-                    : "border-ink-200 text-navy hover:bg-ink-100"
+                    ? "border-line text-fg-muted opacity-50"
+                    : "border-line text-fg hover:bg-surface-2"
                 )}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />

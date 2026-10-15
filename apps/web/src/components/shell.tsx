@@ -41,21 +41,12 @@ const NAV = [
 export function TopBar() {
   const { connected, publicKey, disconnect } = useWallet();
   const user = useSim((s) => s.user);
-  const toast = useSim((s) => s.toast);
   const showToast = useSim((s) => s.showToast);
   const pathname = usePathname();
-  const [toastVisible, setToastVisible] = useState(false);
-
-  useEffect(() => {
-    if (!toast) return;
-    setToastVisible(true);
-    const t = setTimeout(() => setToastVisible(false), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-gray-100/80 bg-white/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-line/80 bg-surface/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-8 lg:px-12">
           <Link href="/" className="group flex items-center gap-2.5">
             <Image
@@ -67,16 +58,16 @@ export function TopBar() {
               unoptimized
               className="h-8 w-8 shadow-md"
             />
-            <span className="text-[15px] font-bold tracking-tight text-navy">
-              mention<span className="text-blue">.market</span>
+            <span className="text-[15px] font-bold tracking-tight text-fg">
+              mention<span className="text-accent">.market</span>
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
             {connected && (
-              <div className="hidden items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-3 py-1.5 text-xs sm:flex">
-                <span className="text-gray-mid">Balance</span>
-                <span className="font-mono font-semibold text-green">
+              <div className="hidden items-center gap-1.5 rounded-full border border-yes/20 bg-yes-soft px-3 py-1.5 text-xs sm:flex">
+                <span className="text-fg-muted">Balance</span>
+                <span className="font-mono font-semibold text-yes">
                   {fmtSol(user.balance)}
                 </span>
               </div>
@@ -88,9 +79,9 @@ export function TopBar() {
                   <DropdownMenu.Trigger asChild>
                     <button
                       aria-label="Wallet menu"
-                      className="flex items-center gap-1.5 rounded-full border border-green/20 bg-green-light px-2.5 py-1 text-xs text-green transition-colors hover:border-green/40"
+                      className="flex items-center gap-1.5 rounded-full border border-yes/20 bg-yes-soft px-2.5 py-1 text-xs text-yes transition-colors hover:border-yes/40"
                     >
-                      <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-yes animate-pulse" />
                       <span className="font-mono font-semibold">
                         {shortAddr(publicKey.toBase58())}
                       </span>
@@ -101,13 +92,13 @@ export function TopBar() {
                     <DropdownMenu.Content
                       align="end"
                       sideOffset={6}
-                      className="z-50 min-w-[200px] overflow-hidden rounded-lg border border-gray-warm bg-white p-1 shadow-dropdown"
+                      className="z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-surface p-1 shadow-dropdown"
                     >
-                      <div className="px-2.5 py-2 text-xs text-gray-mid">
-                        <div className="font-medium text-navy">{user.handle}</div>
+                      <div className="px-2.5 py-2 text-xs text-fg-muted">
+                        <div className="font-medium text-fg">{user.handle}</div>
                         <div className="mt-0.5 font-mono">{shortAddr(publicKey.toBase58())}</div>
                       </div>
-                      <DropdownMenu.Separator className="my-1 h-px bg-gray-warm/60" />
+                      <DropdownMenu.Separator className="my-1 h-px bg-surface-3/60" />
                       <DropdownItem asChild active={pathname === "/portfolio"}>
                         <Link href="/portfolio">
                           <Briefcase className="h-3.5 w-3.5" /> Portfolio
@@ -118,7 +109,7 @@ export function TopBar() {
                           <Trophy className="h-3.5 w-3.5" /> Ranks
                         </Link>
                       </DropdownItem>
-                      <DropdownMenu.Separator className="my-1 h-px bg-gray-warm/60" />
+                      <DropdownMenu.Separator className="my-1 h-px bg-surface-3/60" />
                       <DropdownItem
                         onSelect={() => navigator.clipboard.writeText(publicKey.toBase58())}
                       >
@@ -133,7 +124,7 @@ export function TopBar() {
                           <ExternalLink className="h-3.5 w-3.5" /> View on explorer
                         </a>
                       </DropdownItem>
-                      <DropdownMenu.Separator className="my-1 h-px bg-gray-warm/60" />
+                      <DropdownMenu.Separator className="my-1 h-px bg-surface-3/60" />
                       <DropdownItem
                         destructive
                         onSelect={async () => {
@@ -154,23 +145,15 @@ export function TopBar() {
         </div>
       </header>
 
-      {/* Toast */}
-      {toast && toastVisible && (
-        <div className="pointer-events-none fixed inset-x-0 top-24 z-[60] flex justify-center px-4">
-          <div className="animate-fade-in rounded-full border border-blue/20 bg-white px-5 py-2.5 text-sm font-medium text-navy shadow-lg backdrop-blur">
-            {toast}
-          </div>
-        </div>
-      )}
     </>
   );
 }
 
 const NOTIF_ICON: Record<NotificationItem["kind"], React.ReactNode> = {
-  locked: <Lock className="h-3.5 w-3.5 shrink-0 text-blue" />,
-  resolved: <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
-  "chain-resolved": <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green" />,
-  challenge: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />,
+  locked: <Lock className="h-3.5 w-3.5 shrink-0 text-accent" />,
+  resolved: <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-yes" />,
+  "chain-resolved": <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-yes" />,
+  challenge: <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-warn" />,
 };
 
 function NotifBell() {
@@ -183,11 +166,11 @@ function NotifBell() {
       <DropdownMenu.Trigger asChild>
         <button
           aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
-          className="relative rounded-full p-2 text-gray-mid transition-colors hover:bg-cream-dark hover:text-navy"
+          className="relative rounded-full p-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue px-1 text-[9px] font-bold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-strong px-1 text-[9px] font-bold text-accent-foreground">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -197,16 +180,16 @@ function NotifBell() {
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 w-[340px] overflow-hidden rounded-lg border border-gray-warm bg-white shadow-dropdown"
+          className="z-50 w-[340px] overflow-hidden rounded-lg border border-line bg-surface shadow-dropdown"
         >
-          <div className="flex items-center justify-between border-b border-gray-warm/60 px-3 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-mid">
+          <div className="flex items-center justify-between border-b border-line/60 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
               Notifications
             </span>
             {unread > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-[11px] font-medium text-blue hover:underline"
+                className="text-[11px] font-medium text-accent hover:underline"
               >
                 Mark all read
               </button>
@@ -214,7 +197,7 @@ function NotifBell() {
           </div>
           <div className="max-h-[320px] overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="px-3 py-8 text-center text-xs text-gray-mid">
+              <p className="px-3 py-8 text-center text-xs text-fg-muted">
                 No updates yet — lock and resolution alerts for markets you trade land here.
               </p>
             ) : (
@@ -222,16 +205,16 @@ function NotifBell() {
                 <DropdownMenu.Item key={n.id} asChild>
                   <Link
                     href={n.marketSlug ? `/market/${n.marketSlug}` : "/"}
-                    className="flex items-start gap-2.5 px-3 py-2.5 outline-none transition-colors hover:bg-blue-light/50"
+                    className="flex items-start gap-2.5 px-3 py-2.5 outline-none transition-colors hover:bg-accent-soft"
                   >
                     {NOTIF_ICON[n.kind]}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs leading-snug text-navy">{n.text}</span>
-                      <span className="mt-0.5 block text-[10px] font-mono text-gray-mid">
+                      <span className="block text-xs leading-snug text-fg">{n.text}</span>
+                      <span className="mt-0.5 block text-[10px] font-mono text-fg-muted">
                         {fmtAgo(n.at)}
                       </span>
                     </span>
-                    {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue" />}
+                    {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-strong" />}
                   </Link>
                 </DropdownMenu.Item>
               ))
@@ -251,7 +234,7 @@ export function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)] md:hidden">
       <div className="mx-auto mb-3 max-w-[280px]">
-        <div className="flex items-center justify-around rounded-2xl border border-gray-warm bg-white/95 px-2 py-2 shadow-lg backdrop-blur">
+        <div className="flex items-center justify-around rounded-2xl border border-line bg-surface/95 px-2 py-2 shadow-lg backdrop-blur">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
@@ -262,8 +245,8 @@ export function BottomNav() {
                 className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
                   active
-                    ? "bg-blue text-white shadow-md"
-                    : "text-gray-mid hover:bg-cream-dark hover:text-navy"
+                    ? "bg-accent-strong text-accent-foreground shadow-md"
+                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
                 )}
               >
                 <Icon className="h-5 w-5" />
@@ -279,10 +262,10 @@ export function BottomNav() {
 export function UserBadge() {
   const user = useSim((s) => s.user);
   return (
-    <div className="flex items-center gap-2 text-xs text-gray-mid">
+    <div className="flex items-center gap-2 text-xs text-fg-muted">
       <User className="h-3.5 w-3.5" />
-      <span className="text-navy">{user.handle}</span>
-      <span className="rounded-full bg-blue-light px-2 py-0.5 font-semibold text-blue">
+      <span className="text-fg">{user.handle}</span>
+      <span className="rounded-full bg-accent-soft px-2 py-0.5 font-semibold text-accent">
         {user.points.toLocaleString()} pts
       </span>
     </div>
@@ -305,10 +288,10 @@ function DropdownItem({
   const cls = cn(
     "flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
     active
-      ? "bg-blue-light font-semibold text-blue"
+      ? "bg-accent-soft font-semibold text-accent"
       : destructive
-        ? "text-red-brand hover:bg-red-brand/10"
-        : "text-navy hover:bg-blue-light"
+        ? "text-no hover:bg-no/10"
+        : "text-fg hover:bg-accent-soft"
   );
   if (asChild)
     return (

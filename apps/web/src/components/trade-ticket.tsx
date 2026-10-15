@@ -185,16 +185,16 @@ export function TradeTicket({
       {/* Side / word choice — the actual decision, made first and biggest. */}
       {isWordRace && !showWordPicker ? (
         wordEntry ? (
-          <div className="flex items-center gap-2 rounded-tile border border-blue bg-blue-light px-3 py-2">
-            <span className="min-w-0 flex-1 truncate text-body font-semibold text-blue">
+          <div className="flex items-center gap-2 rounded-tile border border-accent bg-accent-soft px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-body font-semibold text-accent">
               {wordEntry.word.trim()}
             </span>
-            <span className="tnum font-mono text-label font-semibold text-blue">
+            <span className="tnum font-mono text-label font-semibold text-accent">
               {multiplier.toFixed(2)}×
             </span>
           </div>
         ) : (
-          <p className="rounded-tile border border-dashed border-ink-200 px-3 py-2.5 text-center text-label text-gray-mid">
+          <p className="rounded-tile border border-dashed border-line px-3 py-2.5 text-center text-label text-fg-muted">
             Pick a word from the board to see the odds.
           </p>
         )
@@ -213,22 +213,22 @@ export function TradeTicket({
                   className={cn(
                     "flex w-full items-center gap-2 rounded-tile border px-3 py-2 text-left transition-colors",
                     active
-                      ? "border-blue bg-blue-light"
-                      : "border-ink-200 hover:border-blue/40 hover:bg-ink-50"
+                      ? "border-accent bg-accent-soft"
+                      : "border-line hover:border-accent/40 hover:bg-surface-2"
                   )}
                 >
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate text-[13px] font-semibold",
-                      active ? "text-blue" : "text-navy"
+                      active ? "text-accent" : "text-fg"
                     )}
                   >
                     {w.word}
                   </span>
-                  <span className="tnum shrink-0 font-mono text-[11px] text-ink-500">
+                  <span className="tnum shrink-0 font-mono text-[11px] text-fg-muted">
                     {(((pot * 0.99) / Math.max(w.pool, 1e-9)) || 0).toFixed(2)}×
                   </span>
-                  <span className="tnum w-9 shrink-0 text-right font-mono text-[12px] font-semibold text-navy">
+                  <span className="tnum w-9 shrink-0 text-right font-mono text-[12px] font-semibold text-fg">
                     {Math.round(share * 100)}%
                   </span>
                 </button>
@@ -251,15 +251,15 @@ export function TradeTicket({
                   "rounded-tile border px-3 py-2.5 text-left transition-all",
                   active
                     ? s === "yes"
-                      ? "border-yes bg-yes text-white shadow-[0_4px_14px_-6px_rgba(43,117,80,0.6)]"
-                      : "border-no bg-no text-white shadow-[0_4px_14px_-6px_rgba(199,91,58,0.6)]"
-                    : "border-ink-200 bg-white hover:border-ink-300"
+                      ? "border-yes bg-yes text-bg shadow-[0_8px_24px_-12px_rgb(var(--yes)/0.7)]"
+                      : "border-no bg-no text-bg shadow-[0_8px_24px_-12px_rgb(var(--no)/0.7)]"
+                    : "border-line bg-surface hover:border-line-strong"
                 )}
               >
                 <span
                   className={cn(
                     "text-[10px] font-bold uppercase tracking-[0.08em]",
-                    active ? "text-white/80" : "text-gray-mid"
+                    active ? "text-bg/70" : "text-fg-muted"
                   )}
                 >
                   Buy {s}
@@ -267,7 +267,7 @@ export function TradeTicket({
                 <span
                   className={cn(
                     "tnum mt-0.5 block font-mono text-lg font-bold leading-none",
-                    active ? "text-white" : "text-navy"
+                    active ? "text-bg" : "text-fg"
                   )}
                 >
                   {Math.round(p * 100)}¢
@@ -282,7 +282,7 @@ export function TradeTicket({
       <div className="mt-4">
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className="label-caps">Amount (SOL)</span>
-          <span className="tnum flex items-center gap-1 text-micro text-gray-mid">
+          <span className="tnum flex items-center gap-1 text-micro text-fg-muted">
             <Wallet className="h-3 w-3" aria-hidden />
             {fmtSol(balance)}
           </span>
@@ -321,7 +321,7 @@ export function TradeTicket({
       </div>
 
       {/* What you are actually buying */}
-      <div className="mt-4 rounded-tile bg-ink-50 p-3 text-label">
+      <div className="mt-4 rounded-tile bg-surface-2 p-3 text-label">
         {isWordRace ? (
           wordQuote && wordEntry ? (
             <div className="space-y-1.5">
@@ -340,13 +340,13 @@ export function TradeTicket({
                 label="Floor if the pot triples"
                 value={fmtSol(wordQuote.minPayoutIfTripled)}
               />
-              <p className="border-t border-ink-200 pt-1.5 text-micro leading-relaxed text-gray-mid">
+              <p className="border-t border-line pt-1.5 text-micro leading-relaxed text-fg-muted">
                 Pari-mutuel: your payout shrinks if more money lands on this word, so this is a
                 floor, not a promise. Rake {feeBps / 100}% at settlement.
               </p>
             </div>
           ) : (
-            <p className="py-1 text-center text-gray-mid">
+            <p className="py-1 text-center text-fg-muted">
               Pick a word above to see the odds.
             </p>
           )
@@ -371,13 +371,13 @@ export function TradeTicket({
               value={fmtSol(binaryQuote.shares)}
               tone="yes"
             />
-            <p className="border-t border-ink-200 pt-1.5 text-micro leading-relaxed text-gray-mid">
+            <p className="border-t border-line pt-1.5 text-micro leading-relaxed text-fg-muted">
               Each share pays 1 SOL if {side.toUpperCase()} wins. Fee {feeBps / 100}% at
               settlement{chainMarket ? "; on-chain fills allow ±2% slippage" : ""}.
             </p>
           </div>
         ) : (
-          <p className="py-1 text-center text-gray-mid">Enter an amount to see your fill.</p>
+          <p className="py-1 text-center text-fg-muted">Enter an amount to see your fill.</p>
         )}
       </div>
 
@@ -398,7 +398,7 @@ export function TradeTicket({
         </Button>
       </motion.div>
 
-      <div className="mt-3 flex items-start gap-1.5 text-micro leading-relaxed text-gray-mid">
+      <div className="mt-3 flex items-start gap-1.5 text-micro leading-relaxed text-fg-muted">
         <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
         {connected ? (
           <span>
@@ -424,7 +424,7 @@ export function TradeTicket({
                 : `${side.toUpperCase()} · ${m.title}`}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5 rounded-tile bg-ink-50 p-3 text-label">
+          <div className="space-y-1.5 rounded-tile bg-surface-2 p-3 text-label">
             <QuoteRow label="Cost" value={fmtSol(amt)} />
             {isWordRace ? (
               <QuoteRow
@@ -456,7 +456,7 @@ export function TradeTicket({
           >
             {submitting ? "Confirming…" : "Confirm & sign"}
           </Button>
-          <p className="text-center text-micro text-gray-mid">
+          <p className="text-center text-micro text-fg-muted">
             One devnet transaction escrows your SOL in the market vault.
           </p>
         </DialogContent>
@@ -476,11 +476,11 @@ function QuoteRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-gray-mid">{label}</span>
+      <span className="text-fg-muted">{label}</span>
       <span
         className={cn(
           "tnum font-mono font-semibold",
-          tone === "yes" ? "text-yes" : tone === "warn" ? "text-warn" : "text-navy"
+          tone === "yes" ? "text-yes" : tone === "warn" ? "text-warn" : "text-fg"
         )}
       >
         {value}

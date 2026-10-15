@@ -46,12 +46,12 @@ export function WordBoard({
 
   return (
     <section className={cn("panel overflow-hidden", className)}>
-      <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
-        <span className="label-caps text-navy">Word board</span>
-        <span className="tnum text-micro text-gray-mid">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <span className="label-caps text-fg">Word board</span>
+        <span className="tnum text-micro text-fg-muted">
           {words.length} words · {fmtSol(pot, { compact: true })} in play
         </span>
-        <div className="ml-auto flex gap-1 rounded-field bg-ink-100 p-0.5">
+        <div className="ml-auto flex gap-1 rounded-field bg-surface-2 p-0.5">
           {(
             [
               { key: "pool" as const, label: "Pool" },
@@ -65,7 +65,7 @@ export function WordBoard({
               aria-pressed={sort === s.key}
               className={cn(
                 "rounded-[6px] px-2 py-0.5 text-micro font-semibold transition-colors",
-                sort === s.key ? "bg-white text-navy shadow-sm" : "text-gray-mid hover:text-navy"
+                sort === s.key ? "bg-surface text-fg shadow-sm" : "text-fg-muted hover:text-fg"
               )}
             >
               {s.label}
@@ -74,7 +74,7 @@ export function WordBoard({
         </div>
       </div>
 
-      <div className="divide-y divide-ink-100">
+      <div className="divide-y divide-line">
         {words.map((w, i) => {
           const share = pot > 0 ? w.pool / pot : 0;
           const hot = w.lastBetAt > 0 && now - w.lastBetAt < 30_000;
@@ -88,7 +88,7 @@ export function WordBoard({
               sub={`${w.bettors} backers · ${fmtSol(w.pool, { compact: true })} backed${hot ? " · hot" : ""}`}
               className={cn(
                 "rounded-none",
-                selected === w.word && "bg-blue-light/60 hover:bg-blue-light"
+                selected === w.word && "bg-accent-soft hover:bg-accent-soft"
               )}
               onSelect={() => onSelect(w.word)}
             />
@@ -96,7 +96,7 @@ export function WordBoard({
         })}
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-ink-200 px-4 py-2.5 text-micro text-gray-mid">
+      <div className="flex items-center gap-1.5 border-t border-line px-4 py-2.5 text-micro text-fg-muted">
         <ListFilter className="h-3 w-3" aria-hidden />
         Winners split the pot pro-rata · {m.creatorFeeBps / 100}% rake at settlement
         <Flame className="ml-auto h-3 w-3 text-no" aria-hidden />

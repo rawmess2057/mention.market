@@ -33,18 +33,18 @@ export function EvidenceSection({ market }: { market: Market }) {
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="label-caps flex items-center gap-2 text-blue">
+        <div className="label-caps flex items-center gap-2 text-accent">
           <Gavel className="h-3.5 w-3.5" aria-hidden />
           Resolution status
         </div>
         {m.confidence !== undefined && (
-          <span className="font-mono text-xs font-bold text-blue">
+          <span className="font-mono text-xs font-bold text-accent">
             {m.confidence}% confidence
           </span>
         )}
       </div>
 
-      <div className="mt-2 text-sm font-semibold text-navy">{label}</div>
+      <div className="mt-2 text-sm font-semibold text-fg">{label}</div>
 
       {m.evidence && <ChallengeCountdown market={m} />}
 
@@ -72,7 +72,7 @@ function ChallengeCountdown({ market: m }: { market: Market }) {
 
   if (m.status === "resolved" && ms <= 0) {
     return (
-      <div className="mt-1 flex items-center gap-1.5 text-xs text-green">
+      <div className="mt-1 flex items-center gap-1.5 text-xs text-yes">
         <BadgeCheck className="h-3.5 w-3.5" />
         Challenge window closed — finalized on-chain
       </div>
@@ -80,7 +80,7 @@ function ChallengeCountdown({ market: m }: { market: Market }) {
   }
 
   return (
-    <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-600">
+    <div className="mt-1 flex items-center gap-1.5 text-xs text-warn">
       <ShieldAlert className="h-3.5 w-3.5" />
       Challenge window: {min}m {String(sec).padStart(2, "0")}s remaining
       {ev.challenged && <span className="font-bold">· CHALLENGED</span>}
@@ -113,7 +113,7 @@ function EvidenceModal({
         </DialogHeader>
 
         {!ev ? (
-          <div className="py-8 text-center text-sm text-gray-mid">
+          <div className="py-8 text-center text-sm text-fg-muted">
             The AI resolver is still packaging evidence (transcript excerpts, timestamps, audio
             hashes). Check back shortly.
           </div>
@@ -122,32 +122,32 @@ function EvidenceModal({
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <div className="mb-1 flex justify-between text-xs">
-                  <span className="text-gray-mid">AI confidence</span>
-                  <span className="font-mono font-bold text-navy">{ev.confidence}%</span>
+                  <span className="text-fg-muted">AI confidence</span>
+                  <span className="font-mono font-bold text-fg">{ev.confidence}%</span>
                 </div>
-                <Progress value={ev.confidence} indicatorClassName="bg-blue" />
+                <Progress value={ev.confidence} indicatorClassName="bg-accent-strong" />
               </div>
               <div className="text-right">
-                <div className="text-[10px] uppercase text-gray-mid">
+                <div className="text-[10px] uppercase text-fg-muted">
                   {ev.winningOutcome === VOID_OUTCOME ? "Ruling" : "Winner"}
                 </div>
-                <div className="font-mono text-sm font-bold text-green">
+                <div className="font-mono text-sm font-bold text-yes">
                   {ev.winningOutcome.toUpperCase()}
                 </div>
               </div>
             </div>
 
-            <div className="rounded-lg bg-cream-dark p-3 text-xs text-gray-mid">
+            <div className="rounded-lg bg-surface-2 p-3 text-xs text-fg-muted">
               Proposed {fmtAgo(ev.proposedAt)} by{" "}
-              <span className="font-mono text-navy">{ev.proposedBy}</span> · bond{" "}
-              <span className="font-mono text-navy">{fmtBond(ev)}</span> · hash{" "}
-              <span className="font-mono text-navy">{ev.evidenceHash}</span>
+              <span className="font-mono text-fg">{ev.proposedBy}</span> · bond{" "}
+              <span className="font-mono text-fg">{fmtBond(ev)}</span> · hash{" "}
+              <span className="font-mono text-fg">{ev.evidenceHash}</span>
               {chainMarket && m.sourceUrl && (
                 <a
                   href={m.sourceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-blue hover:underline"
+                  className="ml-1.5 inline-flex items-center gap-0.5 font-medium text-accent hover:underline"
                 >
                   View on explorer <ExternalLink className="h-3 w-3" />
                 </a>
@@ -155,15 +155,15 @@ function EvidenceModal({
             </div>
 
             <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-mid">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-muted">
                 Transcript snippets
               </div>
               <div className="space-y-2">
                 {ev.snippets.map((s, i) => (
-                  <div key={i} className="rounded-lg border border-gray-warm bg-white p-3 text-sm text-navy">
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-gray-mid">
+                  <div key={i} className="rounded-lg border border-line bg-surface p-3 text-sm text-fg">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] text-fg-muted">
                       <span className="font-mono">{fmtClock(s.t)}</span>
-                      <span className="font-medium text-blue">{s.speaker}</span>
+                      <span className="font-medium text-accent">{s.speaker}</span>
                     </div>
                     {s.text}
                   </div>
@@ -171,7 +171,7 @@ function EvidenceModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-gray-mid">
+            <div className="flex items-center gap-2 text-xs text-fg-muted">
               <FileAudio className="h-3.5 w-3.5" />
               Audio clip hashes stored on-chain · Arweave archive pending
             </div>
@@ -200,7 +200,7 @@ function EvidenceModal({
                   Challenge (bond {fmtBond(ev)})
                 </Button>
                 {chainMarket && (
-                  <p className="text-center text-xs text-gray-mid">
+                  <p className="text-center text-xs text-fg-muted">
                     If the resolver changes the outcome, you get your bond back plus theirs. If it
                     re-proposes the same outcome, your bond goes to the treasury.
                   </p>

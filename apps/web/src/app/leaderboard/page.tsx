@@ -6,7 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { cn, fmtBalance, fmtSol, shortAddr } from "@/lib/format";
 import { LEADERBOARD, useSim } from "@/lib/sim";
 
-const MEDALS = ["text-amber-600", "text-gray-cool", "text-orange-600"];
+const MEDALS = ["text-warn", "text-fg-subtle", "text-orange-600"];
 
 export default function LeaderboardPage() {
   const { connected, publicKey } = useWallet();
@@ -43,51 +43,51 @@ export default function LeaderboardPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
-        <h1 className="font-serif text-xl font-bold tracking-tight text-navy">Leaderboard</h1>
-        <p className="text-sm text-gray-mid">
+        <h1 className="text-xl font-bold tracking-tight text-fg">Leaderboard</h1>
+        <p className="text-sm text-fg-muted">
           Weekly points from trading, winning and holding through resolution.
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-warm bg-white shadow-card">
+      <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
         {rows.map((row, i) => (
           <div
             key={row.handle}
             className={cn(
               "flex items-center gap-3 px-4 py-3",
-              i > 0 && "border-t border-gray-warm",
-              row.handle === user.handle && "bg-blue-light/50"
+              i > 0 && "border-t border-line",
+              row.handle === user.handle && "bg-accent-soft"
             )}
           >
             <span
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                i < 3 ? "bg-cream-dark " + MEDALS[i] : "text-gray-mid"
+                i < 3 ? "bg-surface-2 " + MEDALS[i] : "text-fg-muted"
               )}
             >
               {i < 3 ? <Medal className="h-4 w-4" /> : row.rank}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-sm font-semibold text-navy">
+              <div className="flex items-center gap-2 text-sm font-semibold text-fg">
                 {row.handle}
                 {row.handle === user.handle && (
-                  <span className="rounded bg-blue-light px-1.5 py-0.5 text-[10px] font-bold text-blue">
+                  <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
                     YOU · #{row.rank}
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-gray-mid">
+              <div className="text-[11px] text-fg-muted">
                 {row.trades} trades · {me && row.handle === me.handle && me.closedTrades === 0 ? "—" : `${(row.winRate * 100).toFixed(0)}% win rate`}
               </div>
             </div>
             <div className="text-right">
-              <div className="font-mono text-sm font-bold text-blue">
+              <div className="font-mono text-sm font-bold text-accent">
                 {row.points.toLocaleString()} pts
               </div>
               <div
                 className={cn(
                   "font-mono text-[11px]",
-                  row.profit >= 0 ? "text-green" : "text-red-brand"
+                  row.profit >= 0 ? "text-yes" : "text-no"
                 )}
               >
                 {me && row.handle === me.handle
@@ -99,11 +99,11 @@ export default function LeaderboardPage() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-gray-warm bg-white p-4 shadow-card">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-mid">
+      <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-muted">
           How points work
         </div>
-        <ul className="space-y-1 text-sm text-gray-mid">
+        <ul className="space-y-1 text-sm text-fg-muted">
           <li>+2 pts per SOL traded</li>
           <li>+25 pts per winning claim</li>
           <li>+10 pts for holding through resolution</li>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { rgba } from "@/lib/theme";
 
-const COLORS = ["#2E7DF6", "#2B7550", "#C75B3A", "#F9F7F4", "#1A1A1A", "#EBF2FF"];
+const COLORS = [rgba("accent"), rgba("yes"), rgba("no"), rgba("warn"), rgba("fg"), rgba("accent-strong")];
 
 /** Fires a one-shot confetti burst when `fire` increments. Zero dependencies. */
 export function Confetti({ fire }: { fire: number }) {

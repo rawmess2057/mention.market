@@ -18,14 +18,14 @@ export function TrustPanel({ market, className }: { market: Market; className?: 
     <div className={cn("space-y-3", className)}>
       <div className="panel p-4">
         <div className="mb-2 flex items-center gap-2">
-          <ScrollText className="h-3.5 w-3.5 text-blue" aria-hidden />
-          <span className="label-caps text-navy">How this resolves</span>
+          <ScrollText className="h-3.5 w-3.5 text-accent" aria-hidden />
+          <span className="label-caps text-fg">How this resolves</span>
           {m.sourceUrl && (
             <a
               href={m.sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="ml-auto inline-flex items-center gap-0.5 text-micro font-medium text-blue hover:underline"
+              className="ml-auto inline-flex items-center gap-0.5 text-micro font-medium text-accent hover:underline"
             >
               primary source <ExternalLink className="h-2.5 w-2.5" />
             </a>

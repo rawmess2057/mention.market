@@ -66,7 +66,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
   if (!m) {
     return (
       <div className="py-20 text-center">
-        <p className="text-gray-mid">Market not found.</p>
+        <p className="text-fg-muted">Market not found.</p>
         <Button variant="outline" size="sm" asChild className="mt-4">
           <Link href="/">← Back to markets</Link>
         </Button>
@@ -109,13 +109,13 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
         <header>
           <Link
             href="/"
-            className="inline-flex items-center gap-1 text-micro text-gray-mid transition-colors hover:text-navy"
+            className="inline-flex items-center gap-1 text-micro text-fg-muted transition-colors hover:text-fg"
           >
             <ArrowLeft className="h-3 w-3" aria-hidden /> All markets
           </Link>
           <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-gray-mid">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-fg-muted">
                 <span>
                   {VERTICAL_META[m.vertical].emoji} {VERTICAL_META[m.vertical].label}
                 </span>
@@ -126,13 +126,13 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                     href={m.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-0.5 font-medium text-blue hover:underline"
+                    className="inline-flex items-center gap-0.5 font-medium text-accent hover:underline"
                   >
                     {m.source} <ExternalLink className="h-2.5 w-2.5" aria-hidden />
                   </a>
                 )}
               </div>
-              <h1 className="mt-1 font-serif text-2xl font-bold leading-tight tracking-tight text-navy md:text-3xl">
+              <h1 className="mt-1 text-2xl font-bold leading-tight tracking-tight text-fg md:text-3xl">
                 {m.title}
               </h1>
             </div>
@@ -142,7 +142,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
                 type="button"
                 onClick={copyLink}
                 aria-label="Copy market link"
-                className="rounded-field border border-ink-200 p-2 text-gray-mid transition-colors hover:bg-ink-50 hover:text-navy"
+                className="rounded-field border border-line p-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
               >
                 <Share2 className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -156,11 +156,11 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
             <MarketHero market={m} onTrade={openTrade} />
 
             <section className="panel overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-ink-200 px-4 py-3">
-                <span className="label-caps text-navy">
+              <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+                <span className="label-caps text-fg">
                   {m.type === "binary" ? "Probability" : "Word race odds"}
                 </span>
-                <span suppressHydrationWarning className="text-micro text-gray-mid">
+                <span suppressHydrationWarning className="text-micro text-fg-muted">
                   {lastAt > 0 ? `updated ${fmtAgo(lastAt)}` : "waiting for the first print"}
                 </span>
               </div>
@@ -180,7 +180,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
             )}
 
             <Tabs defaultValue="transcript" className="space-y-3">
-              <TabsList className="w-full justify-start rounded-tile bg-ink-100 p-1">
+              <TabsList className="w-full justify-start rounded-tile bg-surface-2 p-1">
                 <TabsTrigger value="transcript" className="flex-1 sm:flex-none">
                   Transcript
                 </TabsTrigger>
@@ -214,7 +214,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
             <div className="space-y-4">
               <section className="panel p-4">
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="label-caps text-navy">Trade</span>
+                  <span className="label-caps text-fg">Trade</span>
                   {chainYes !== null && (
                     <span className="tnum ml-auto inline-flex items-center gap-1.5 rounded-pill border border-yes-line bg-yes-soft px-2 py-0.5 font-mono text-micro font-semibold text-yes">
                       <span className="live-dot" aria-hidden />
@@ -241,7 +241,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
 
       {/* Mobile: one-thumb trade entry, replacing the bottom nav on this route. */}
       {m.status === "open" && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
           {m.type === "binary" ? (
             <div className="flex gap-2">
               <Button

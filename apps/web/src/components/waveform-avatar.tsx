@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/format";
+import { rgba } from "@/lib/theme";
 
 export function WaveformAvatar({
   speaking = false,
@@ -19,8 +20,8 @@ export function WaveformAvatar({
   return (
     <div
       className={cn(
-        "relative flex items-center justify-center rounded-full bg-blue-light",
-        speaking && "ring-2 ring-blue/20",
+        "relative flex items-center justify-center rounded-full bg-accent-soft",
+        speaking && "ring-2 ring-accent/20",
         className
       )}
       style={{ width: dims, height: dims }}
@@ -42,7 +43,7 @@ export function WaveformAvatar({
               y={-baseHeight / 2}
               width={barWidth}
               rx={1}
-              fill="#2E7DF6"
+              fill={rgba("accent")}
               opacity={0.7}
             >
               {speaking && (
@@ -68,7 +69,7 @@ export function WaveformAvatar({
 
       {/* Speaking indicator ring */}
       {speaking && (
-        <div className="absolute inset-0 rounded-full ring-2 ring-blue/30 animate-pulse-live" />
+        <div className="absolute inset-0 rounded-full ring-2 ring-accent/30 animate-pulse-live" />
       )}
     </div>
   );

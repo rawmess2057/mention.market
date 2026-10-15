@@ -2,6 +2,7 @@
 
 import { useId, useMemo } from "react";
 import { cn, seededRandom } from "@/lib/format";
+import { rgba } from "@/lib/theme";
 
 /**
  * Full-width waveform strip for the market detail page. Purely presentational:
@@ -13,7 +14,7 @@ export function WaveformStrip({
   bars = 96,
   className,
   live = false,
-  color = "#2E7DF6",
+  color = rgba("accent"),
 }: {
   seed?: number;
   bars?: number;

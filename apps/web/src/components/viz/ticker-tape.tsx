@@ -49,16 +49,16 @@ export function TickerTape() {
             className="flex items-center gap-1.5 whitespace-nowrap px-4 text-[11px] transition-opacity hover:opacity-70"
           >
             <span>{VERTICAL_META[m.vertical].emoji}</span>
-            <span className="font-medium text-gray-mid">{label}</span>
+            <span className="font-medium text-fg-muted">{label}</span>
             <AnimatedNumber
               value={cur * 100}
               format={(v) => `${Math.round(v)}%`}
-              className="font-mono font-bold text-navy"
+              className="font-mono font-bold text-fg"
             />
             {delta >= 0 ? (
-              <TrendingUp className="h-3 w-3 text-green" />
+              <TrendingUp className="h-3 w-3 text-yes" />
             ) : (
-              <TrendingDown className="h-3 w-3 text-red-brand" />
+              <TrendingDown className="h-3 w-3 text-no" />
             )}
           </Link>
         );
@@ -67,13 +67,13 @@ export function TickerTape() {
   );
 
   return (
-    <div className="relative overflow-hidden border-b border-gray-warm bg-cream-dark py-1.5">
+    <div className="relative overflow-hidden border-b border-line bg-surface-2 py-1.5">
       <div className="marquee flex w-max">
         {row}
         {row}
       </div>
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-cream-dark to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-cream-dark to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-surface-2 to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-surface-2 to-transparent" />
     </div>
   );
 }

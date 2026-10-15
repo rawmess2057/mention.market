@@ -8,7 +8,9 @@ import { OutcomeRow } from "@/components/ui/outcome-row";
 import { Probability, DeltaPill } from "@/components/ui/probability";
 import { SplitBar } from "@/components/viz/split-bar";
 import { cn, fmtSol, fmtTimeLeft } from "@/lib/format";
-import { sessionChange, type HistoryInput } from "@/lib/history";
+import { sessionChange, toValues, type HistoryInput } from "@/lib/history";
+import { Sparkline } from "@/components/viz/sparkline";
+import { rgba } from "@/lib/theme";
 import { useStore } from "@/lib/store";
 import { useNow } from "@/hooks/useNow";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
@@ -55,22 +57,25 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
   return (
     <Link
       href={`/market/${m.slug}`}
-      className="panel lift group flex flex-col gap-3 p-4 md:p-5"
+      className="group flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-2/60"
     >
       <div className="flex items-start gap-3">
-        <VerticalChip vertical={m.vertical} />
+        <VerticalChip vertical={m.vertical} className="h-8 w-8 text-sm" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-micro text-fg-muted">{m.event}</div>
-          <h3 className="mt-0.5 line-clamp-2 text-body-lg font-semibold leading-snug text-fg transition-colors group-hover:text-accent">
-            {m.title}
-          </h3>
+          <div className="truncate text-micro text-fg-subtle">{m.event}</div>
+          <h3 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-fg">{m.title}</h3>
         </div>
-        <StatusBadge status={m.status} />
       </div>
 
-      {m.type === "binary" ? <BinaryOutcome m={m} history={history} /> : <MajorityOutcome m={m} />}
+      {m.status === "resolved" || (m.status === "resolving" && m.winningOutcome) ? (
+        <Outcome m={m} />
+      ) : m.type === "binary" ? (
+        <BinaryOutcome m={m} history={history} />
+      ) : (
+        <MajorityOutcome m={m} />
+      )}
 
-      <div className="mt-auto flex items-center gap-3 border-t border-line pt-3 text-micro text-fg-muted">
+      <div className="mt-auto flex items-center gap-3 pt-1 text-micro text-fg-subtle">
         <span className="tnum flex items-center gap-1">
           <Volume2 className="h-3 w-3" aria-hidden />
           {fmtSol(m.volume, { compact: true })}
@@ -85,35 +90,29 @@ export const MarketCard = memo(function MarketCard({ market }: { market: Market 
   );
 });
 
+/** A decided market shows what happened, not a stale probability. */
+function Outcome({ m }: { m: Market }) {
+  const o = m.winningOutcome ?? "";
+  const label = o === "void" ? "VOID" : m.type === "binary" ? o.toUpperCase() : `“${o}”`;
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className={cn("text-2xl font-bold tracking-tight", o === "yes" ? "text-yes" : o === "no" ? "text-no" : "text-fg")}>
+        {label}
+      </span>
+      <span className="text-xs text-fg-muted">{m.status === "resolved" ? (o === "void" ? "refunded" : "won") : "proposed"}</span>
+    </div>
+  );
+}
+
 function StatusPill({ m, now }: { m: Market; now: number }) {
   if (m.status === "resolved") {
-    if (isVoided(m)) {
-      return (
-        <span className="tnum ml-auto rounded-field bg-surface-2 px-1.5 py-0.5 font-mono font-semibold text-fg-muted">
-          VOIDED · refunded
-        </span>
-      );
-    }
-    const winner = (m.winningOutcome ?? "—").toUpperCase();
-    return (
-      <span className="tnum ml-auto rounded-field bg-yes-soft px-1.5 py-0.5 font-mono font-semibold text-yes">
-        {winner} won{m.confidence !== undefined ? ` · ${m.confidence}%` : ""}
-      </span>
-    );
+    return <span className="ml-auto text-fg-subtle">{isVoided(m) ? "Voided" : "Resolved"}</span>;
   }
-  if (m.status === "locked") {
-    return (
-      <span className="ml-auto rounded-field bg-warn-soft px-1.5 py-0.5 font-mono font-semibold text-warn">
-        Locked
-      </span>
-    );
+  if (m.status === "locked" || (m.status === "open" && now >= m.endTime)) {
+    return <span className="ml-auto rounded-md bg-warn-soft px-1.5 py-0.5 font-medium text-warn">Awaiting result</span>;
   }
   if (m.status === "resolving") {
-    return (
-      <span className="ml-auto rounded-field bg-accent-soft px-1.5 py-0.5 font-mono font-semibold text-accent">
-        Resolving…
-      </span>
-    );
+    return <span className="ml-auto rounded-md bg-accent-soft px-1.5 py-0.5 font-medium text-accent">Challenge window</span>;
   }
   const msLeft = m.endTime - now;
   const urgent = msLeft > 0 && msLeft < 10 * 60_000;
@@ -121,8 +120,8 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
     <span
       suppressHydrationWarning
       className={cn(
-        "tnum ml-auto rounded-field px-1.5 py-0.5 font-mono font-semibold",
-        urgent ? "bg-no-soft text-no" : "bg-surface-2 text-fg-muted"
+        "tnum ml-auto rounded-md px-1.5 py-0.5 font-medium",
+        urgent ? "bg-no-soft text-no" : "text-fg-muted"
       )}
     >
       {urgent ? "Ends in " : "Closes in "}
@@ -134,20 +133,27 @@ function StatusPill({ m, now }: { m: Market; now: number }) {
 function BinaryOutcome({ m, history }: { m: Market; history?: HistoryInput }) {
   const p = lmsrProbYes(m.yesShares, m.noShares, m.b);
   const change = m.status === "open" ? sessionChange(history) : 0;
+  const points = toValues(history).slice(-48);
   return (
     <div className="space-y-2.5">
-      <div className="flex items-end justify-between gap-2">
-        <Probability value={p} delta={m.status === "open" ? change : undefined} size="card" />
-        <div className="flex gap-1.5 pb-0.5">
-          <span className="tnum rounded-field border border-yes-line bg-yes-soft px-2 py-1 font-mono text-label font-semibold text-yes">
-            YES {Math.round(p * 100)}¢
-          </span>
-          <span className="tnum rounded-field border border-no-line bg-no-soft px-2 py-1 font-mono text-label font-semibold text-no">
-            NO {Math.round((1 - p) * 100)}¢
-          </span>
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <span className="tnum text-2xl font-bold tracking-tight text-fg">{Math.round(p * 100)}%</span>
+          <span className="text-xs text-fg-muted">chance</span>
+          {m.status === "open" && Math.abs(change) >= 0.005 && <DeltaPill delta={change} />}
         </div>
+        {points.length > 1 && (
+          <Sparkline data={points} width={88} height={28} domain={[0, 1]} stroke={rgba(change < 0 ? "no" : "yes")} />
+        )}
       </div>
-      <SplitBar yes={p} height={6} />
+      <div className="grid grid-cols-2 gap-1.5">
+        <span className="tnum rounded-md bg-yes-soft py-1.5 text-center text-xs font-semibold text-yes">
+          Yes {Math.round(p * 100)}¢
+        </span>
+        <span className="tnum rounded-md bg-no-soft py-1.5 text-center text-xs font-semibold text-no">
+          No {Math.round((1 - p) * 100)}¢
+        </span>
+      </div>
     </div>
   );
 }
@@ -173,82 +179,5 @@ function MajorityOutcome({ m }: { m: Market }) {
         {words.length} words · {fmtSol(pot, { compact: true })} in play
       </div>
     </div>
-  );
-}
-
-export function LiveCarousel({ markets }: { markets: Market[] }) {
-  const live = markets.filter((m) => m.status === "open");
-  return (
-    <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
-      {live.map((m) => (
-        <div key={m.id} className="w-[290px] shrink-0 snap-start">
-          <LiveCard m={m} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function LiveCard({ m }: { m: Market }) {
-  const history = useStore((s) => s.history[m.id]);
-  const now = useNow(1000);
-  const change = sessionChange(history);
-  const p = m.type === "binary" ? lmsrProbYes(m.yesShares, m.noShares, m.b) : null;
-  const words = [...(m.words ?? [])].sort((a, b) => b.pool - a.pool);
-  const pot = words.reduce((s, w) => s + w.pool, 0);
-
-  return (
-    <Link href={`/market/${m.slug}`} className="panel lift flex h-full flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 rounded-pill bg-no-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-no">
-          <span className="live-dot" aria-hidden />
-          On air
-        </span>
-        <span suppressHydrationWarning className="tnum font-mono text-micro text-fg-muted">
-          {fmtTimeLeft(m.endTime - now)}
-        </span>
-      </div>
-
-      <div className="flex items-start gap-2.5">
-        <VerticalChip vertical={m.vertical} className="h-8 w-8 text-sm" />
-        <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 text-body font-semibold leading-snug text-fg">
-            {m.title}
-          </h3>
-          <div className="mt-0.5 truncate text-micro text-fg-muted">{m.event}</div>
-        </div>
-      </div>
-
-      <div className="mt-auto">
-        {p !== null ? (
-          <div className="space-y-2">
-            <Probability value={p} size="row" showCents={false} />
-            <SplitBar yes={p} height={6} />
-            <div className="flex items-center gap-1.5">
-              <span className="tnum rounded-field bg-yes-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold text-yes">
-                YES {Math.round(p * 100)}¢
-              </span>
-              <span className="tnum rounded-field bg-no-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold text-no">
-                NO {Math.round((1 - p) * 100)}¢
-              </span>
-              <DeltaPill delta={change} className="ml-auto" />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {words.slice(0, 2).map((w, i) => (
-              <OutcomeRow
-                key={w.word}
-                dense
-                label={w.word}
-                share={pot > 0 ? w.pool / pot : 0}
-                leading={i === 0}
-                className="px-1"
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </Link>
   );
 }

@@ -2,182 +2,120 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, TrendingUp } from "lucide-react";
-import { MarketCard, LiveCarousel } from "@/components/market-card";
+import { Plus, Search } from "lucide-react";
+
+import { MarketCard } from "@/components/market-card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/format";
+import { Segmented } from "@/components/ui/segmented";
+import { MarketCardSkeleton } from "@/components/ui/skeleton";
+import { useNow } from "@/hooks/useNow";
+import { isChainId, isStaleChainMarket } from "@/lib/chain";
+import { cn, fmtSol } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { useStore } from "@/lib/store";
-import { isChainId, isStaleChainMarket } from "@/lib/chain";
-import { VERTICAL_META, type Vertical } from "@/lib/types";
+import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
 
 const FILTERS: Array<{ key: Vertical | "all"; label: string }> = [
   { key: "all", label: "All" },
-  ...Object.entries(VERTICAL_META).map(([key, v]) => ({
-    key: key as Vertical,
-    label: `${v.emoji} ${v.label}`,
-  })),
+  ...Object.entries(VERTICAL_META).map(([key, v]) => ({ key: key as Vertical, label: `${v.emoji} ${v.label}` })),
 ];
 
 const SORTS = [
-  { key: "trending", label: "Trending" },
-  { key: "volume", label: "Volume" },
-  { key: "ending", label: "Ending soon" },
+  { value: "trending", label: "Trending" },
+  { value: "volume", label: "Volume" },
+  { value: "ending", label: "Ending" },
 ] as const;
+type SortKey = (typeof SORTS)[number]["value"];
 
-type SortKey = (typeof SORTS)[number]["key"];
+/** Which shelf a market sits on. */
+function phase(m: Market, now: number): "trading" | "pending" | "resolved" {
+  if (m.status === "resolved") return "resolved";
+  if (m.status === "open" && now < m.endTime) return "trading";
+  return "pending";
+}
 
 export default function Home() {
   const markets = useStore((s) => s.markets);
   const history = useStore((s) => s.history);
   const chainSynced = useStore((s) => s.chainSynced);
   const chainSyncError = useStore((s) => s.chainSyncError);
+  const now = useNow(10_000);
   const [filter, setFilter] = useState<Vertical | "all">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("trending");
 
   const all = useMemo(
-    () =>
-      Object.values(markets).filter((m) => isChainId(m.id) && !isStaleChainMarket(m)),
+    () => Object.values(markets).filter((m) => isChainId(m.id) && !isStaleChainMarket(m)),
     [markets]
   );
-  const live = all.filter((m) => m.status === "open");
-  // With nothing in the current view, search/filter/sort are all no-ops — mark
-  // them inactive instead of letting them look usable and do nothing.
-  const nothingToList = all.length === 0;
-  const inertHint = "No markets listed yet";
+
   const listed = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = [...all].filter((m) => {
-      if (filter !== "all" && m.vertical !== filter) return false;
-      if (!q) return true;
-      return (
-        m.title.toLowerCase().includes(q) ||
-        m.event.toLowerCase().includes(q) ||
-        m.slug.toLowerCase().includes(q)
-      );
-    });
-    return filtered.sort((a, b) => {
-      if (sort === "volume") return b.volume - a.volume;
-      if (sort === "ending") {
-        const ae = a.status === "open" ? a.endTime : Number.POSITIVE_INFINITY;
-        const be = b.status === "open" ? b.endTime : Number.POSITIVE_INFINITY;
-        return ae - be;
-      }
-      // trending: session momentum first, then volume
-      const ac = Math.abs(sessionChange(history[a.id]));
-      const bc = Math.abs(sessionChange(history[b.id]));
-      if (bc !== ac) return bc - ac;
-      return b.volume - a.volume;
-    });
+    return all
+      .filter((m) => (filter === "all" || m.vertical === filter) && (!q || `${m.title} ${m.event}`.toLowerCase().includes(q)))
+      .sort((a, b) => {
+        if (sort === "volume") return b.volume - a.volume;
+        if (sort === "ending") return a.endTime - b.endTime;
+        const momentum = Math.abs(sessionChange(history[b.id])) - Math.abs(sessionChange(history[a.id]));
+        return momentum !== 0 ? momentum : b.volume - a.volume;
+      });
   }, [all, filter, query, sort, history]);
 
-  const trending = useMemo(() => {
-    // The words with the most SOL behind them across open word races.
-    const counts: Record<string, number> = {};
-    for (const m of all) {
-      if (m.status !== "open") continue;
-      for (const w of m.words ?? []) if (w.pool > 0) counts[w.word] = (counts[w.word] ?? 0) + w.pool;
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-  }, [all]);
+  const shelves = useMemo(() => {
+    const by = { trading: [] as Market[], pending: [] as Market[], resolved: [] as Market[] };
+    for (const m of listed) by[phase(m, now)].push(m);
+    return by;
+  }, [listed, now]);
+
+  const tradingCount = all.filter((m) => phase(m, now) === "trading").length;
+  const volume = all.reduce((s, m) => s + m.volume, 0);
+  const loading = all.length === 0 && !chainSynced && !chainSyncError;
 
   return (
     <div className="space-y-6">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl md:rounded-3xl border border-line/80 bg-gradient-to-b from-surface to-surface-2 p-8 md:p-10">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
-        <div className="relative">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent-soft px-3 py-1 text-[11px] font-medium text-accent">
-            <span className="h-1.5 w-1.5 animate-pulse-live rounded-full bg-accent-strong" />
-            On-chain markets · Solana devnet · SOL
-          </div>
-          <h1 className="max-w-xl text-3xl font-bold leading-tight tracking-tight text-fg md:text-4xl lg:text-5xl">
-            Trade on what gets <span className="text-gradient">said</span>.
-          </h1>
-          <p className="mt-2 max-w-md text-body text-fg-muted md:text-body-lg">
-            Trade markets deployed to Solana devnet. Trades, positions, and claims use the Anchor
-            program; outcomes are submitted by the configured resolver.
-          </p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-fg md:text-3xl">Markets</h1>
+          <p className="mt-1 text-sm text-fg-muted">Trade on whether a phrase gets said. Settled on Solana from the transcript.</p>
         </div>
-      </section>
-
-      {/* Live carousel */}
-      {live.length > 0 && (
-        <section>
-          <SectionTitle icon={<span className="h-2 w-2 animate-pulse-live rounded-full bg-no" />}>
-            Live now
-          </SectionTitle>
-          <LiveCarousel markets={all} />
-        </section>
-      )}
-
-      {/* Trending words */}
-      {trending.length > 0 && <section>
-        <SectionTitle icon={<TrendingUp className="h-4 w-4 text-accent" />}>
-          Trending words right now
-        </SectionTitle>
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {trending.map(([word, vol]) => (
-            <span
-              key={word}
-              className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-3.5 py-1.5 text-xs font-semibold text-fg"
-            >
-              {word} <span className="tnum ml-1 font-mono text-accent">◎{vol.toFixed(2)}</span>
-            </span>
-          ))}
+        <div className="flex items-center gap-5">
+          <Metric label="Trading" value={loading ? "—" : String(tradingCount)} live={tradingCount > 0} />
+          <Metric label="Volume" value={loading ? "—" : fmtSol(volume, { compact: true })} />
+          <Button asChild size="sm" className="hidden sm:inline-flex">
+            <Link href="/create">
+              <Plus className="h-4 w-4" aria-hidden /> Create
+            </Link>
+          </Button>
         </div>
-      </section>}
+      </header>
 
-      {/* Filters + search + sort */}
-      <div className="flex flex-col gap-2">
+      <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search markets, events…"
-              disabled={nothingToList}
-              title={nothingToList ? `Nothing to search — ${inertHint.toLowerCase()}` : undefined}
-              className="h-9 bg-surface pl-9 text-sm"
+              placeholder="Search markets"
+              aria-label="Search markets"
+              className="h-10 bg-surface pl-9"
             />
           </div>
-          <div className="flex gap-1 rounded-lg border border-line bg-surface p-1">
-            {SORTS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setSort(s.key)}
-                disabled={nothingToList}
-                title={nothingToList ? `Nothing to sort — ${inertHint.toLowerCase()}` : undefined}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  sort === s.key
-                    ? "bg-accent-soft text-accent"
-                    : "text-fg-muted hover:text-fg hover:bg-surface-2",
-                  nothingToList && "cursor-not-allowed opacity-50 hover:bg-transparent"
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <Segmented aria-label="Sort" value={sort} onChange={setSort} options={SORTS} className="sm:w-72" />
         </div>
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+        <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:px-0">
           {FILTERS.map((f) => (
             <button
               key={f.key}
+              type="button"
               onClick={() => setFilter(f.key)}
-              disabled={nothingToList}
-              title={nothingToList ? `Nothing to filter — ${inertHint.toLowerCase()}` : undefined}
+              aria-pressed={filter === f.key}
               className={cn(
-                "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
+                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                 filter === f.key
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-line text-fg-muted hover:border-accent/40 hover:text-fg",
-                nothingToList && "cursor-not-allowed opacity-50 hover:border-line hover:text-fg-muted"
+                  ? "border-accent/50 bg-accent-soft text-fg"
+                  : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
               )}
             >
               {f.label}
@@ -186,51 +124,73 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Market list */}
-      {all.length === 0 ? (
-        <section className="rounded-xl border border-dashed border-line py-12 text-center">
+      {loading ? (
+        <Grid>
+          {Array.from({ length: 6 }, (_, i) => (
+            <MarketCardSkeleton key={i} />
+          ))}
+        </Grid>
+      ) : all.length === 0 ? (
+        <section className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-6 py-16 text-center">
           {chainSyncError ? (
-            <p className="text-sm text-fg-muted">
-              Couldn&apos;t reach Solana devnet — retrying about every 30s.
-            </p>
-          ) : !chainSynced ? (
-            <p className="flex items-center justify-center gap-2 text-sm text-fg-muted">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-strong" />
-              Checking Solana devnet for markets…
-            </p>
+            <p className="text-sm text-fg-muted">Couldn&apos;t reach Solana devnet. Retrying shortly.</p>
           ) : (
             <>
-              <p className="text-sm text-fg-muted">No on-chain markets found on Solana devnet.</p>
-              <Link href="/create" className="mt-3 inline-block text-sm font-semibold text-accent hover:underline">
-                Create an on-chain market
-              </Link>
+              <h2 className="text-base font-semibold text-fg">No markets yet</h2>
+              <p className="max-w-sm text-sm text-fg-muted">Pick an event and a phrase, and be the first market on the board.</p>
+              <Button asChild size="sm">
+                <Link href="/create">
+                  <Plus className="h-4 w-4" aria-hidden /> Create a market
+                </Link>
+              </Button>
             </>
           )}
         </section>
+      ) : listed.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line py-16 text-center text-sm text-fg-muted">
+          {query.trim() ? `No markets match “${query.trim()}”.` : "No markets in this category yet."}
+        </p>
       ) : (
-        <section className="grid gap-3 sm:grid-cols-2">
-          {listed.map((m) => (
-            <MarketCard key={m.id} market={m} />
-          ))}
-        </section>
-      )}
-
-      {all.length > 0 && listed.length === 0 && (
-        <div className="rounded-xl border border-dashed border-line py-16 text-center text-sm text-fg-muted">
-          {query.trim()
-            ? `No markets match “${query.trim()}”.`
-            : "No markets in this category yet."}
+        <div className="space-y-8">
+          <Shelf title="Trading" markets={shelves.trading} live />
+          <Shelf title="Awaiting result" markets={shelves.pending} />
+          <Shelf title="Resolved" markets={shelves.resolved} />
         </div>
       )}
     </div>
   );
 }
 
-function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function Metric({ label, value, live }: { label: string; value: string; live?: boolean }) {
   return (
-    <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">
-      {icon}
-      {children}
-    </h2>
+    <div className="text-right">
+      <div className="flex items-center justify-end gap-1.5 text-micro text-fg-subtle">
+        {live && <span className="live-dot text-yes" aria-hidden />}
+        {label}
+      </div>
+      <div className="tnum text-lg font-semibold text-fg">{value}</div>
+    </div>
+  );
+}
+
+function Grid({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>;
+}
+
+function Shelf({ title, markets, live }: { title: string; markets: Market[]; live?: boolean }) {
+  if (markets.length === 0) return null;
+  return (
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
+        {live && <span className="live-dot text-yes" aria-hidden />}
+        {title}
+        <span className="tnum font-normal text-fg-subtle">{markets.length}</span>
+      </h2>
+      <Grid>
+        {markets.map((m) => (
+          <MarketCard key={m.id} market={m} />
+        ))}
+      </Grid>
+    </section>
   );
 }

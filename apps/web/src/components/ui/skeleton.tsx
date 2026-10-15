@@ -5,26 +5,28 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("shimmer rounded-field bg-surface-2", className)}
+      className={cn("shimmer rounded-field bg-surface-3", className)}
     />
   );
 }
 
 export function MarketCardSkeleton() {
+  // Mirrors `MarketCard` so nothing shifts when the data lands.
   return (
-    <div className="panel space-y-3 p-4">
-      <div className="flex items-center gap-2.5">
-        <Skeleton className="h-9 w-9 rounded-tile" />
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+      <div className="flex items-start gap-3">
+        <Skeleton className="h-8 w-8 rounded-tile" />
         <div className="flex-1 space-y-1.5">
           <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-4/5" />
         </div>
       </div>
-      <Skeleton className="h-2 w-full rounded-pill" />
-      <div className="flex gap-2">
-        <Skeleton className="h-6 w-20 rounded-field" />
-        <Skeleton className="h-6 w-20 rounded-field" />
+      <Skeleton className="h-7 w-24" />
+      <div className="grid grid-cols-2 gap-1.5">
+        <Skeleton className="h-7 rounded-md" />
+        <Skeleton className="h-7 rounded-md" />
       </div>
+      <Skeleton className="h-3 w-32" />
     </div>
   );
 }

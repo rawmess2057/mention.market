@@ -138,11 +138,13 @@ export default function PortfolioPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between pt-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-fg">Portfolio</h1>
-          <p className="mt-1 text-sm text-fg-muted">
-            Your book — P&L, positions, and every trade you&apos;ve made
+          <h1 className="font-display text-[40px] leading-none tracking-[-0.01em] text-fg md:text-[52px]">
+            Your <span className="quote-hit">book</span>.
+          </h1>
+          <p className="mt-2.5 text-sm text-fg-muted md:text-[15px]">
+            P&L, positions, and every trade you&apos;ve made.
           </p>
         </div>
       </div>
@@ -166,11 +168,16 @@ export default function PortfolioPage() {
           <HistoryTab />
         </Tabs>
       ) : (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-line bg-surface p-12 text-center shadow-card">
-          <Wallet className="h-8 w-8 text-fg-muted" />
+        <div
+          className="card-glow panel flex flex-col items-center gap-4 p-12 text-center"
+          style={{ "--glow-a": 0.14 } as React.CSSProperties}
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-pill bg-accent-soft ring-8 ring-accent/5">
+            <Wallet className="h-5 w-5 text-accent" aria-hidden />
+          </span>
           <div>
-            <p className="text-lg font-semibold text-fg">Connect your wallet</p>
-            <p className="mt-1 max-w-md text-sm text-fg-muted">
+            <p className="font-display text-2xl text-fg">Connect your wallet</p>
+            <p className="mt-1.5 max-w-md text-sm text-fg-muted">
               Your portfolio is per-wallet: positions, trade history, and P&L are all
               tied to the connected account.
             </p>
@@ -398,14 +405,22 @@ function PnlCard({
   tone?: "pos" | "neg" | "neutral";
 }) {
   return (
-    <div className="rounded-xl border border-line bg-surface p-3 shadow-card">
+    <div
+      className="card-glow rounded-xl border border-line bg-surface p-3 shadow-card"
+      style={
+        {
+          "--glow": tone === "pos" ? "var(--yes)" : tone === "neg" ? "var(--no)" : "var(--accent)",
+          "--glow-a": tone === "neutral" ? 0.05 : 0.14,
+        } as React.CSSProperties
+      }
+    >
       <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
         {icon}
         {label}
       </div>
       <div
         className={cn(
-          "mt-1 font-mono text-lg font-bold",
+          "tnum mt-1 font-mono text-lg font-bold",
           tone === "pos" ? "text-yes" : tone === "neg" ? "text-no" : "text-fg"
         )}
       >

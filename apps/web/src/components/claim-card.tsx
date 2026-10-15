@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AnimatedNumber } from "@/components/viz/animated-number";
 import { Confetti } from "@/components/viz/confetti";
 import { cn, fmtErr, fmtSol } from "@/lib/format";
 import { claimPayout, isVoided, positionCost } from "@/lib/settle";
@@ -38,11 +39,8 @@ export function ClaimCard({ market }: { market: Market }) {
 
   return (
     <section
-      className={cn(
-        "panel overflow-hidden",
-        won && "border-yes-line",
-        flash && "win-flash"
-      )}
+      className={cn("card-glow panel overflow-hidden", won && "border-yes-line", flash && "win-flash")}
+      style={{ "--glow": won ? "var(--yes)" : "var(--accent)", "--glow-a": won ? 0.22 : 0.06 } as React.CSSProperties}
     >
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <PartyPopper className={cn("h-3.5 w-3.5", won ? "text-yes" : "text-fg-muted")} aria-hidden />
@@ -60,7 +58,9 @@ export function ClaimCard({ market }: { market: Market }) {
       <div className="space-y-2.5 p-4">
         <div className="flex items-baseline justify-between">
           <span className="text-label text-fg-muted">{voided ? "Your refund" : "Your payout"}</span>
-          <span className="tnum font-mono text-2xl font-bold text-fg">{fmtSol(payout)}</span>
+          <span className={cn("tnum font-mono text-3xl font-bold", won ? "text-yes" : "text-fg")}>
+            <AnimatedNumber value={payout} format={(v) => fmtSol(v)} />
+          </span>
         </div>
         <div className="flex items-center justify-between text-label">
           <span className="text-fg-muted">P&amp;L</span>

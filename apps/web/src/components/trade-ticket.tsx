@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { AlertTriangle, Wallet } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertTriangle, Check, ExternalLink, Loader2, Wallet } from "lucide-react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
+import { AnimatedNumber } from "@/components/viz/animated-number";
 import { useChain } from "@/hooks/useChain";
 import { chainErrorText } from "@/lib/chain";
 import { cn, fmtSol } from "@/lib/format";
@@ -89,6 +90,10 @@ export function TradeTicket({
 
   const [amount, setAmount] = useState("0.05");
   const [submitting, setSubmitting] = useState(false);
+  // The moment after a fill: the button becomes the receipt for a beat.
+  const [filled, setFilled] = useState<{ text: string; href: string } | null>(null);
+  const filledTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(filledTimer.current), []);
 
   const words = useMemo(() => [...(m.words ?? [])].sort((a, b) => b.pool - a.pool), [m.words]);
   const amt = Math.max(0, parseFloat(amount) || 0);
@@ -140,28 +145,33 @@ export function TradeTicket({
     setSubmitting(true);
     const id = toast.pending("Confirm in your wallet…");
     try {
+      let text: string;
+      let sig: string | null;
       if (isWordRace) {
         const word = selectedWord!;
-        const sig = await chain.back(m, word, amt);
+        sig = await chain.back(m, word, amt);
         if (!sig) throw new Error("The wallet isn't ready to sign.");
         recordBack(m.id, word, amt, sig);
-        toast.success(`Backed “${word}” with ${fmtSol(amt)}`, { id, href: explorerTx(sig) });
+        text = `Backed “${word}” with ${fmtSol(amt)}`;
       } else if (selling) {
         const shares = Math.min(amt, held);
-        const sig = await chain.sell(m, side, shares);
+        sig = await chain.sell(m, side, shares);
         if (!sig) throw new Error("The wallet isn't ready to sign.");
         recordSell(m.id, side, shares);
-        toast.success(`Sold ${trimNum(shares, 2)} ${side.toUpperCase()} for ${fmtSol(sellProceeds)}`, { id, href: explorerTx(sig) });
+        text = `Sold ${trimNum(shares, 2)} ${side.toUpperCase()} for ${fmtSol(sellProceeds)}`;
       } else {
-        const sig = await chain.buy(m, side, amt);
+        sig = await chain.buy(m, side, amt);
         if (!sig) throw new Error("The wallet isn't ready to sign.");
         recordBuy(m.id, side, amt, sig);
-        toast.success(`Bought ${trimNum(buyQuote?.shares ?? 0, 2)} ${side.toUpperCase()} for ${fmtSol(amt)}`, {
-          id,
-          href: explorerTx(sig),
-        });
+        text = `Bought ${trimNum(buyQuote?.shares ?? 0, 2)} ${side.toUpperCase()} for ${fmtSol(amt)}`;
       }
-      onFilled?.();
+      const href = explorerTx(sig);
+      toast.success(text, { id, href });
+      setFilled({ text, href });
+      clearTimeout(filledTimer.current);
+      filledTimer.current = setTimeout(() => setFilled(null), 2400);
+      // Let the receipt land before a hosting sheet closes.
+      if (onFilled) setTimeout(onFilled, 900);
     } catch (err) {
       toast.error("Trade didn't go through", { id, description: chainErrorText(err) });
     } finally {
@@ -256,7 +266,7 @@ export function TradeTicket({
                   {selling ? "Sell" : "Buy"} {s}
                 </span>
                 <span className={cn("tnum mt-0.5 block text-xl font-bold leading-none", active ? "text-bg" : "text-fg")}>
-                  {Math.round(p * 100)}¢
+                  <AnimatedNumber value={p * 100} format={(v) => `${Math.round(v)}¢`} />
                 </span>
               </button>
             );
@@ -338,14 +348,18 @@ export function TradeTicket({
           )
         ) : buyQuote ? (
           <>
-            <QuoteRow label="Shares" value={trimNum(buyQuote.shares, 3)} />
-            <QuoteRow label="Avg price" value={`${Math.round(buyQuote.avgPrice * 100)}¢`} />
+            <QuoteRow label="Shares" value={<AnimatedNumber value={buyQuote.shares} format={(v) => trimNum(v, 3)} />} />
+            <QuoteRow label="Avg price" value={<AnimatedNumber value={buyQuote.avgPrice * 100} format={(v) => `${Math.round(v)}¢`} />} />
             <QuoteRow
               label="Price impact"
               value={`${buyQuote.impactPct >= 0 ? "+" : ""}${buyQuote.impactPct.toFixed(1)}%`}
               tone={highImpact ? "warn" : undefined}
             />
-            <QuoteRow label={`Payout if ${side.toUpperCase()}`} value={fmtSol(buyQuote.shares)} tone="yes" />
+            <QuoteRow
+              label={`Payout if ${side.toUpperCase()}`}
+              value={<AnimatedNumber value={buyQuote.shares} format={(v) => fmtSol(v)} />}
+              tone="yes"
+            />
             <Fine>
               Each share pays 1 SOL if {side.toUpperCase()} wins. {feeBps / 100}% fee at settlement; fills allow ±2%
               slippage.
@@ -363,22 +377,68 @@ export function TradeTicket({
         </p>
       )}
 
-      <motion.div whileTap={ready ? { scale: 0.985 } : undefined} transition={{ duration: DURATION.press, ease: EASE }}>
-        <Button
-          variant={isWordRace ? "default" : side === "yes" ? "yes" : "no"}
-          size="xl"
-          className="w-full"
-          disabled={(connected && !ready) || submitting}
-          onClick={() => void submit()}
-        >
-          {submitting ? "Confirm in wallet…" : cta}
-        </Button>
-      </motion.div>
+      <AnimatePresence initial={false} mode="wait">
+        {filled ? (
+          <motion.div
+            key="filled"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.roll, ease: EASE }}
+            className="flex h-14 items-center gap-3 rounded-xl border border-yes-line bg-yes-soft px-4"
+            role="status"
+          >
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.05 }}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-pill bg-yes text-bg"
+            >
+              <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+            </motion.span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{filled.text}</span>
+            <a
+              href={filled.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View transaction"
+              className="shrink-0 text-fg-muted transition-colors hover:text-fg"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </a>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="cta"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            whileTap={ready ? { scale: 0.985 } : undefined}
+            transition={{ duration: DURATION.press, ease: EASE }}
+          >
+            <Button
+              variant={isWordRace ? "default" : side === "yes" ? "yes" : "no"}
+              size="xl"
+              className="w-full"
+              disabled={(connected && !ready) || submitting}
+              onClick={() => void submit()}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Confirm in wallet…
+                </>
+              ) : (
+                cta
+              )}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function QuoteRow({ label, value, tone }: { label: string; value: string; tone?: "yes" | "warn" }) {
+function QuoteRow({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "yes" | "warn" }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-fg-muted">{label}</span>

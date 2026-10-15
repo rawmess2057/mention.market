@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import { createChart, ColorType, LineSeries, LineStyle } from "lightweight-charts";
+import { createChart, AreaSeries, ColorType, LineSeries, LineStyle } from "lightweight-charts";
 import type { ISeriesApi } from "lightweight-charts";
+import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/format";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -46,6 +47,8 @@ function createPriceChart(container: HTMLElement) {
       textColor: rgba("fg-subtle"),
       fontFamily: "var(--font-mono)",
       fontSize: 11,
+      // Credited in the chart header instead (Apache-2.0 attribution).
+      attributionLogo: false,
     },
     grid: {
       vertLines: { visible: false },
@@ -114,7 +117,7 @@ export function PriceChart({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
-  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const baselineApplied = useRef(false);
 
   useEffect(() => {
@@ -122,8 +125,10 @@ export function PriceChart({
 
     const chart = createPriceChart(containerRef.current);
 
-    const lineSeries = chart.addSeries(LineSeries, {
-      color: rgba("accent"),
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor: rgba("accent"),
+      topColor: rgba("accent", 0.28),
+      bottomColor: rgba("accent", 0),
       lineWidth: 2,
       crosshairMarkerBackgroundColor: rgba("accent"),
       crosshairMarkerBorderColor: rgba("bg"),
@@ -389,27 +394,26 @@ export function PriceChartWithTimeframe({
 
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className="flex items-center gap-1 border-b border-line px-3 py-2">
-        {CHART_TIMEFRAMES.map((tf) => (
-          <button
-            key={tf}
-            onClick={() => setTimeframe(tf)}
-            aria-pressed={timeframe === tf}
-            className={cn(
-              "rounded-field px-2.5 py-1 text-micro font-semibold transition-colors",
-              timeframe === tf
-                ? "bg-accent-soft text-accent"
-                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-            )}
-          >
-            {tf === "all" ? "All" : tf}
-          </button>
-        ))}
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+        <Segmented
+          aria-label="Timeframe"
+          size="sm"
+          value={timeframe}
+          onChange={setTimeframe}
+          options={CHART_TIMEFRAMES.map((tf) => ({ value: tf, label: tf === "all" ? "All" : tf }))}
+          className="w-auto"
+        />
         <span className="tnum ml-auto font-mono text-[10px] text-fg-muted">
-          {isMulti
-            ? `${visible.length}/${multi.length} words`
-            : `${pointCount} prints`}
+          {isMulti ? `${visible.length}/${multi.length} words` : `${pointCount} prints`}
         </span>
+        <a
+          href="https://www.tradingview.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="hidden text-[10px] text-fg-subtle transition-colors hover:text-fg-muted sm:inline"
+        >
+          charts · TradingView
+        </a>
       </div>
       {isMulti && multi.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2">

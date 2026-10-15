@@ -33,9 +33,13 @@ export default function LeaderboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Leaderboard</h1>
-        <p className="mt-1 text-sm text-fg-muted">Points for trading, holding to resolution and claiming.</p>
+      <div className="pt-2">
+        <h1 className="font-display text-[40px] leading-none tracking-[-0.01em] text-fg md:text-[52px]">
+          Who <span className="quote-hit">called it</span>.
+        </h1>
+        <p className="mt-2.5 text-sm text-fg-muted md:text-[15px]">
+          Points for trading, holding to resolution and claiming.
+        </p>
       </div>
 
       <section className="panel p-5">
@@ -61,11 +65,14 @@ export default function LeaderboardPage() {
         )}
       </section>
 
-      <section className="panel flex flex-col items-center gap-3 px-6 py-12 text-center">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-soft">
+      <section
+        className="card-glow panel flex flex-col items-center gap-3 px-6 py-14 text-center"
+        style={{ "--glow-a": 0.14 } as React.CSSProperties}
+      >
+        <span className="flex h-12 w-12 items-center justify-center rounded-pill bg-accent-soft ring-8 ring-accent/5">
           <Trophy className="h-5 w-5 text-accent" aria-hidden />
         </span>
-        <h2 className="text-base font-semibold text-fg">Global rankings are coming</h2>
+        <h2 className="font-display text-2xl text-fg">Global rankings are coming</h2>
         <p className="max-w-sm text-sm text-fg-muted">
           Rankings across every wallet go live with the on-chain indexer. Points you earn now count toward them.
         </p>

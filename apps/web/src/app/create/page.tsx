@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { Check, ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { QuoteTitle } from "@/components/ui/quote-title";
 import { cn } from "@/lib/format";
+import { DURATION, EASE } from "@/lib/motion";
 import { useStore } from "@/lib/store";
 import { useChain } from "@/hooks/useChain";
 import {
@@ -28,6 +31,7 @@ import {
 } from "@/lib/create-categories";
 
 const WORD_LIMIT = 12;
+const STEPS = ["Event", "Type", "Words", "Rules"] as const;
 
 export default function CreateMarketPage() {
   const router = useRouter();
@@ -109,34 +113,59 @@ export default function CreateMarketPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-fg">Create a market</h1>
-        <p className="text-sm text-fg-muted">
-          Pick an event, define the words, and launch a market on Solana.
+      <div className="pt-2">
+        <h1 className="font-display text-[40px] leading-none tracking-[-0.01em] text-fg md:text-[52px]">
+          Make a <span className="quote-hit">market</span>.
+        </h1>
+        <p className="mt-2.5 text-sm text-fg-muted md:text-[15px]">
+          Pick an event, name the phrase, and launch it on Solana.
         </p>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-1.5">
-        {["Event", "Type", "Words", "Rules"].map((label, i) => (
-          <button
-            key={label}
-            onClick={() => i <= step && setStep(i)}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-full border py-1.5 text-[11px] font-medium transition-colors",
-              i === step
-                ? "border-accent bg-accent-soft text-accent"
-                : i < step
-                  ? "border-yes/40 bg-yes-soft text-yes"
-                  : "border-line text-fg-muted"
-            )}
-          >
-            {i < step ? <Check className="h-3 w-3" /> : <span>{i + 1}</span>}
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Stepper: a track that fills as you go. Past steps are clickable. */}
+      <ol className="grid grid-cols-4 gap-1.5" aria-label="Steps">
+        {STEPS.map((label, i) => {
+          const done = i < step;
+          const active = i === step;
+          return (
+            <li key={label} aria-current={active ? "step" : undefined}>
+              <button
+                type="button"
+                disabled={i > step}
+                onClick={() => setStep(i)}
+                className="group w-full text-left disabled:cursor-default"
+              >
+                <div className="h-1 overflow-hidden rounded-pill bg-surface-3">
+                  <motion.div
+                    className={cn("h-full rounded-pill", active ? "bg-accent" : "bg-yes")}
+                    initial={false}
+                    animate={{ width: done || active ? "100%" : "0%" }}
+                    transition={{ duration: 0.45, ease: EASE }}
+                  />
+                </div>
+                <div
+                  className={cn(
+                    "mt-1.5 flex items-center gap-1 text-micro",
+                    active ? "font-semibold text-fg" : done ? "text-fg-muted group-hover:text-fg" : "text-fg-subtle"
+                  )}
+                >
+                  {done && <Check className="h-3 w-3 text-yes" aria-hidden />}
+                  {label}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
 
+      <AnimatePresence initial={false} mode="wait">
+      <motion.div
+        key={step}
+        initial={{ opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -12 }}
+        transition={{ duration: DURATION.roll, ease: EASE }}
+      >
       {/* Step 0: event */}
       {step === 0 && (
         <div className="space-y-3 animate-fade-in">
@@ -145,15 +174,25 @@ export default function CreateMarketPage() {
             {PICKER_CATEGORIES.map((c) => (
               <button
                 key={c.label}
+                type="button"
+                aria-pressed={category === c.label}
                 onClick={() => setCategory(c.label as PickerCategory)}
                 className={cn(
-                  "rounded-xl border p-3 text-sm font-medium transition-all",
+                  "flex items-center gap-2.5 rounded-xl border p-2.5 text-left text-sm font-medium transition-[border-color,background-color,transform] active:scale-[0.98]",
                   category === c.label
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-line text-fg hover:border-accent/40"
+                    ? "border-accent/60 bg-accent-soft text-fg"
+                    : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
                 )}
               >
-                <span className="mr-1.5">{c.emoji}</span>
+                <span
+                  className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-field text-base",
+                    category === c.label ? "bg-accent/20" : "bg-surface-2"
+                  )}
+                  aria-hidden
+                >
+                  {c.emoji}
+                </span>
                 {c.label}
               </button>
             ))}
@@ -202,14 +241,20 @@ export default function CreateMarketPage() {
           ).map((t) => (
             <button
               key={t.key}
+              type="button"
+              aria-pressed={type === t.key}
               onClick={() => setType(t.key)}
               className={cn(
-                "rounded-xl border p-4 text-left transition-all",
-                type === t.key ? "border-accent bg-accent-soft text-fg" : "border-line text-fg hover:border-accent/40"
+                "card-glow rounded-2xl border p-4 text-left transition-[border-color,background-color,transform] active:scale-[0.99]",
+                type === t.key ? "border-accent/60 bg-accent-soft" : "border-line hover:border-line-strong"
               )}
+              style={{ "--glow-a": type === t.key ? 0.16 : 0 } as React.CSSProperties}
             >
-              <div className="font-semibold">{t.title}</div>
-              <div className="mt-1 text-xs text-fg-muted">{t.desc}</div>
+              <div className="font-display text-2xl text-fg">
+                {t.key === "binary" ? <>Will they say <span className="quote-hit">“it”</span>?</> : <>Which word <span className="quote-hit">first</span>?</>}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-fg">{t.title}</div>
+              <div className="mt-0.5 text-xs text-fg-muted">{t.desc}</div>
             </button>
           ))}
         </div>
@@ -332,22 +377,36 @@ export default function CreateMarketPage() {
             </div>
           )}
 
-          {/* Preview */}
-          <div className="rounded-xl border border-accent/15 bg-accent-soft p-4 text-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-accent">
-              Preview
+          {/* Preview: the card traders will see. */}
+          <div
+            className="card-glow rounded-2xl border border-line/80 bg-surface p-4"
+            style={{ "--glow-a": 0.14 } as React.CSSProperties}
+          >
+            <div className="flex items-center gap-2 text-micro text-fg-subtle">
+              <span className="flex h-7 w-7 items-center justify-center rounded-field bg-accent-soft text-[13px]" aria-hidden>
+                {VERTICAL_META[resolveCategory(category)].emoji}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{event || "Your event"}</span>
+              <span className="rounded-pill bg-surface-2 px-2 py-0.5 font-medium text-fg-muted">{minutes || "?"} min</span>
             </div>
-            <div className="font-semibold text-fg">
+            <QuoteTitle
+              title={
+                type === "binary"
+                  ? question || (binaryPhrase ? `Will they say “${binaryPhrase}”?` : "Your question here")
+                  : `Word race: ${event || "your event"}`
+              }
+              className="mt-3 text-[21px] leading-[1.15]"
+            />
+            <div className="mt-3 text-micro text-fg-muted">
               {type === "binary"
-                ? question || "Your question here"
-                : `Word race with ${words.length} words`}
-            </div>
-            <div className="text-xs text-fg-muted">
-              {event || "Event"} · {VERTICAL_META[resolveCategory(category)].label} · {minutes || "?"} min
+                ? `Listening for “${binaryPhrase || "…"}”`
+                : `${words.length} words: ${words.map((w) => `“${w}”`).join(", ") || "…"}`}
             </div>
           </div>
         </div>
       )}
+      </motion.div>
+      </AnimatePresence>
 
       {/* Nav */}
       <div className="flex gap-2">
@@ -369,11 +428,15 @@ export default function CreateMarketPage() {
               disabled={submitting || problems.length > 0}
               onClick={() => void submit()}
             >
-              {submitting
-                ? "Launching…"
-                : connected
-                  ? "Launch on-chain"
-                  : "Connect wallet to launch"}
+              {submitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Launching…
+                </>
+              ) : connected ? (
+                "Launch on-chain"
+              ) : (
+                "Connect wallet to launch"
+              )}
             </Button>
           </div>
         )}

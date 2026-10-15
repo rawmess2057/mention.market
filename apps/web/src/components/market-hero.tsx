@@ -1,17 +1,15 @@
 "use client";
 
-import { Radio, Users, Volume2 } from "lucide-react";
+import { Users, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Probability } from "@/components/ui/probability";
 import { Stat, StatRow } from "@/components/ui/stat";
-import { WaveformStrip } from "@/components/viz/waveform-strip";
 import { cn, fmtSol, fmtTimeLeft } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { lmsrProbYes } from "@/lib/lmsr";
 import { useStore } from "@/lib/store";
 import { useNow } from "@/hooks/useNow";
 import type { Market } from "@/lib/types";
-import { rgba } from "@/lib/theme";
 
 /**
  * The headline of a market page: how likely, how much, and one tap to trade.
@@ -40,12 +38,32 @@ export function MarketHero({
   const pot = words.reduce((s, w) => s + w.pool, 0);
   const lead = words[0];
   const leadShare = lead && pot > 0 ? lead.pool / pot : 0;
-  const open = m.status === "open";
+  const open = m.status === "open" && now < m.endTime;
+  const decided = (m.status === "resolved" || m.status === "resolving") && m.winningOutcome ? m.winningOutcome : null;
 
   return (
     <section className={cn("panel overflow-hidden", className)}>
       <div className="p-4 md:p-5">
-        {isBinary && p !== null ? (
+        {decided ? (
+          <div>
+            <div className="text-xs text-fg-muted">{m.status === "resolved" ? "Resolved" : "Proposed outcome"}</div>
+            <div
+              className={cn(
+                "mt-1 text-5xl font-bold tracking-tight",
+                decided === "yes" ? "text-yes" : decided === "no" ? "text-no" : "text-fg"
+              )}
+            >
+              {decided === "void" ? "VOID" : isBinary ? decided.toUpperCase() : `“${decided}”`}
+            </div>
+            <div className="mt-1.5 text-sm text-fg-muted">
+              {decided === "void"
+                ? "Every position is refunded."
+                : m.status === "resolved"
+                  ? "Final. Winning positions can be claimed."
+                  : "Final once the challenge window closes."}
+            </div>
+          </div>
+        ) : isBinary && p !== null ? (
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
             <Probability
               value={p}
@@ -55,7 +73,8 @@ export function MarketHero({
               outcomeLabel="YES"
               ariaLive
             />
-            <div className="flex gap-2">
+            {/* Mobile only: on desktop the sticky ticket is right beside this. */}
+            {open && <div className="flex gap-2 lg:hidden">
               <Button
                 variant="yes"
                 size="lg"
@@ -72,7 +91,7 @@ export function MarketHero({
               >
                 Buy NO {Math.round((1 - p) * 100)}¢
               </Button>
-            </div>
+            </div>}
           </div>
         ) : (
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
@@ -121,22 +140,12 @@ export function MarketHero({
               )
             }
           />
-          {isBinary && p !== null && (
+          {isBinary && p !== null && !decided && (
             <Stat label="Implied odds" value={`${Math.round(p * 100)}¢ / ${Math.round((1 - p) * 100)}¢`} hint="YES / NO" />
           )}
         </StatRow>
       </div>
 
-      {m.status === "open" && (
-        <div className="border-t border-line bg-surface-2/60 px-4 py-2.5 md:px-5">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <Radio className="live-dot text-no" aria-hidden />
-            <span className="label-caps text-fg">Stream feed</span>
-            <span className="ml-auto truncate text-micro text-fg-muted">{m.source}</span>
-          </div>
-          <WaveformStrip seed={m.slug.length * 7 + m.volume} live className="h-7" color={rgba("accent")} />
-        </div>
-      )}
     </section>
   );
 }

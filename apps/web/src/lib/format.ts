@@ -1,5 +1,20 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * tailwind-merge must know our custom theme scales: unknown `text-*` sizes
+ * (`text-micro`) otherwise read as colors, and `cn("text-micro text-fg")`
+ * silently drops the size.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["micro", "label", "body", "body-lg"] }],
+      shadow: [{ shadow: ["card", "card-hover", "dropdown", "sheet", "cta"] }],
+      rounded: [{ rounded: ["field", "tile", "card", "panel", "pill"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

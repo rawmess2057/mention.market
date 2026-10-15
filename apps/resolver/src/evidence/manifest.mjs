@@ -178,8 +178,18 @@ function capText(text, max, phrases = []) {
   const room = Math.max(1, max - 2); // two ellipses
   let start = Math.max(0, Math.min(at - Math.floor((room - len) / 2), text.length - room));
   if (len >= room) start = at;
-  const end = Math.min(text.length, start + room);
-  return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
+  let end = Math.min(text.length, start + room);
+  // Cut at word boundaries where that keeps the phrase: a quote reading
+  // "…an all female team…" beats "…h an all female team, I th…".
+  if (start > 0 && !/\s/.test(text[start - 1])) {
+    const next = text.indexOf(" ", start);
+    if (next !== -1 && next < at) start = next + 1;
+  }
+  if (end < text.length && !/\s/.test(text[end])) {
+    const prev = text.lastIndexOf(" ", end);
+    if (prev > at + len) end = prev;
+  }
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
 }
 
 /** Case-insensitive match of a phrase's words, tolerant of punctuation between them. */

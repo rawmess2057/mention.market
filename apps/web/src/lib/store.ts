@@ -309,7 +309,6 @@ export const useStore = create<AppState>()(
             books: { ...s.books, [wallet]: { user, positions, trades } },
           };
         });
-        get().showToast(`Bought ${side.toUpperCase()} · ${fmtShares(shares)} shares`);
       },
 
       sellBinary: (marketId, side, shares) => {
@@ -356,7 +355,6 @@ export const useStore = create<AppState>()(
             books: { ...st.books, [wallet]: { user, positions, trades } },
           };
         });
-        get().showToast(`Sold ${side.toUpperCase()} · +${fmtShares(proceeds)} SOL`);
       },
 
       backWord: (marketId, word, amount, txSig) => {
@@ -412,7 +410,6 @@ export const useStore = create<AppState>()(
             books: { ...s.books, [wallet]: { user, positions, trades } },
           };
         });
-        get().showToast(`Backed “${word}” · ${fmtShares(amount)} SOL`);
       },
 
       claim: (marketId) => {

@@ -53,3 +53,13 @@ describe("dark theme guard", () => {
     }
   });
 });
+
+describe("cn (tailwind-merge with our theme)", () => {
+  it("keeps custom font sizes next to colors", async () => {
+    const { cn } = await import("../format");
+    expect(cn("text-micro text-fg")).toBe("text-micro text-fg");
+    expect(cn("text-label", "text-fg-muted")).toBe("text-label text-fg-muted");
+    expect(cn("text-micro", "text-sm")).toBe("text-sm");
+    expect(cn("shadow-card text-fg", "shadow-cta")).toBe("text-fg shadow-cta");
+  });
+});

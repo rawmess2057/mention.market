@@ -7,7 +7,7 @@ import { ArrowLeft, ExternalLink, Share2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChartSkeleton } from "@/components/ui/skeleton";
+import { ChartSkeleton, PanelSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { PulseFeed } from "@/components/pulse-feed";
 import { TradeTicket } from "@/components/trade-ticket";
@@ -17,6 +17,7 @@ import { WordBoard } from "@/components/word-board";
 import { MarketHero } from "@/components/market-hero";
 import { PositionCard } from "@/components/position-card";
 import { ClaimCard } from "@/components/claim-card";
+import { ResolutionPanel } from "@/components/resolution-panel";
 import { ActivityFeed } from "@/components/activity-feed";
 import { fmtAgo, fmtSol } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -40,6 +41,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
   const history = useStore((s) => s.history);
   const wordHistory = useStore((s) => s.wordHistory);
   const showToast = useStore((s) => s.showToast);
+  const chainSynced = useStore((s) => s.chainSynced);
   const now = useNow(1000);
   const isDesktop = useIsDesktop();
   const m = Object.values(markets).find((x) => x.slug === slug);
@@ -63,6 +65,24 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
 
   useChainActivity(m);
 
+  if (!m && !chainSynced) {
+    // A direct link can land before the first chain read: show the page's
+    // shape, not "not found".
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-9 w-2/3" />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
+          <div className="space-y-4">
+            <PanelSkeleton rows={2} />
+            <ChartSkeleton />
+          </div>
+          <PanelSkeleton rows={5} className="hidden lg:block" />
+        </div>
+      </div>
+    );
+  }
+
   if (!m) {
     return (
       <div className="py-20 text-center">
@@ -83,6 +103,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
       : null;
   const words = [...(m.words ?? [])].sort((a, b) => b.pool - a.pool);
   const leadWord = words[0]?.word ?? null;
+  const trading = m.status === "open" && now < m.endTime;
 
   const openTrade = (opts: { side?: "yes" | "no"; word?: string }) => {
     if (opts.side) setRailSide(opts.side);
@@ -155,6 +176,14 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
           <div className="space-y-4">
             <MarketHero market={m} onTrade={openTrade} />
 
+            {/* Mobile: once trading ends, the outcome and claim lead the page. */}
+            {!trading && (
+              <div className="space-y-4 lg:hidden">
+                <ResolutionPanel market={m} />
+                <ClaimCard market={m} />
+              </div>
+            )}
+
             <section className="panel overflow-hidden">
               <div className="flex items-center gap-2 border-b border-line px-4 py-3">
                 <span className="label-caps text-fg">
@@ -205,32 +234,39 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
               </TabsContent>
             </Tabs>
 
+            {trading && <ResolutionPanel market={m} />}
             <PositionCard market={m} />
-            <ClaimCard market={m} />
           </div>
 
           {/* Sticky trade rail */}
           <aside className="hidden lg:sticky lg:top-20 lg:block lg:self-start">
             <div className="space-y-4">
-              <section className="panel p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="label-caps text-fg">Trade</span>
-                  {chainYes !== null && (
-                    <span className="tnum ml-auto inline-flex items-center gap-1.5 rounded-pill border border-yes-line bg-yes-soft px-2 py-0.5 font-mono text-micro font-semibold text-yes">
-                      <span className="live-dot" aria-hidden />
-                      {Math.round(chainYes * 100)}¢ on-chain
-                    </span>
-                  )}
-                </div>
-                <TradeTicket
-                  market={m}
-                  side={railSide}
-                  onSideChange={setRailSide}
-                  word={railWord}
-                  onWordChange={setRailWord}
-                  showWordPicker={m.type === "binary"}
-                />
-              </section>
+              {trading ? (
+                <section className="panel p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="label-caps text-fg">Trade</span>
+                    {chainYes !== null && (
+                      <span className="tnum ml-auto inline-flex items-center gap-1.5 rounded-pill border border-yes-line bg-yes-soft px-2 py-0.5 text-micro font-semibold text-yes">
+                        <span className="live-dot" aria-hidden />
+                        {Math.round(chainYes * 100)}¢ live
+                      </span>
+                    )}
+                  </div>
+                  <TradeTicket
+                    market={m}
+                    side={railSide}
+                    onSideChange={setRailSide}
+                    word={railWord}
+                    onWordChange={setRailWord}
+                    showWordPicker={m.type === "binary"}
+                  />
+                </section>
+              ) : (
+                <>
+                  <ResolutionPanel market={m} />
+                  <ClaimCard market={m} />
+                </>
+              )}
 
               <TrustPanel market={m} />
               <RecentTrades marketId={m.id} limit={6} />
@@ -240,7 +276,7 @@ export default function MarketPage({ params }: { params: Promise<{ slug: string 
       </div>
 
       {/* Mobile: one-thumb trade entry, replacing the bottom nav on this route. */}
-      {m.status === "open" && (
+      {trading && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
           {m.type === "binary" ? (
             <div className="flex gap-2">

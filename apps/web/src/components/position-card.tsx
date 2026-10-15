@@ -1,41 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Briefcase } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn, fmtErr, fmtSol, shortAddr } from "@/lib/format";
-import { lmsrPositionValue } from "@/lib/lmsr";
+import { cn, fmtSol } from "@/lib/format";
+import { positionMark } from "@/lib/pnl";
 import { useStore } from "@/lib/store";
-import { useChain } from "@/hooks/useChain";
-import { isChainId } from "@/lib/chain";
 import type { Market } from "@/lib/types";
 
 export function PositionCard({ market }: { market: Market }) {
   const m = useStore((s) => s.markets[market.id]) ?? market;
   const pos = useStore((s) => s.positions[m.id]);
-  const sellBinary = useStore((s) => s.sellBinary);
-  const showToast = useStore((s) => s.showToast);
-  const chain = useChain();
-  const chainMarket = isChainId(m.id);
-  const [selling, setSelling] = useState<string | null>(null);
-
-  const onSell = async (side: "yes" | "no", shares: number) => {
-    if (selling) return;
-    setSelling(side);
-    try {
-      const sig = chainMarket ? await chain.sell(m, side, shares) : null;
-      sellBinary(m.id, side, shares);
-      if (sig) showToast(`Sold ${side.toUpperCase()} · tx ${shortAddr(sig)}`);
-    } catch (err) {
-      showToast(`Sell failed: ${fmtErr(err)}`);
-    } finally {
-      setSelling(null);
-    }
-  };
 
   const summary = useMemo<
     | null
-    | { kind: "binary"; yes: number; no: number; value: number; cost: number; pnl: number }
+    | { kind: "binary"; yes: number; no: number; value: number; cost: number; pnl: number; proposed: boolean }
     | { kind: "majority"; backs: Array<[string, number]>; total: number }
   >(() => {
     if (!pos) return null;
@@ -43,12 +21,10 @@ export function PositionCard({ market }: { market: Market }) {
       const yes = pos.yesShares ?? 0;
       const no = pos.noShares ?? 0;
       if (yes === 0 && no === 0) return null;
-      const value = lmsrPositionValue(m.yesShares, m.noShares, m.b, {
-        yesShares: yes,
-        noShares: no,
-      });
+      // Same valuation as the portfolio: shares × price, or the proposed payout.
+      const { value, basis } = positionMark(m, pos);
       const cost = (pos.avgYesPrice ?? 0) * yes + (pos.avgNoPrice ?? 0) * no;
-      return { kind: "binary", yes, no, value, cost, pnl: value - cost };
+      return { kind: "binary", yes, no, value, cost, pnl: value - cost, proposed: basis === "proposed" };
     }
     const entries = Object.entries(pos.wordBacks ?? {}).filter(([, v]) => v > 0);
     if (entries.length === 0) return null;
@@ -79,38 +55,12 @@ export function PositionCard({ market }: { market: Market }) {
                 <Holding side="no" shares={summary.no} avg={pos?.avgNoPrice} />
               )}
             </div>
-            <Row label="Cost → value" value={`${fmtSol(summary.cost)} → ${fmtSol(summary.value)}`} />
+            <Row label={summary.proposed ? "Cost → value if confirmed" : "Cost → value"} value={`${fmtSol(summary.cost)} → ${fmtSol(summary.value)}`} />
             <Row
               label="Unrealized P&L"
               value={`${summary.pnl >= 0 ? "+" : ""}${fmtSol(summary.pnl)}`}
               tone={summary.pnl >= 0 ? "yes" : "no"}
             />
-            {m.status === "open" && (
-              <div className="flex gap-2 pt-1">
-                {summary.yes > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={!!selling}
-                    onClick={() => onSell("yes", summary.yes)}
-                  >
-                    {selling === "yes" ? "Selling…" : "Sell YES"}
-                  </Button>
-                )}
-                {summary.no > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={!!selling}
-                    onClick={() => onSell("no", summary.no)}
-                  >
-                    {selling === "no" ? "Selling…" : "Sell NO"}
-                  </Button>
-                )}
-              </div>
-            )}
           </>
         ) : (
           <>
@@ -147,7 +97,7 @@ function Holding({
     >
       <div className={cn("label-caps", side === "yes" ? "text-yes" : "text-no")}>{side}</div>
       <div className="tnum mt-0.5 font-mono text-sm font-bold text-fg">
-        {shares.toFixed(1)} sh
+        {shares < 10 ? shares.toFixed(3) : shares.toFixed(1)} sh
       </div>
       {avg !== undefined && (
         <div className="tnum text-micro text-fg-muted">avg {Math.round(avg * 100)}¢</div>

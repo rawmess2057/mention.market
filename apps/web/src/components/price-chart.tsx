@@ -78,6 +78,22 @@ function createPriceChart(container: HTMLElement) {
   });
 }
 
+/**
+ * Keep at least a 10-point span on the % axis. A flat market (no trades, or a
+ * single price) otherwise gets a zero-height range and labels every gridline
+ * with the same value.
+ */
+const MIN_SPAN = 10;
+function autoscaleWithMinSpan(original: () => { priceRange: { minValue: number; maxValue: number } } | null) {
+  const res = original();
+  if (!res) return res;
+  const { minValue, maxValue } = res.priceRange;
+  if (maxValue - minValue >= MIN_SPAN) return res;
+  const mid = (minValue + maxValue) / 2;
+  const lo = Math.max(0, Math.min(mid - MIN_SPAN / 2, 100 - MIN_SPAN));
+  return { ...res, priceRange: { minValue: lo, maxValue: lo + MIN_SPAN } };
+}
+
 const PRICE_FORMAT = {
   type: "custom" as const,
   formatter: (v: number) => `${Math.round(v)}%`,
@@ -113,6 +129,7 @@ export function PriceChart({
       crosshairMarkerBorderColor: rgba("bg"),
       crosshairMarkerRadius: 4,
       priceFormat: PRICE_FORMAT,
+      autoscaleInfoProvider: autoscaleWithMinSpan,
     });
 
     if (data.length > 0) {
@@ -282,6 +299,7 @@ export function PriceChartMulti({
           crosshairMarkerBorderColor: rgba("bg"),
           crosshairMarkerRadius: 4,
           priceFormat: PRICE_FORMAT,
+          autoscaleInfoProvider: autoscaleWithMinSpan,
         });
         existing.set(s.name, api);
       } else {

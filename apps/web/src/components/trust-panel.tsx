@@ -1,6 +1,5 @@
 import { ExternalLink, ScrollText } from "lucide-react";
 import { ResolutionGrammar } from "@/components/resolution-grammar";
-import { EvidenceSection } from "@/components/evidence-viewer";
 import { cn } from "@/lib/format";
 import type { Market } from "@/lib/types";
 
@@ -33,7 +32,6 @@ export function TrustPanel({ market, className }: { market: Market; className?: 
         </div>
         <ResolutionGrammar market={m} />
       </div>
-      <EvidenceSection market={m} />
     </div>
   );
 }

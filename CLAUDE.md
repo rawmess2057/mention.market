@@ -162,7 +162,7 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 ### Routes (`app/`)
 | Route | File | What |
 |---|---|---|
-| `/` | `app/page.tsx` | Discover: live carousel, trending, vertical filters, sort by volume, trend and timeframe |
+| `/` | `app/page.tsx` | Discover: search, vertical filters, sort (trending/volume/ending), Trading / Awaiting result / Resolved shelves |
 | `/market/[slug]` | `app/market/[slug]/page.tsx` | Binary (LMSR ticket) or word race (word board) detail |
 | `/create` | `app/create/page.tsx` | 4-step wizard (event → type → words → rules). On-chain or sim launch. |
 | `/portfolio` | `app/portfolio/page.tsx` | Positions, P&L, claims, points (largest page, ~1.1k lines) |
@@ -191,18 +191,21 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 - Trading on a chain market sends a real devnet tx and then mirrors it into the store. Sim markets only mutate the store.
 
 ### Components
-- `components/ui/*`: primitives (button, badge/`StatusBadge`, card, dialog, sheet, tabs, input, progress, skeleton, stat, probability, outcome-row, empty-state). Reuse these.
+- `components/ui/*`: primitives (button, badge/`StatusBadge`, card, dialog, sheet, tabs, segmented, input, progress, skeleton, stat, probability, outcome-row, quote-title, empty-state, toaster). Reuse these.
 - `components/viz/*`: sparkline, split-bar, leader-bar, ticker-tape, waveform-strip, animated-number, confetti.
 - Feature: `trade-ticket`, `word-board`, `price-chart`, `market-card`, `market-hero`, `position-card`, `claim-card`, `evidence-viewer`, `trust-panel`, `resolution-grammar`, `pulse-feed`, `recent-trades`, `activity-feed`, `the-whisper`, `shell` (TopBar/BottomNav).
 - Wiring: `providers.tsx` (wallet + connection), `wallet-sync.tsx` (active wallet → store), `chain-sync.tsx`.
 - Hooks: `useChain`, `useChainActivity`, `useSolBalance`, `useNow`, `useMediaQuery`.
 
-### Design system ("Parchment & Ink")
-- Tokens in `tailwind.config.ts` and `app/globals.css`. Background: cream `#F9F7F4`. Text: navy `#0F172A`. Brand blue `#2D5CFF`. Green `#2B7550` (YES/up). `red-brand` `#C75B3A` (NO/down).
-- **Text greys: use only the `ink-*` ramp** (or `gray-mid`, which is AA-safe). Don't use Tailwind's default grays.
-- Fonts: `font-sans` Inter, `font-serif` Source Serif 4 (headlines), `font-mono` JetBrains Mono (numbers, addresses).
-- Radius `--radius: 1rem`. Card shadows `--shadow-card` and `--shadow-card-hover`.
-- Mobile first: `BottomNav` on mobile, `pb-28` main padding. Check both widths.
+### Design system (dark, editorial)
+- **Semantic tokens only.** RGB channels live in `app/globals.css` (`--bg`, `--surface{,-2,-3}`, `--line{,-strong}`, `--fg{,-muted,-subtle}`, `--accent{,-strong}`, `--yes`, `--no`, `--warn`, `--live`) and are mirrored in `lib/theme.ts` (`PALETTE`, `rgba()` for charts/SVG). Tailwind exposes them as `bg-surface-2`, `text-fg-muted`, `bg-yes-soft`, `border-no-line`, … `theme-guard.test.ts` fails on raw hex or Tailwind's default palette names.
+- **Fonts:** `font-sans` Inter (UI), `font-mono` JetBrains Mono (every number, `tnum` class for tabular digits), `font-display` Instrument Serif (market titles and page headlines only).
+- **The signature:** market titles are quotes, so `QuoteTitle` (`components/ui/quote-title.tsx`) sets them in the display serif with the quoted phrase in `.quote-hit` (italic on a highlighter stroke). `splitQuote` in `lib/watch-words.ts` finds the phrase; it's the same regex that drives resolution watch-words.
+- **Lean glow:** `.card-glow` paints a radial wash from the top-right in `--glow` (the outcome colour) at `--glow-a` (how hard the market leans), set inline per card/hero. Coin-flips stay neutral; a 90% market is unmistakably green.
+- **Chrome:** `.glass` for floating bars (top bar, bottom nav, mobile trade bar). Backdrop is `.backdrop` in `layout.tsx` (two drifting aurora blobs, faded grid, film grain).
+- **Motion:** tokens in `lib/motion.ts` (`DURATION`, `EASE`, `SPRING_TIGHT`, `fadeIn`, `sheetIn`); `.rise` + `--i` for staggered lists; `app/template.tsx` fades each route in (opacity only: a transform there breaks `position: fixed` children). `AnimatedNumber` for any value that changes live. `Segmented` for every sort/timeframe/mode toggle.
+- Radii: `rounded-field` (inputs, chips), `rounded-tile`, `rounded-2xl` cards, `rounded-pill`. Shadows: `shadow-card`, `shadow-card-hover`, `shadow-dropdown`, `shadow-cta`.
+- Mobile first: `BottomNav` on mobile (hidden on market pages, which own the bottom with the trade bar), `pb-28` main padding. Check both widths with headless Chrome: `google-chrome --headless=new --screenshot=out.png --window-size=390,1000 --virtual-time-budget=20000 http://localhost:3000/`.
 
 ---
 

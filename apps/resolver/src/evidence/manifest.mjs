@@ -17,8 +17,16 @@ import { hashResolutionSpec, validateEvidenceManifest } from "@mention/resolutio
  * the stage-for-approval policy is enforced by the schema itself.
  */
 
-/** `constants.rs` `MAX_EVIDENCE_LEN`. */
+/** `constants.rs` `MAX_EVIDENCE_LEN`: what the evidence account can hold. */
 export const MAX_EVIDENCE_LEN = 4096;
+
+/**
+ * What one `post_evidence` transaction can carry: the bytes ride in the
+ * instruction data, and a Solana transaction is capped at 1232 bytes. With the
+ * compute-budget instruction and five accounts the ceiling measures 813 bytes;
+ * 800 leaves margin. This, not {@link MAX_EVIDENCE_LEN}, is the real limit.
+ */
+export const MAX_POSTABLE_EVIDENCE_LEN = 800;
 
 /** Preferred per-excerpt text length before shrinking kicks in. */
 export const DEFAULT_EXCERPT_TEXT_CAP = 480;
@@ -46,7 +54,7 @@ export function hashArtifact(value) {
  * @param {object} [input.evaluator]       `{method, version, matchedExcerptIndexes}`.
  * @param {object} input.review            `{reviewer, approvedAt, rationale}` (required).
  * @param {number} [input.createdAt]
- * @param {number} [input.maxBytes]        Defaults to {@link MAX_EVIDENCE_LEN}.
+ * @param {number} [input.maxBytes]        Defaults to {@link MAX_POSTABLE_EVIDENCE_LEN}.
  * @returns {{manifest:object, bytes:Uint8Array, sha256:string, length:number}}
  */
 export function buildEvidence(input) {
@@ -59,7 +67,7 @@ export function buildEvidence(input) {
     evaluator,
     review,
     createdAt = Date.now(),
-    maxBytes = MAX_EVIDENCE_LEN,
+    maxBytes = MAX_POSTABLE_EVIDENCE_LEN,
   } = input;
 
   if (!spec) throw new TypeError("spec is required to build evidence");
@@ -104,12 +112,24 @@ function fitToBudget(manifest, spec, maxBytes) {
   const work = structuredClone(manifest);
   if (size(work) <= maxBytes) return work;
 
-  let cap = DEFAULT_EXCERPT_TEXT_CAP;
-  while (size(work) > maxBytes && cap >= MIN_EXCERPT_TEXT_CAP) {
-    work.excerpts = work.excerpts.map((e) => ({ ...e, text: capText(e.text, cap) }));
-    if (size(work) <= maxBytes) return work;
-    cap = Math.floor(cap / 2);
+  // The longest per-excerpt text cap that fits (binary search), each excerpt
+  // trimmed around its quoted phrase.
+  const phrases = (spec.terms ?? []).map((t) => t.phrase);
+  const capped = (cap) => ({
+    ...work,
+    excerpts: manifest.excerpts.map((e) => ({ ...e, text: capText(e.text, cap, phrases) })),
+  });
+  let lo = MIN_EXCERPT_TEXT_CAP;
+  let hi = DEFAULT_EXCERPT_TEXT_CAP;
+  if (size(capped(lo)) <= maxBytes) {
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (size(capped(mid)) <= maxBytes) lo = mid;
+      else hi = mid - 1;
+    }
+    return capped(lo);
   }
+  work.excerpts = capped(MIN_EXCERPT_TEXT_CAP).excerpts;
 
   // Drop unmatched trailing excerpts (remapping matched indexes) as a last
   // resort. Matched excerpts are never dropped; if those alone overflow, the
@@ -139,7 +159,33 @@ function size(manifest) {
   return Buffer.byteLength(canonicalJson(manifest), "utf8");
 }
 
-function capText(text, max) {
+/**
+ * Shorten `text` to `max` characters, keeping the window around the first
+ * spoken term (the quote that proves the outcome) and marking cuts with "…".
+ */
+function capText(text, max, phrases = []) {
   if (typeof text !== "string" || text.length <= max) return text;
-  return text.slice(0, Math.max(1, max));
+  let at = 0;
+  let len = 0;
+  for (const phrase of phrases) {
+    const match = phraseRegex(phrase)?.exec(text);
+    if (match) {
+      at = match.index;
+      len = match[0].length;
+      break;
+    }
+  }
+  const room = Math.max(1, max - 2); // two ellipses
+  let start = Math.max(0, Math.min(at - Math.floor((room - len) / 2), text.length - room));
+  if (len >= room) start = at;
+  const end = Math.min(text.length, start + room);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
+}
+
+/** Case-insensitive match of a phrase's words, tolerant of punctuation between them. */
+function phraseRegex(phrase) {
+  const words = String(phrase).match(/[\p{L}\p{N}']+/gu);
+  if (!words) return null;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(escaped.join("[^\\p{L}\\p{N}]+"), "iu");
 }

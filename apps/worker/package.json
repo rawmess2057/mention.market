@@ -1,0 +1,25 @@
+{
+  "name": "@mention/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Resolution worker: lock → transcribe → evaluate → (operator approves) → propose → finalize",
+  "scripts": {
+    "start": "node src/main.mjs",
+    "ops": "node scripts/ops.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@mention/db": "workspace:*",
+    "@mention/resolution": "workspace:*",
+    "@mention/resolver": "workspace:*",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

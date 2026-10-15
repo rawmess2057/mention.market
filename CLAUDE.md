@@ -19,13 +19,14 @@ mention.market/                 pnpm monorepo (pnpm@9, node >= 20)
 ├── apps/program/               Anchor program "mention" + devnet ops scripts
 │                               NOT in the pnpm workspace (own package-lock / npm)
 ├── apps/resolution/            @mention/resolution: spec/evidence contracts, canonical JSON, sha256
-├── apps/resolver/              @mention/resolver: spec store, transcript pipeline, Deepgram adapters
+├── apps/resolver/              @mention/resolver: spec store, resolution queue, transcript pipeline, Deepgram adapters
+│   └── data/specs/*.json       committed resolution specs keyed by market address (fixtures; live specs are in Postgres)
+├── apps/worker/                @mention/worker: resolution worker (Railway, Dockerfile) + operator CLI
 ├── packages/db/                @mention/db: Postgres client (Neon serverless), migrations, PGlite test DB
-│   └── data/specs/*.json       committed resolution specs keyed by market address
 └── docs/RESEARCH.md            design rationale (UMA-lite resolution, LMSR, etc.)
 ```
 
-Dependency direction: `web → resolver → resolution`. `program/scripts` imports
+Dependency direction: `web → resolver → resolution`, `worker → resolver`. `program/scripts` imports
 `apps/resolver` through **relative paths**, because it sits outside the workspace.
 
 ---
@@ -60,6 +61,11 @@ node scripts/oracle.mjs --watch --all          # lock → propose → wait 120s 
 node scripts/resolver.mjs status <id|c12|addr> # trusted resolver CLI (lock/evidence/propose/finalize)
 node scripts/evidence-e2e.mjs                  # full evidence flow E2E on devnet
 node scripts/smoke.mjs                         # quick program smoke test
+
+# resolution worker (needs DATABASE_URL, DEEPGRAM_API_KEY, RESOLVER_KEYPAIR[_PATH], SOLANA_RPC_URL)
+cd apps/worker && pnpm test                    # full lock→finalize flow on PGlite + a fake chain
+ONCE=1 RESOLVER_KEYPAIR_PATH=../program/scripts/keys/resolver.json node src/main.mjs
+pnpm --filter @mention/worker ops list         # queue; also: show <m>, approve <m> --rationale "…" [--outcome x|void], retry <m> [--audio-start ISO]
 ```
 
 ### Before you finish a change, run
@@ -68,7 +74,7 @@ node scripts/smoke.mjs                         # quick program smoke test
 |---|---|
 | `apps/web/**` | `cd apps/web && pnpm test && npx tsc --noEmit && pnpm lint` |
 | `apps/program/**` | `cd apps/program && cargo test` (then `anchor build` and sync the IDL, see §6) |
-| `apps/resolution/**`, `apps/resolver/**`, `packages/db/**` | `pnpm test` in that package (store and DB tests run on in-process Postgres via PGlite, no server needed) |
+| `apps/resolution/**`, `apps/resolver/**`, `apps/worker/**`, `packages/db/**` | `pnpm test` in that package (store and DB tests run on in-process Postgres via PGlite, no server needed) |
 
 ---
 
@@ -79,7 +85,9 @@ node scripts/smoke.mjs                         # quick program smoke test
 | `NEXT_PUBLIC_SOLANA_RPC_URL` (or `NEXT_PUBLIC_RPC_URL`) | `apps/web/.env.local` | Devnet RPC. Falls back to the public endpoint, which is rate-limited and breaks trades. Copy from `.env.example`. |
 | `DATABASE_URL` | Vercel, web API route, resolver, scripts | Postgres (Neon). When set, the spec store uses it; when unset, it uses files. **Required on Vercel.** Migrate: `pnpm --filter @mention/db migrate`. Backfill files: `node apps/resolver/scripts/import-specs.mjs`. |
 | `RESOLVER_DATA_DIR` | web API route, resolver | File-backend spec dir (only without `DATABASE_URL`). Defaults to `apps/resolver/data`. |
-| `DEEPGRAM_API_KEY` | resolver adapters | Transcription. |
+| `DEEPGRAM_API_KEY` | worker, resolver adapters | Batch transcription. Worker host only (not Vercel). |
+| `RESOLVER_KEYPAIR` / `RESOLVER_KEYPAIR_PATH` | worker | Resolver secret key: JSON byte array (hosted secret) or file path. Must equal `config.resolver`. **Never on Vercel.** |
+| `POLL_MS`, `ONCE=1`, `OPS_REVIEWER` | worker / ops CLI | Pass interval; single pass; reviewer name the CLI records. |
 | `SOLANA_RPC_URL`, `ANCHOR_PROVIDER_URL` | program scripts | Script RPC. |
 | `SEED_BLOCK` | seed / oracle | Demo batch: 0 → ids 9–16, 1 → 25–32, … Use the **same** value for seed and oracle. |
 | `SEED_KEYPAIR_PATH`, `SEED_ONLY`, `SEED_END_SECONDS` | seed.mjs | Payer keypair and seed filtering. |
@@ -127,7 +135,7 @@ tests/test_market.rs  LiteSVM integration tests
 | `buy_binary(side 0=YES/1=NO, cost, min_shares)` / `sell_binary(side, shares, min_proceeds)` | trader | LMSR. Slippage-guarded. |
 | `back_word(word, amount)` | trader | Pari-mutuel (Majority markets). |
 | `lock_market` | anyone | After `end_time`. |
-| `post_evidence(bytes, sha256, spec_sha256)` | resolver | Program recomputes the sha256. Max 4096 bytes. |
+| `post_evidence(bytes, sha256, spec_sha256)` | resolver | Program recomputes the sha256. Account max 4096 bytes, but one tx carries ≤ 813 (see #19). |
 | `propose_resolution(outcome, confidence, evidence_sha256)` | resolver | Posts a 1 SOL bond. Opens a 120s challenge window. Rejected if the spec hash is all-zero (legacy/demo). Always takes the `challenge` PDA. If a challenge is open it **settles it** and then needs `challengerAccount`, `priorProposerAccount` and `treasury` (use `settlementAccounts()` in `scripts/lib.mjs`). |
 | `challenge_resolution` | anyone | Inside the window, with a 1 SOL bond. Opens the `Challenge` PDA and resets the market to Locked. Settled by the next proposal: **different outcome = upheld**, challenger gets both bonds. **Same outcome = rejected**, proposer is refunded and the challenger's bond goes to the treasury (`config.authority`), never to the resolver. |
 | `finalize_resolution` | anyone | After the window. Refunds the bond to the proposer. |
@@ -221,6 +229,12 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 16. **LMSR buys are closed form.** `shares_for_cost` (`math/lmsr.rs`) is the exact inverse, built from small terms (`log1p`/`expm1`) so skewed markets stay precise. A buy costs about 30k CU. It's mirrored term for term in `web/src/lib/lmsr.ts::lmsrSharesForCost` and `scripts/lib.mjs::sharesForCost`, pinned by the same 60-digit test vectors. Change all three together. Never go back to a bisection: about 115 rounds of soft-float `exp`/`log` hit the 1.4M CU cap.
 17. New `ErrorCode` variants go **last**: codes are positional, and the web maps them from the IDL.
 18. Large transactions: compute limit is `COMPUTE_UNIT_LIMIT = 1_400_000`. Closing markets with many positions can exceed the tx size limit.
+19. **Resolution worker** (`apps/worker`). Queue: the `resolutions` table, with guarded transitions (`resolver/src/store/resolution-queue.mjs`).
+    - It **never proposes without an operator approval** (reviewer + rationale), even when the evaluator is certain.
+    - Evidence is built once per round and stored, so retries post identical bytes and reuse the PDA. A challenge starts a new round, which needs a new approval.
+    - Transcripts are stored compact (`compactDeepgramResponse`), times relative to the audio. They're shifted onto the market clock (`startedAtMs`) and **split at the window edges** (`splitAtMs`): the evaluator drops any segment not wholly inside the window, which could turn a spoken phrase into a false NO.
+    - **Evidence must fit one transaction: ≤ 800 bytes** (`MAX_POSTABLE_EVIDENCE_LEN`; the measured ceiling is 813), not the program's 4096. Fixed manifest fields take ~600, so evidence quotes one excerpt, trimmed around the matched phrase, and rationales are capped at 120 chars. An approval that still doesn't fit goes back for review. Larger evidence needs a chunked `post_evidence` in the program.
+    - Run **one** worker instance: passes are sequential within a process, but two processes could double-submit.
 
 ---
 
@@ -236,6 +250,8 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 
 **Add a market field**: Rust `state.rs` (account size changes, so existing devnet accounts break and you must clean up and reseed) → IDL → `ChainMarketAccount` + `mapMarketToStore` in `chain.ts` → `types.ts` `Market` → sim seeds.
 
+**Resolve a real market** (worker): the spec's `source.url` must be a public audio/video file Deepgram can fetch. Worker locks → transcribes → `candidate`/`needs_review` → `ops approve <m> --rationale "…"` → worker posts evidence + proposes → finalizes after the window. A recording that didn't start at the window start: `ops retry <m> --audio-start <ISO>` (re-evaluates the stored transcript, no new Deepgram call).
+
 **Fresh devnet demo**: `cleanup` → (`bootstrap` once) → `seed` (with `SEED_BLOCK=n` if the batch expired) → keep `oracle --watch --all` running with the same `SEED_BLOCK`.
 
 ---
@@ -244,9 +260,10 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 
 Done: Anchor program (LMSR + pari-mutuel, optimistic resolution with bond and
 challenge, evidence manifests bound to spec hash), web app wired to devnet,
-resolution contracts, resolver pipeline with Deepgram adapters, spec store.
+resolution contracts, resolver pipeline with Deepgram adapters, spec store and
+resolution queue on Postgres, resolution worker (batch recordings, operator approval).
 
-Next (see README and RESEARCH): Deepgram live worker → automatic candidates,
+Next (see README and RESEARCH): `/ops` approval page, live capture,
 Helius indexer + WebSocket feed (replace polling), Postgres for users, points
 and evidence, Arweave audio hashes, a bond that scales with open interest, an
 LMSR `b` that scales with volume, multisig escalation for disputes.

@@ -211,3 +211,38 @@ describe("pnlSeries", () => {
     expect(pnlSeries(trades, 7).length).toBeLessThanOrEqual(7);
   });
 });
+describe("positionMark", () => {
+  // m104 on devnet: the creator is the only trader — 0.228 SOL bought 0.4135 YES at b = 1.
+  const sole = binaryMarket({ yesShares: 0.413546135, noShares: 0, b: 1 });
+  const pos: Position = { id: "p", marketId: "bm", yesShares: 0.413546135, noShares: 0, avgYesPrice: 0.228 / 0.413546135 };
+
+  it("marks a trading position at shares × price, so a sole trader sees the price move", async () => {
+    const { positionMark } = await import("../pnl");
+    const { lmsrProbYes } = await import("../lmsr");
+    const mark = positionMark(sole, pos);
+    expect(mark.basis).toBe("price");
+    expect(mark.value).toBeCloseTo(0.413546135 * lmsrProbYes(0.413546135, 0, 1), 9);
+    expect(unrealizedPnl(sole, pos)).toBeGreaterThan(0.02); // price 55¢ → 60¢
+    expect(unrealizedPnl({ ...sole, status: "locked" }, pos)).toBeCloseTo(unrealizedPnl(sole, pos), 12);
+  });
+
+  it("values a resolving position at the proposed outcome, not zero", async () => {
+    const { positionMark } = await import("../pnl");
+    const resolving = { ...sole, status: "resolving" as const, winningOutcome: "yes" };
+    expect(positionMark(resolving, pos)).toEqual({ value: 0.413546135, basis: "proposed" });
+    const lost = { ...resolving, winningOutcome: "no" };
+    expect(positionMark(lost, pos).value).toBe(0);
+
+    const overview = summarizePnl([], { bm: pos }, { bm: resolving }, {}, 1);
+    expect(overview.openValue).toBeCloseTo(0.413546135, 9);
+    expect(overview.unrealizedPnl).toBeCloseTo(0.413546135 - 0.228, 9);
+  });
+
+  it("drops resolved positions from the open book (their payout is claimable)", () => {
+    const resolved = { ...sole, status: "resolved" as const, winningOutcome: "yes" };
+    const overview = summarizePnl([], { bm: pos }, { bm: resolved }, { bm: 0.413546135 }, 1);
+    expect(overview.openValue).toBe(0);
+    expect(overview.unrealizedPnl).toBe(0);
+    expect(overview.claimableTotal).toBeCloseTo(0.413546135, 9);
+  });
+});

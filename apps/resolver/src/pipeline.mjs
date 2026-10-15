@@ -3,8 +3,12 @@ import { evaluateTranscript, hashResolutionSpec, VOID_OUTCOME } from "@mention/r
 
 import { buildEvidence, EVALUATOR_VERSION, hashArtifact } from "./evidence/manifest.mjs";
 
-/** Matched segments cited as evidence excerpts. */
-export const MAX_EXCERPTS = 3;
+/**
+ * Matched segments cited as evidence excerpts: the earliest, decisive one.
+ * Evidence must fit one transaction (`MAX_POSTABLE_EVIDENCE_LEN`), and the
+ * fixed manifest fields already take ~600 of its 800 bytes.
+ */
+export const MAX_EXCERPTS = 1;
 
 /**
  * Shift an audio-relative transcript (times from 0, as Deepgram batch returns)
@@ -60,8 +64,8 @@ export function buildCandidate({ spec, transcript, review, capturedAt, createdAt
     };
   }
 
-  // The earliest matches decide the outcome; on-chain evidence is capped at
-  // 4096 bytes, so cite only those (a binary YES may match hundreds of times).
+  // The earliest match decides the outcome; evidence must fit one transaction,
+  // so cite only that (a binary YES may match hundreds of times).
   const excerptIndexes = [...new Set(result.matches.map((m) => m.excerptIndex))]
     .sort((a, b) => a - b)
     .slice(0, MAX_EXCERPTS);

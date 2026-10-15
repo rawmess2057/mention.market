@@ -252,3 +252,15 @@ describe("DeepgramBatchAdapter", () => {
     assert.throws(() => new DeepgramBatchAdapter(), /DEEPGRAM_API_KEY/);
   });
 });
+
+describe("compact transcript storage", () => {
+  it("round-trips a real response to the same normalized transcript", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { compactDeepgramResponse, expandDeepgramTranscript } = await import("../src/adapters/deepgram.mjs");
+    const json = JSON.parse(await readFile(new URL("./fixtures/deepgram-spacewalk.json", import.meta.url), "utf8"));
+    const compact = compactDeepgramResponse(json);
+    const opts = { startedAtMs: 1_000_000, splitAtMs: [1_010_000] };
+    assert.deepEqual(normalizeDeepgramResponse(expandDeepgramTranscript(compact), opts), normalizeDeepgramResponse(json, opts));
+    assert.ok(JSON.stringify(compact).length < JSON.stringify(json).length / 2);
+  });
+});

@@ -9,7 +9,8 @@
     "./evidence": "./src/evidence/manifest.mjs",
     "./pipeline": "./src/pipeline.mjs",
     "./adapters/deepgram": "./src/adapters/deepgram.mjs",
-    "./adapters/deepgram-live": "./src/adapters/deepgram-live.mjs"
+    "./adapters/deepgram-live": "./src/adapters/deepgram-live.mjs",
+    "./queue": "./src/store/resolution-queue.mjs"
   },
   "scripts": {
     "test": "node --test"

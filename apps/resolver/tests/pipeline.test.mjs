@@ -251,3 +251,20 @@ test("a real Deepgram response (fixture) resolves through the whole pipeline", a
   assert.equal(no.status, "candidate");
   assert.equal(no.outcome, "no");
 });
+
+test("real-transcript evidence fits one transaction and still quotes the phrase", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { MAX_POSTABLE_EVIDENCE_LEN } = await import("../src/evidence/manifest.mjs");
+  const json = JSON.parse(await readFile(new URL("./fixtures/deepgram-spacewalk.json", import.meta.url), "utf8"));
+  const window = { startsAtMs: EVENT_START, endsAtMs: EVENT_START + 300_000 };
+  const spec = buildResolutionSpec({ marketAddress: MARKET, marketType: "binary", binaryPhrase: "all female team", sourceUrl: "https://dpgr.am/spacewalk.wav", window });
+  const transcript = normalizeDeepgramResponse(json, { startedAtMs: EVENT_START, splitAtMs: [window.startsAtMs, window.endsAtMs] });
+  // An /ops approval: a wallet as reviewer and a typical rationale.
+  const longReview = { reviewer: "CD69UjQitwnnPwHkFSYNsL2Qh7PW3hdqBNU1cQSrXFj", approvedAt: EVENT_START, rationale: "Phrase heard ~7s in; matches the spec." };
+  const candidate = buildCandidate({ spec, transcript, review: longReview });
+  assert.equal(candidate.outcome, "yes");
+  assert.ok(candidate.evidence.length <= MAX_POSTABLE_EVIDENCE_LEN, `${candidate.evidence.length} bytes`);
+  const [excerpt] = candidate.evidence.manifest.excerpts;
+  assert.match(excerpt.text, /all female team/);
+  assert.ok(excerpt.text.startsWith("…"), "trimmed around the phrase, not from the start");
+});

@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { cn, fmtBalance, fmtTimeLeft, shortAddr } from "@/lib/format";
-import { lmsrPositionValue, lmsrProbYes } from "@/lib/lmsr";
-import { pnlSeries, summarizePnl, verticalBreakdown } from "@/lib/pnl";
+import { lmsrProbYes } from "@/lib/lmsr";
+import { pnlSeries, positionMark, summarizePnl, verticalBreakdown } from "@/lib/pnl";
 import { claimableAmounts, isVoided } from "@/lib/settle";
 import { useSim } from "@/lib/sim";
 import { useChain } from "@/hooks/useChain";
@@ -38,6 +38,8 @@ interface PositionRow {
   avgEntry: number;
   currentPrice: number;
   marketValue: number;
+  /** How `marketValue` was derived (see `positionMark`). */
+  markBasis: "price" | "proposed" | "backed";
   costBasis: number;
   pnl: number;
   pnlPct: number;
@@ -67,10 +69,7 @@ function computePositions(
         const avgEntry = yes > 0 ? (pos.avgYesPrice ?? 0) : (pos.avgNoPrice ?? 0);
         const currentPrice = lmsrProbYes(m.yesShares, m.noShares, m.b);
         const displayPrice = yes > 0 ? currentPrice : 1 - currentPrice;
-        const marketValue = lmsrPositionValue(m.yesShares, m.noShares, m.b, {
-          yesShares: yes,
-          noShares: no,
-        });
+        const { value: marketValue, basis: markBasis } = positionMark(m, pos);
         const costBasis = avgEntry * shares;
         const pnl = marketValue - costBasis;
         const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
@@ -84,6 +83,7 @@ function computePositions(
           avgEntry,
           currentPrice: displayPrice,
           marketValue,
+          markBasis,
           costBasis,
           pnl,
           pnlPct,
@@ -118,10 +118,12 @@ function computePositions(
         shares: totalBacked,
         avgEntry: 0,
         currentPrice: bestOdds,
-        marketValue: totalBacked,
+        ...(() => {
+          const { value, basis } = positionMark(m, pos);
+          const pnl = value - totalBacked;
+          return { marketValue: value, markBasis: basis, pnl, pnlPct: totalBacked > 0 ? (pnl / totalBacked) * 100 : 0 };
+        })(),
         costBasis: totalBacked,
-        pnl: 0,
-        pnlPct: 0,
         timeLeft: m.endTime - Date.now(),
         isClaimable: !!claimable[m.id],
         claimableAmount: claimable[m.id] ?? 0,
@@ -1077,7 +1079,9 @@ function PositionRowCard({
       <div className="mt-3 flex items-center justify-between border-t border-gray-warm/60 pt-3">
         <div className="flex items-baseline gap-3">
           <div>
-            <span className="text-[10px] uppercase tracking-wider text-gray-mid">Value</span>{" "}
+            <span className="text-[10px] uppercase tracking-wider text-gray-mid">
+              {row.markBasis === "proposed" ? "Value if confirmed" : "Value"}
+            </span>{" "}
             <span className="font-mono text-sm font-bold text-navy">{fmtBalance(row.marketValue)}</span>
           </div>
           {m.type === "binary" && (

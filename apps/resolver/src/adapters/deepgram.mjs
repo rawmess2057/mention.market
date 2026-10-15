@@ -172,18 +172,18 @@ export class DeepgramBatchAdapter {
    * Transcribe from a public URL. Requires Deepgram to fetch the audio.
    */
   async transcribeUrl(audioUrl, opts = {}) {
+    return normalizeDeepgramResponse(await this.transcribeUrlRaw(audioUrl, opts));
+  }
+
+  /** The raw Deepgram response for a public URL (for storage; see `compactDeepgramResponse`). */
+  async transcribeUrlRaw(audioUrl, opts = {}) {
     const url = buildPrerecordedUrl({
       model: this.model,
       language: this.language,
       ...this.query,
       ...(opts.query ?? {}),
     });
-    const json = await this.http.postJson(
-      url,
-      { url: audioUrl },
-      { authorization: `Token ${this.apiKey}` }
-    );
-    return normalizeDeepgramResponse(json);
+    return this.http.postJson(url, { url: audioUrl }, { authorization: `Token ${this.apiKey}` });
   }
 }
 
@@ -337,4 +337,54 @@ function sha256Hex(str) {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Compact a Deepgram response for storage: word timings and text only (about
+ * a quarter of the raw size). {@link expandDeepgramTranscript} restores a
+ * response `normalizeDeepgramResponse` accepts, so a stored transcript can be
+ * re-normalized (e.g. with a corrected recording start) without re-transcribing.
+ *
+ * @returns {{ v: 1, requestId: string|null, duration: number, transcript: string, words: Array<[number, number, string|number|null, string]> }}
+ */
+export function compactDeepgramResponse(json) {
+  const alt = json?.results?.channels?.[0]?.alternatives?.[0];
+  if (!alt) throw new TypeError("deepgram response has no transcript alternative");
+  return {
+    v: 1,
+    requestId: json?.metadata?.request_id ?? null,
+    duration: Number(json?.metadata?.duration ?? json?.duration ?? 0),
+    transcript: typeof alt.transcript === "string" ? alt.transcript : "",
+    words: (alt.words ?? []).map((w) => [
+      Number(w.start),
+      Number(w.end),
+      w.speaker ?? w.speaker_id ?? null,
+      String(w.punctuated_word ?? w.word ?? ""),
+    ]),
+  };
+}
+
+/** Inverse of {@link compactDeepgramResponse}. */
+export function expandDeepgramTranscript(compact) {
+  if (compact?.v !== 1) throw new TypeError("unknown stored transcript format");
+  return {
+    metadata: { request_id: compact.requestId, duration: compact.duration },
+    results: {
+      channels: [
+        {
+          alternatives: [
+            {
+              transcript: compact.transcript,
+              words: compact.words.map(([start, end, speaker, text]) => ({
+                start,
+                end,
+                speaker,
+                punctuated_word: text,
+              })),
+            },
+          ],
+        },
+      ],
+    },
+  };
 }

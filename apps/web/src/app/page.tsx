@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 
+import { DiscoverHero } from "@/components/discover-hero";
 import { MarketCard } from "@/components/market-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { MarketCardSkeleton } from "@/components/ui/skeleton";
 import { useNow } from "@/hooks/useNow";
 import { isChainId, isStaleChainMarket } from "@/lib/chain";
-import { cn, fmtSol } from "@/lib/format";
+import { cn } from "@/lib/format";
 import { sessionChange } from "@/lib/history";
 import { useStore } from "@/lib/store";
 import { VERTICAL_META, type Market, type Vertical } from "@/lib/types";
@@ -68,33 +69,16 @@ export default function Home() {
     return by;
   }, [listed, now]);
 
-  const tradingCount = all.filter((m) => phase(m, now) === "trading").length;
+  const trading = useMemo(() => all.filter((m) => phase(m, now) === "trading"), [all, now]);
+  const resolvedCount = all.filter((m) => m.status === "resolved").length;
   const volume = all.reduce((s, m) => s + m.volume, 0);
   const loading = all.length === 0 && !chainSynced && !chainSyncError;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4 pt-2">
-        <div>
-          <h1 className="font-display text-[40px] leading-none tracking-[-0.01em] text-fg md:text-[52px]">
-            What gets <span className="quote-hit">said</span>.
-          </h1>
-          <p className="mt-2.5 text-sm text-fg-muted md:text-[15px]">
-            Trade on whether a phrase is spoken. Settled on Solana from the transcript.
-          </p>
-        </div>
-        <div className="flex items-center gap-5">
-          <Metric label="Trading" value={loading ? "—" : String(tradingCount)} live={tradingCount > 0} />
-          <Metric label="Volume" value={loading ? "—" : fmtSol(volume, { compact: true })} />
-          <Button asChild size="sm" className="hidden sm:inline-flex">
-            <Link href="/create">
-              <Plus className="h-4 w-4" aria-hidden /> Create
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <DiscoverHero trading={trading} resolved={resolvedCount} volume={volume} history={history} loading={loading} />
 
-      <div className="space-y-3">
+      <div id="markets" className="scroll-mt-24 space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
@@ -161,18 +145,6 @@ export default function Home() {
           <Shelf title="Resolved" markets={shelves.resolved} />
         </div>
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value, live }: { label: string; value: string; live?: boolean }) {
-  return (
-    <div className="text-right">
-      <div className="flex items-center justify-end gap-1.5 text-micro text-fg-subtle">
-        {live && <span className="live-dot text-yes" aria-hidden />}
-        {label}
-      </div>
-      <div className="tnum text-lg font-semibold text-fg">{value}</div>
     </div>
   );
 }

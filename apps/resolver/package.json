@@ -15,10 +15,14 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@mention/db": "workspace:*",
     "@mention/resolution": "workspace:*",
     "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
   }
 }

@@ -92,7 +92,7 @@ for (const s of targets) {
     })
     .preInstructions(budget())
     .rpc();
-  putSpec({
+  await putSpec({
     marketAddress: market.toBase58(),
     spec,
     ingest: { adapter: "operator-upload", mode: "manual", keywords: seedKeywords(s), speaker: null },

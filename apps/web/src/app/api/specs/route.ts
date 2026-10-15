@@ -3,20 +3,24 @@ import path from "node:path";
 
 import { getSpec, putSpec } from "@mention/resolver/store";
 
+import { connection, PROGRAM_ID, resolutionSpecPda } from "@/lib/chain";
+import { registerSpec, rpcCommitmentFetcher } from "@/lib/server/spec-registry";
+
 export const runtime = "nodejs";
 
 /**
- * Local persistence for market resolution specs.
+ * Persistence for market resolution specs.
  *
  * The program commits only `specSha256` on-chain; the resolver needs the exact
- * spec *bytes* to build valid evidence. This route lets the web app (which
- * builds the spec when creating a market) save it into the resolver's file
- * store (`apps/resolver/data/specs/<marketAddress>.json`) so every UI-created
- * market stays resolvable.
+ * spec *bytes* to build valid evidence. The create flow POSTs the spec here
+ * right after the market is created. A spec is stored only if it hashes to
+ * the market's on-chain commitment (see `lib/server/spec-registry.ts`), and the
+ * store is insert-only. Storage is Postgres when `DATABASE_URL` is set (Vercel),
+ * else the resolver's file store (local dev).
  */
 
-// The route runs with cwd = the Next app root (apps/web); resolve the resolver
-// store relative to it. An explicit env override always wins.
+// Without DATABASE_URL the store falls back to files: the route runs with
+// cwd = the Next app root (apps/web), so point it at the resolver's data dir.
 function ensureResolverDataDir(): void {
   process.env.RESOLVER_DATA_DIR ??= path.resolve(process.cwd(), "../resolver/data");
 }
@@ -24,27 +28,18 @@ function ensureResolverDataDir(): void {
 export async function POST(req: Request) {
   ensureResolverDataDir();
 
-  let body: { marketAddress?: unknown; spec?: unknown };
+  let body: unknown;
   try {
-    body = (await req.json()) as typeof body;
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const { marketAddress, spec } = body ?? {};
-  if (typeof marketAddress !== "string" || !spec || typeof spec !== "object") {
-    return NextResponse.json(
-      { error: "marketAddress (string) and spec (object) are required" },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const record = putSpec({ marketAddress, spec });
-    return NextResponse.json({ ok: true, marketAddress, specSha256: record.specSha256 });
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
-  }
+  const result = await registerSpec(body, {
+    fetchCommitment: rpcCommitmentFetcher(connection(), PROGRAM_ID, resolutionSpecPda),
+    store: { putSpec },
+  });
+  return NextResponse.json(result.body, { status: result.status });
 }
 
 export async function GET(req: Request) {
@@ -55,7 +50,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "marketAddress is required" }, { status: 400 });
   }
 
-  const record = getSpec(marketAddress);
-  if (!record) return NextResponse.json({ ok: false }, { status: 404 });
-  return NextResponse.json(record);
+  try {
+    const record = await getSpec(marketAddress);
+    if (!record) return NextResponse.json({ ok: false }, { status: 404 });
+    return NextResponse.json(record);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
 }

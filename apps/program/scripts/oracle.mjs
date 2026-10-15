@@ -89,7 +89,7 @@ async function evidenceFor(pk, m, outcome) {
   const onChainHex = commitment ? Buffer.from(commitment.specSha256).toString("hex") : ZERO_HASH;
   if (onChainHex === ZERO_HASH) return { skip: "zero resolution spec (legacy market, unresolvable)" };
 
-  const record = getSpec(pk.toBase58());
+  const record = await getSpec(pk.toBase58());
   if (!record) return { skip: "no stored resolution spec in apps/resolver/data/specs" };
   const specHex = hashResolutionSpec(record.spec);
   if (specHex !== onChainHex) {

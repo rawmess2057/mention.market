@@ -20,6 +20,7 @@ mention.market/                 pnpm monorepo (pnpm@9, node >= 20)
 │                               NOT in the pnpm workspace (own package-lock / npm)
 ├── apps/resolution/            @mention/resolution: spec/evidence contracts, canonical JSON, sha256
 ├── apps/resolver/              @mention/resolver: spec store, transcript pipeline, Deepgram adapters
+├── packages/db/                @mention/db: Postgres client (Neon serverless), migrations, PGlite test DB
 │   └── data/specs/*.json       committed resolution specs keyed by market address
 └── docs/RESEARCH.md            design rationale (UMA-lite resolution, LMSR, etc.)
 ```
@@ -67,7 +68,7 @@ node scripts/smoke.mjs                         # quick program smoke test
 |---|---|
 | `apps/web/**` | `cd apps/web && pnpm test && npx tsc --noEmit && pnpm lint` |
 | `apps/program/**` | `cd apps/program && cargo test` (then `anchor build` and sync the IDL, see §6) |
-| `apps/resolution/**`, `apps/resolver/**` | `pnpm test` in that package |
+| `apps/resolution/**`, `apps/resolver/**`, `packages/db/**` | `pnpm test` in that package (store and DB tests run on in-process Postgres via PGlite, no server needed) |
 
 ---
 
@@ -76,7 +77,8 @@ node scripts/smoke.mjs                         # quick program smoke test
 | Var | Where | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SOLANA_RPC_URL` (or `NEXT_PUBLIC_RPC_URL`) | `apps/web/.env.local` | Devnet RPC. Falls back to the public endpoint, which is rate-limited and breaks trades. Copy from `.env.example`. |
-| `RESOLVER_DATA_DIR` | web API route, resolver | Spec store dir. Defaults to `apps/resolver/data`. |
+| `DATABASE_URL` | Vercel, web API route, resolver, scripts | Postgres (Neon). When set, the spec store uses it; when unset, it uses files. **Required on Vercel.** Migrate: `pnpm --filter @mention/db migrate`. Backfill files: `node apps/resolver/scripts/import-specs.mjs`. |
+| `RESOLVER_DATA_DIR` | web API route, resolver | File-backend spec dir (only without `DATABASE_URL`). Defaults to `apps/resolver/data`. |
 | `DEEPGRAM_API_KEY` | resolver adapters | Transcription. |
 | `SOLANA_RPC_URL`, `ANCHOR_PROVIDER_URL` | program scripts | Script RPC. |
 | `SEED_BLOCK` | seed / oracle | Demo batch: 0 → ids 9–16, 1 → 25–32, … Use the **same** value for seed and oracle. |
@@ -206,7 +208,10 @@ Zustand (persisted), framer-motion, lightweight-charts, wallet-adapter
 6. Vitest does not read tsconfig paths. The `@/` alias is duplicated in `vitest.config.mts`.
 7. The web bundle stubs Node built-ins (`fs/os/path/crypto` fallbacks in `next.config.ts`). Don't import Node-only modules into client components. Server-only code goes in `app/api/*` (`runtime = "nodejs"`).
 8. The public devnet RPC 429s. Use `withRetry` for new RPC calls and set `NEXT_PUBLIC_SOLANA_RPC_URL`.
-9. Resolution specs: only the **hash** is on-chain. The bytes must exist in `apps/resolver/data/specs/<marketAddress>.json` (via `/api/specs`), or the market can't be resolved through the evidence pipeline. All-zero spec hash = legacy/demo, and propose rejects it.
+9. Resolution specs: only the **hash** is on-chain. The bytes must be in the spec store, or the market can't be resolved through the evidence pipeline. The store is Postgres when `DATABASE_URL` is set, else `apps/resolver/data/specs/`.
+   - **Async** (always `await` it) and **insert-only**: the same spec again is a no-op; a different one throws `SpecConflictError`.
+   - `/api/specs` POST stores a spec only if it hashes to the market's on-chain `ResolutionSpecCommitment` (`lib/server/spec-registry.ts`). That's why it needs no auth. It returns 404 + `retryable` while the commitment isn't visible, and 422 on a mismatch.
+   - An all-zero spec hash means legacy/demo, and propose rejects it.
 10. `resolution` JSON shapes are **versioned contracts**. Changing fields needs a new schema version and shared test vectors (`apps/resolution/README.md`).
 11. `close_market` / `cleanup.mjs` force-close resolved markets. Never run them while users still have unclaimed winnings.
 12. The Zustand store is **persisted** (localStorage). Shape changes may need a migration, or users get stale state.

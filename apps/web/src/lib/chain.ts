@@ -1441,6 +1441,8 @@ export interface ChainCreateResult {
   id: number;
   sig: string;
   solBalance: number;
+  /** False when the resolution spec couldn't be registered (market is unresolvable until it is). */
+  specSaved: boolean;
 }
 
 export async function chainCreateMarket(
@@ -1500,37 +1502,53 @@ export async function chainCreateMarket(
     .instruction();
   try {
     const sig = await sendAll(signer, [ix]);
-    await persistLocalSpec(market.toBase58(), resolutionSpec);
-    return { id, sig, solBalance: await solBalanceUi(signer.publicKey) };
+    const specSaved = await registerMarketSpec(market.toBase58(), resolutionSpec);
+    return { id, sig, solBalance: await solBalanceUi(signer.publicKey), specSaved };
   } catch (err) {
     // A confirmation timeout is indistinguishable from a failure from here,
     // but the market account is not: if it exists the transaction landed, so
     // report the create instead of a failure the user would "retry" straight
     // into a duplicate-PDA rejection.
     if (await marketAccountExists(id).catch(() => false)) {
-      await persistLocalSpec(market.toBase58(), resolutionSpec);
-      return { id, sig: "", solBalance: await solBalanceUi(signer.publicKey) };
+      const specSaved = await registerMarketSpec(market.toBase58(), resolutionSpec);
+      return { id, sig: "", solBalance: await solBalanceUi(signer.publicKey), specSaved };
     }
     throw new Error(chainErrorText(err));
   }
 }
 
 /**
- * Persist a freshly created market's canonical resolution spec to the
- * resolver's local store (`/api/specs`). The program commits only the spec
- * hash; without the bytes the market can never be resolved. Best-effort: a
- * failure here does not fail the creation (the market exists on-chain).
+ * Register a freshly created market's canonical resolution spec (`/api/specs`).
+ * The program commits only the spec hash; without the bytes the market can
+ * never be resolved. The server stores the spec only once it can see the
+ * on-chain commitment, which may lag the create by a slot or two on its RPC
+ * (404 `retryable`), so transient failures are retried with backoff.
+ *
+ * @returns whether the spec is stored. A failure does not fail the creation
+ *   (the market exists on-chain); the caller should tell the user.
  */
-async function persistLocalSpec(marketAddress: string, spec: unknown): Promise<void> {
-  try {
-    await fetch("/api/specs", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ marketAddress, spec }),
-    });
-  } catch {
-    /* non-fatal */
+export async function registerMarketSpec(
+  marketAddress: string,
+  spec: unknown,
+  { attempts = 4, baseMs = 800, fetchImpl = fetch }: { attempts?: number; baseMs?: number; fetchImpl?: typeof fetch } = {}
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, baseMs * 2 ** (i - 1)));
+    try {
+      const res = await fetchImpl("/api/specs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ marketAddress, spec }),
+      });
+      if (res.ok) return true;
+      // 404 = commitment not visible yet; 5xx = server/RPC hiccup. Anything
+      // else (400/409/422) is a real rejection that retrying won't fix.
+      if (res.status !== 404 && res.status < 500) return false;
+    } catch {
+      /* network error: retry */
+    }
   }
+  return false;
 }
 
 /* ------------------------------------------------------------------ */

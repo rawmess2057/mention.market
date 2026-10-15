@@ -78,7 +78,7 @@ async function status(program, marketArg) {
   const address = marketAddress(marketArg);
   const market = await fetchMarket(program, address);
   const spec = await fetchSpec(program, address);
-  const record = getSpec(address.toBase58());
+  const record = await getSpec(address.toBase58());
   const specHex = Buffer.from(spec.specSha256).toString("hex");
 
   console.log(`market      ${address.toBase58()}`);
@@ -119,7 +119,7 @@ async function lock(program, resolver, marketArg) {
 async function resolve(program, resolver, marketArg, flags) {
   const address = marketAddress(marketArg);
   const market = await fetchMarket(program, address);
-  const record = getSpec(address.toBase58());
+  const record = await getSpec(address.toBase58());
   if (!record) {
     throw new Error(`no stored resolution spec for ${address.toBase58()} — run the seed script or create the market from the UI`);
   }
@@ -319,7 +319,7 @@ async function finalize(program, resolver, marketArg) {
 async function transcribe(program, marketArg, flags) {
   const address = marketAddress(marketArg);
   const market = await fetchMarket(program, address);
-  const record = getSpec(address.toBase58());
+  const record = await getSpec(address.toBase58());
   if (!record) {
     throw new Error(`no stored resolution spec for ${address.toBase58()} — run the seed script or create the market from the UI`);
   }
@@ -353,9 +353,9 @@ async function transcribe(program, marketArg, flags) {
 
 async function watch(program, resolver, flags) {
   const interval = Number(flags.interval || 20) * 1000;
-  console.log(`watching ${listSpecs().length} stored markets (every ${interval / 1000}s); locks ended markets`);
+  console.log(`watching ${(await listSpecs()).length} stored markets (every ${interval / 1000}s); locks ended markets`);
   for (;;) {
-    for (const record of listSpecs()) {
+    for (const record of await listSpecs()) {
       try {
         const address = new PublicKey(record.marketAddress);
         const market = await fetchMarket(program, address).catch(() => null);

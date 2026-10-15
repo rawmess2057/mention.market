@@ -94,9 +94,14 @@ export default function CreateMarketPage() {
     }
     if (!local) {
       try {
-        const chainId = await chain.create(params);
-        if (chainId == null) throw new Error("Wallet is not ready to create an on-chain market.");
-        const id = createMarket({ ...params, chainId });
+        const launched = await chain.create(params);
+        if (launched == null) throw new Error("Wallet is not ready to create an on-chain market.");
+        const id = createMarket({ ...params, chainId: launched.id });
+        if (!launched.specSaved) {
+          showToast(
+            "Market is live, but its resolution rules couldn't be saved, so it can't be resolved yet. Ask an operator to register it."
+          );
+        }
         const created = useSim.getState().markets[id];
         router.push(`/market/${created.slug}`);
         return;

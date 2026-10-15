@@ -103,12 +103,12 @@ export function useChain() {
   );
 
   const create = useCallback(
-    async (params: ChainCreateParams): Promise<number | null> => {
+    async (params: ChainCreateParams): Promise<{ id: number; specSaved: boolean } | null> => {
       if (!connected || !publicKey || !signTransaction) return null;
       const signer = { publicKey, signTransaction };
       const result = await chainCreateMarket(signer, params);
       await refreshBalance(publicKey.toBase58(), result);
-      return result.id;
+      return { id: result.id, specSaved: result.specSaved };
     },
     [connected, publicKey, signTransaction, refreshBalance]
   );
